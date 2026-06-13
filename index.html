@@ -73,6 +73,8 @@ html, body { height: 100%; background: var(--cream); color: var(--ink); font-fam
 .km-period-btn.active { background: var(--ink); color: var(--cream); border-color: var(--ink); }
 .km-export-btn { margin-left: auto; padding: 7px 16px; border-radius: 999px; border: 1px solid var(--border); background: none; font-family: var(--font-body); font-size: 12px; color: var(--ink-light); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
 .km-export-btn:hover { color: var(--ink); border-color: var(--ink-faint); }
+.km-invoer-grid { display: grid; grid-template-columns: 160px 120px 1fr; gap: 12px; align-items: end; }
+@media (max-width: 768px) { .km-invoer-grid { grid-template-columns: 1fr 1fr; } .km-invoer-omschr { grid-column: 1 / -1; } }
 
 /* HOME */
 .home-bg { position: absolute; inset: 0; z-index: 0; background: radial-gradient(ellipse 60% 50% at 80% 20%, rgba(200,80,58,0.12) 0%, transparent 60%), radial-gradient(ellipse 40% 60% at 10% 80%, rgba(59,109,17,0.08) 0%, transparent 50%), var(--cream); }
@@ -1852,7 +1854,7 @@ updateHome();
         <!-- Formulier -->
         <div class="km-form-card">
           <div class="card-title" id="km-form-title" style="margin-bottom:16px;">Kilometers invullen</div>
-          <div style="display:grid;grid-template-columns:160px 120px 1fr;gap:12px;align-items:end;">
+          <div class="km-invoer-grid">
             <div class="km-field">
               <label>Datum</label>
               <input type="date" id="km-datum">
@@ -1861,7 +1863,7 @@ updateHome();
               <label>Totaal km</label>
               <input type="number" id="km-km" placeholder="bijv. 85" min="0" step="0.1">
             </div>
-            <div class="km-field">
+            <div class="km-field km-invoer-omschr">
               <label>Omschrijving</label>
               <input type="text" id="km-omschr" placeholder="bijv. Klantbezoek, werkzaamheden op locatie">
             </div>
