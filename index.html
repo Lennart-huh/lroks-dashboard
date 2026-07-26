@@ -260,6 +260,7 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Omschrijving</label><input type="text" id="uOmschrijving" placeholder="wat heb je gedaan"></div>
           <button class="knop" id="uOpslaan">Uren opslaan</button>
+          <button class="knop klein stil" id="uAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
         </div>
 
         <!-- KM -->
@@ -280,6 +281,7 @@ nav.onderbalk{display:none}
             </div>
           </div>
           <button class="knop" id="kOpslaan">KM-stand opslaan</button>
+          <button class="knop klein stil" id="kAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
         </div>
 
         <!-- PRODUCT -->
@@ -538,13 +540,13 @@ document.querySelectorAll("[data-tab]").forEach(k =>
   k.addEventListener("click", () => toonTab(k.dataset.tab)));
 $("meerKnop").addEventListener("click", () => $("meerSheet").classList.toggle("open"));
 
+function kiesSub(subId){
+  document.querySelectorAll(".subtabs button").forEach(b => b.classList.toggle("aan", b.dataset.sub === subId));
+  document.querySelectorAll(".subform").forEach(f => f.classList.remove("actief"));
+  $(subId).classList.add("actief");
+}
 document.querySelectorAll(".subtabs button").forEach(k =>
-  k.addEventListener("click", () => {
-    document.querySelectorAll(".subtabs button").forEach(b => b.classList.remove("aan"));
-    k.classList.add("aan");
-    document.querySelectorAll(".subform").forEach(f => f.classList.remove("actief"));
-    $(k.dataset.sub).classList.add("actief");
-  }));
+  k.addEventListener("click", () => kiesSub(k.dataset.sub)));
 
 /* schakelknoppen (werk/kantoor, zakelijk/privé, open/afgerond) */
 function schakel(idAan, idUit){
@@ -746,6 +748,16 @@ function checkHerinnering(){
 /* =====================================================
    UREN
    ===================================================== */
+let bewerkUrenId = null;
+function stopUrenBewerken(){
+  bewerkUrenId = null;
+  $("uOpslaan").textContent = "Uren opslaan";
+  $("uAnnuleer").style.display = "none";
+  $("uAantal").value = ""; $("uOmschrijving").value = "";
+  $("uDatum").value = vandaagISO();
+}
+$("uAnnuleer").addEventListener("click", stopUrenBewerken);
+
 $("uOpslaan").addEventListener("click", async () => {
   const datum = $("uDatum").value;
   const aantal = parseFloat($("uAantal").value);
@@ -759,13 +771,36 @@ $("uOpslaan").addEventListener("click", async () => {
     omschrijving: $("uOmschrijving").value.trim() || null
   };
   $("uOpslaan").disabled = true;
-  const { error } = await db.from("uren").insert(rij);
+  let fout;
+  if (bewerkUrenId){
+    ({ error: fout } = await db.from("uren").update(rij).eq("id", bewerkUrenId));
+  } else {
+    ({ error: fout } = await db.from("uren").insert(rij));
+  }
   $("uOpslaan").disabled = false;
-  if (error) { console.error(error); toast("Opslaan mislukt"); return; }
-  $("uAantal").value = ""; $("uOmschrijving").value = "";
-  toast("Uren opgeslagen");
+  if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
+  toast(bewerkUrenId ? "Uren gewijzigd" : "Uren opgeslagen");
+  stopUrenBewerken();
   await herlaadUren();
 });
+
+function startUrenBewerken(id){
+  const u = urenData.find(x => x.id === id);
+  if (!u) return;
+  bewerkUrenId = id;
+  $("uDatum").value = u.datum;
+  $("uAantal").value = u.aantal;
+  $("uTarief").value = u.tarief ?? "";
+  urenSoort = u.soort;
+  if (u.soort === "werk") schakel("uSoortWerk","uSoortKantoor"); else schakel("uSoortKantoor","uSoortWerk");
+  $("uProject").value = u.project_id || "";
+  $("uKlant").value = u.klant_id || "";
+  $("uOmschrijving").value = u.omschrijving || "";
+  $("uOpslaan").textContent = "Wijziging opslaan";
+  $("uAnnuleer").style.display = "block";
+  toonTab("invullen");
+  kiesSub("sub-uren");
+}
 
 async function herlaadUren(){
   const { data } = await db.from("uren").select("*").order("datum", { ascending:false }).limit(400);
@@ -817,7 +852,7 @@ function renderUren(){
   }
   body.innerHTML = urenData.slice(0, 60).map(u => {
     const wie = projectNaam(u.project_id) || klantNaam(u.klant_id) || "—";
-    return '<tr>' +
+    return '<tr class="klik" data-uedit="' + u.id + '">' +
       '<td>' + fmtDatum(u.datum) + '</td>' +
       '<td><span class="chip ' + (u.soort === "werk" ? "groen" : "grijs") + '">' + (u.soort === "werk" ? "WERK" : "KANTOOR") + '</span></td>' +
       '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
@@ -828,7 +863,10 @@ function renderUren(){
       '<td class="r"><button class="verwijder" data-uid="' + u.id + '" title="Verwijderen">✕</button></td>' +
     '</tr>';
   }).join("");
-  body.querySelectorAll("[data-uid]").forEach(k => k.addEventListener("click", async () => {
+  body.querySelectorAll("[data-uedit]").forEach(r =>
+    r.addEventListener("click", () => startUrenBewerken(r.dataset.uedit)));
+  body.querySelectorAll("[data-uid]").forEach(k => k.addEventListener("click", async (e) => {
+    e.stopPropagation();
     if (!confirm("Deze urenregel verwijderen?")) return;
     const { error } = await db.from("uren").delete().eq("id", k.dataset.uid);
     if (error) { toast("Verwijderen mislukt"); return; }
@@ -864,6 +902,19 @@ $("kDatum").addEventListener("change", bijwerkKmHint);
 $("kZakelijk").addEventListener("click", bijwerkKmHint);
 $("kPrive").addEventListener("click", bijwerkKmHint);
 
+let bewerkKmId = null;
+function stopKmBewerken(){
+  bewerkKmId = null;
+  $("kOpslaan").textContent = "KM-stand opslaan";
+  $("kAnnuleer").style.display = "none";
+  $("kStand").value = ""; $("kOmschrijving").value = "";
+  $("kKlant").value = "";
+  $("kDatum").value = vandaagISO();
+  kmZakelijk = true; schakel("kZakelijk","kPrive");
+  bijwerkKmHint();
+}
+$("kAnnuleer").addEventListener("click", stopKmBewerken);
+
 $("kOpslaan").addEventListener("click", async () => {
   const datum = $("kDatum").value;
   const stand = parseInt($("kStand").value, 10);
@@ -873,8 +924,9 @@ $("kOpslaan").addEventListener("click", async () => {
     if (!confirm("Deze stand (" + stand.toLocaleString("nl-NL") + ") is lager dan de vorige (" +
       vorige.km_stand.toLocaleString("nl-NL") + "). Toch opslaan?")) return;
   }
-  const bestaand = kmData.find(k => k.datum === datum);
-  if (bestaand && !confirm("Er staat al een stand voor deze dag. Overschrijven?")) return;
+  const dubbel = kmData.find(k => k.datum === datum && k.id !== bewerkKmId);
+  if (bewerkKmId && dubbel){ toast("Er staat al een andere stand op die datum"); return; }
+  if (!bewerkKmId && dubbel && !confirm("Er staat al een stand voor deze dag. Overschrijven?")) return;
 
   const rij = {
     datum, km_stand: stand,
@@ -884,17 +936,35 @@ $("kOpslaan").addEventListener("click", async () => {
   };
   $("kOpslaan").disabled = true;
   let fout;
-  if (bestaand){
-    ({ error: fout } = await db.from("km_registratie").update(rij).eq("id", bestaand.id));
+  const doelId = bewerkKmId || (dubbel ? dubbel.id : null);
+  if (doelId){
+    ({ error: fout } = await db.from("km_registratie").update(rij).eq("id", doelId));
   } else {
     ({ error: fout } = await db.from("km_registratie").insert(rij));
   }
   $("kOpslaan").disabled = false;
   if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
-  $("kStand").value = ""; $("kOmschrijving").value = "";
-  toast("KM-stand opgeslagen");
+  toast(bewerkKmId ? "KM-regel gewijzigd" : "KM-stand opgeslagen");
+  stopKmBewerken();
   await herlaadKm();
 });
+
+function startKmBewerken(id){
+  const k = kmData.find(x => x.id === id);
+  if (!k) return;
+  bewerkKmId = id;
+  $("kDatum").value = k.datum;
+  $("kStand").value = k.km_stand;
+  $("kOmschrijving").value = k.omschrijving || "";
+  $("kKlant").value = k.klant_id || "";
+  kmZakelijk = !!k.zakelijk;
+  if (kmZakelijk) schakel("kZakelijk","kPrive"); else schakel("kPrive","kZakelijk");
+  $("kOpslaan").textContent = "Wijziging opslaan";
+  $("kAnnuleer").style.display = "block";
+  toonTab("invullen");
+  kiesSub("sub-km");
+  bijwerkKmHint();
+}
 
 async function herlaadKm(){
   const { data } = await db.from("km_registratie").select("*").order("datum", { ascending:true });
@@ -938,7 +1008,7 @@ function renderKm(){
   }
   body.innerHTML = regels.slice().reverse().slice(0, 60).map((r, idx) => {
     const eersteOoit = r.datum === kmData[0].datum;
-    return '<tr>' +
+    return '<tr class="klik" data-kedit="' + r.id + '">' +
       '<td>' + fmtDatum(r.datum) + '</td>' +
       '<td class="r">' + r.km_stand.toLocaleString("nl-NL") + '</td>' +
       '<td class="r">' + (eersteOoit ? "start" : r.gereden.toLocaleString("nl-NL")) + '</td>' +
@@ -948,7 +1018,10 @@ function renderKm(){
       '<td class="r"><button class="verwijder" data-kid="' + r.id + '" title="Verwijderen">✕</button></td>' +
     '</tr>';
   }).join("");
-  body.querySelectorAll("[data-kid]").forEach(k => k.addEventListener("click", async () => {
+  body.querySelectorAll("[data-kedit]").forEach(r =>
+    r.addEventListener("click", () => startKmBewerken(r.dataset.kedit)));
+  body.querySelectorAll("[data-kid]").forEach(k => k.addEventListener("click", async (e) => {
+    e.stopPropagation();
     if (!confirm("Deze km-regel verwijderen?")) return;
     const { error } = await db.from("km_registratie").delete().eq("id", k.dataset.kid);
     if (error) { toast("Verwijderen mislukt"); return; }
