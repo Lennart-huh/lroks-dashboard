@@ -280,6 +280,10 @@ nav.onderbalk{display:none}
               </div>
             </div>
           </div>
+          <div class="rij2">
+            <div class="veld"><label>Vergoeding per km (€)</label><input type="number" id="kPrijs" step="0.01" min="0" inputmode="decimal" placeholder="0,35"></div>
+            <div></div>
+          </div>
           <button class="knop" id="kOpslaan">KM-stand opslaan</button>
           <button class="knop klein stil" id="kAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
         </div>
@@ -302,6 +306,12 @@ nav.onderbalk{display:none}
             <div class="rij2">
               <div class="veld"><label>Inkoopprijs (excl.)</label><input type="number" id="npInkoop" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
               <div class="veld"><label>Verkoopprijs (excl.)</label><input type="number" id="npVerkoop" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
+            </div>
+            <div class="veld"><label>Soort product</label>
+              <div class="schakel">
+                <button type="button" id="npSoortVoorraad" class="aan">Op voorraad</button>
+                <button type="button" id="npSoortDoorloop">Doorloop</button>
+              </div>
             </div>
             <button class="knop klein stil" id="npOpslaan">Product toevoegen</button>
           </div>
@@ -336,7 +346,7 @@ nav.onderbalk{display:none}
         </div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>Datum</th><th class="r">Stand</th><th class="r">Gereden</th><th>Type</th><th>Waar</th><th class="r">Vergoeding</th><th></th></tr></thead>
+            <thead><tr><th>Datum</th><th class="r">Stand</th><th class="r">Gereden</th><th>Type</th><th>Waar</th><th class="r">€/km</th><th class="r">Vergoeding</th><th></th></tr></thead>
             <tbody id="kmBody"></tbody>
           </table>
         </div>
@@ -424,8 +434,14 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Inkoopprijs (excl.)</label><input type="number" id="vInkoop" step="0.01" min="0" inputmode="decimal"></div>
             <div class="veld"><label>Verkoopprijs (excl.)</label><input type="number" id="vVerkoop" step="0.01" min="0" inputmode="decimal"></div>
           </div>
+          <div class="veld"><label>Soort product</label>
+            <div class="schakel">
+              <button type="button" id="vSoortVoorraad" class="aan">Op voorraad</button>
+              <button type="button" id="vSoortDoorloop">Doorloop (meteen de deur uit)</button>
+            </div>
+          </div>
           <div class="rij2">
-            <div class="veld"><label>Voorraad</label><input type="number" id="vVoorraad" step="0.5" inputmode="decimal"></div>
+            <div class="veld" id="vVoorraadVeld"><label>Voorraad</label><input type="number" id="vVoorraad" step="0.5" inputmode="decimal"></div>
             <div class="veld"><label>Eenheid</label><input type="text" id="vEenheid" placeholder="stuks / meter / doos"></div>
           </div>
           <div class="veld"><label>Leverancier</label><input type="text" id="vLeverancier"></div>
@@ -633,6 +649,7 @@ async function laadAlles(){
     renderProjecten();
     renderUren();
     vulTariefDefault();
+    if (!$("kPrijs").value) $("kPrijs").value = Number(cache.inst.km_prijs || 0.35).toFixed(2);
     renderKm();
     renderVoorraad();
     renderHoofd();
@@ -891,13 +908,14 @@ function bijwerkKmHint(){
     : "Eerste invulling — deze stand wordt je startpunt.";
   if (vorige && stand > vorige.km_stand){
     const diff = stand - vorige.km_stand;
-    const prijs = Number(cache.inst.km_prijs || 0);
+    const prijs = parseFloat($("kPrijs").value) || Number(cache.inst.km_prijs || 0);
     tekst += " · vandaag gereden: <b>" + diff.toLocaleString("nl-NL") + " km</b>" +
       (kmZakelijk ? " = <b>" + eur2(diff * prijs) + "</b>" : "");
   }
   $("kVorige").innerHTML = tekst;
 }
 $("kStand").addEventListener("input", bijwerkKmHint);
+$("kPrijs").addEventListener("input", bijwerkKmHint);
 $("kDatum").addEventListener("change", bijwerkKmHint);
 $("kZakelijk").addEventListener("click", bijwerkKmHint);
 $("kPrive").addEventListener("click", bijwerkKmHint);
@@ -909,6 +927,7 @@ function stopKmBewerken(){
   $("kAnnuleer").style.display = "none";
   $("kStand").value = ""; $("kOmschrijving").value = "";
   $("kKlant").value = "";
+  $("kPrijs").value = Number(cache.inst.km_prijs || 0.35).toFixed(2);
   $("kDatum").value = vandaagISO();
   kmZakelijk = true; schakel("kZakelijk","kPrive");
   bijwerkKmHint();
@@ -932,6 +951,7 @@ $("kOpslaan").addEventListener("click", async () => {
     datum, km_stand: stand,
     omschrijving: $("kOmschrijving").value.trim() || null,
     klant_id: $("kKlant").value || null,
+    km_prijs: (parseFloat($("kPrijs").value) > 0 ? parseFloat($("kPrijs").value) : null),
     zakelijk: kmZakelijk
   };
   $("kOpslaan").disabled = true;
@@ -957,6 +977,7 @@ function startKmBewerken(id){
   $("kStand").value = k.km_stand;
   $("kOmschrijving").value = k.omschrijving || "";
   $("kKlant").value = k.klant_id || "";
+  $("kPrijs").value = (k.km_prijs ?? Number(cache.inst.km_prijs || 0.35));
   kmZakelijk = !!k.zakelijk;
   if (kmZakelijk) schakel("kZakelijk","kPrive"); else schakel("kPrive","kZakelijk");
   $("kOpslaan").textContent = "Wijziging opslaan";
@@ -987,14 +1008,15 @@ function kmJaarTotaal(jaar){
 
 function renderKm(){
   const p = periodes();
-  const prijs = Number(cache.inst.km_prijs || 0);
+  const rijPrijs = r => Number(r.km_prijs ?? (cache.inst.km_prijs || 0));
   const regels = kmRegels();
   const som = vanaf => regels.filter(r => r.zakelijk && new Date(r.datum) >= vanaf)
     .reduce((s,r) => s + r.gereden, 0);
+  const somGeld = vanaf => regels.filter(r => r.zakelijk && new Date(r.datum) >= vanaf)
+    .reduce((s,r) => s + r.gereden * rijPrijs(r), 0);
   const zet = (idKm, idSub, vanaf, extra) => {
-    const kmTot = som(vanaf);
-    $(idKm).textContent = kmTot.toLocaleString("nl-NL");
-    $(idSub).textContent = (extra ? extra + " · " : "") + eur2(kmTot * prijs);
+    $(idKm).textContent = som(vanaf).toLocaleString("nl-NL");
+    $(idSub).textContent = (extra ? extra + " · " : "") + eur2(somGeld(vanaf));
   };
   zet("kwWeek","kwWeekSub", p.maandag);
   zet("kwMaand","kwMaandSub", p.maandStart);
@@ -1003,7 +1025,7 @@ function renderKm(){
 
   const body = $("kmBody");
   if (!regels.length){
-    body.innerHTML = '<tr><td colspan="7" class="leeg">Nog geen km-standen — vul je eerste stand in via het invulformulier.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="leeg">Nog geen km-standen — vul je eerste stand in via het invulformulier.</td></tr>';
     return;
   }
   body.innerHTML = regels.slice().reverse().slice(0, 60).map((r, idx) => {
@@ -1014,7 +1036,8 @@ function renderKm(){
       '<td class="r">' + (eersteOoit ? "start" : r.gereden.toLocaleString("nl-NL")) + '</td>' +
       '<td><span class="chip ' + (r.zakelijk ? "groen" : "grijs") + '">' + (r.zakelijk ? "ZAKELIJK" : "PRIVÉ") + '</span></td>' +
       '<td class="tekst">' + esc((r.omschrijving || "") + (r.klant_id ? (r.omschrijving ? " · " : "") + klantNaam(r.klant_id) : "")) + '</td>' +
-      '<td class="r">' + (r.zakelijk && !eersteOoit ? eur2(r.gereden * prijs) : "—") + '</td>' +
+      '<td class="r">' + eur2(rijPrijs(r)) + '</td>' +
+      '<td class="r">' + (r.zakelijk && !eersteOoit ? eur2(r.gereden * rijPrijs(r)) : "—") + '</td>' +
       '<td class="r"><button class="verwijder" data-kid="' + r.id + '" title="Verwijderen">✕</button></td>' +
     '</tr>';
   }).join("");
@@ -1045,7 +1068,8 @@ $("npOpslaan").addEventListener("click", async () => {
     naam,
     categorie_id: $("npCategorie").value || null,
     inkoopprijs: parseFloat($("npInkoop").value) || 0,
-    verkoopprijs: parseFloat($("npVerkoop").value) || 0
+    verkoopprijs: parseFloat($("npVerkoop").value) || 0,
+    op_voorraad: npOpVoorraad
   };
   $("npOpslaan").disabled = true;
   const { data, error } = await db.from("producten").insert(rij).select().single();
@@ -1057,6 +1081,7 @@ $("npOpslaan").addEventListener("click", async () => {
   renderVoorraad();
   $("pProduct").value = data.id;
   $("npNaam").value = ""; $("npInkoop").value = ""; $("npVerkoop").value = "";
+  npOpVoorraad = true; schakel("npSoortVoorraad","npSoortDoorloop");
   $("pNieuwBlok").style.display = "none";
   toast("Product toegevoegd");
 });
@@ -1076,9 +1101,11 @@ $("pOpslaan").addEventListener("click", async () => {
   });
   if (!error){
     const prod = cache.producten.find(p => p.id === productId);
-    const nieuw = Number(prod ? prod.voorraad : 0) - aantal;
-    const { error: e2 } = await db.from("producten").update({ voorraad: nieuw }).eq("id", productId);
-    if (!e2 && prod) prod.voorraad = nieuw;
+    if (prod && prod.op_voorraad !== false){
+      const nieuw = Number(prod.voorraad || 0) - aantal;
+      const { error: e2 } = await db.from("producten").update({ voorraad: nieuw }).eq("id", productId);
+      if (!e2) prod.voorraad = nieuw;
+    }
   }
   $("pOpslaan").disabled = false;
   if (error) { console.error(error); toast("Opslaan mislukt"); return; }
@@ -1263,6 +1290,18 @@ function catNaam(id){
   return c ? c.naam : "";
 }
 let bewerkProductId = null;
+let prodOpVoorraad = true;
+$("vSoortVoorraad").addEventListener("click", () => {
+  prodOpVoorraad = true; schakel("vSoortVoorraad","vSoortDoorloop");
+  $("vVoorraadVeld").style.display = "block";
+});
+$("vSoortDoorloop").addEventListener("click", () => {
+  prodOpVoorraad = false; schakel("vSoortDoorloop","vSoortVoorraad");
+  $("vVoorraadVeld").style.display = "none";
+});
+let npOpVoorraad = true;
+$("npSoortVoorraad").addEventListener("click", () => { npOpVoorraad = true; schakel("npSoortVoorraad","npSoortDoorloop"); });
+$("npSoortDoorloop").addEventListener("click", () => { npOpVoorraad = false; schakel("npSoortDoorloop","npSoortVoorraad"); });
 
 function vulVoorraadSelects(){
   $("vCategorie").innerHTML = '<option value="">— geen —</option>' +
@@ -1275,6 +1314,8 @@ $("vNieuw").addEventListener("click", () => {
   bewerkProductId = null;
   ["vNaam","vInkoop","vVerkoop","vVoorraad","vEenheid","vLeverancier"].forEach(id => $(id).value = "");
   $("vCategorie").value = "";
+  prodOpVoorraad = true; schakel("vSoortVoorraad","vSoortDoorloop");
+  $("vVoorraadVeld").style.display = "block";
   $("vVerwijder").style.display = "none";
   $("vForm").style.display = "block";
   $("vNaam").focus();
@@ -1289,7 +1330,8 @@ $("vOpslaan").addEventListener("click", async () => {
     categorie_id: $("vCategorie").value || null,
     inkoopprijs: parseFloat($("vInkoop").value) || 0,
     verkoopprijs: parseFloat($("vVerkoop").value) || 0,
-    voorraad: parseFloat($("vVoorraad").value) || 0,
+    op_voorraad: prodOpVoorraad,
+    voorraad: prodOpVoorraad ? (parseFloat($("vVoorraad").value) || 0) : 0,
     eenheid: $("vEenheid").value.trim() || "stuks",
     leverancier: $("vLeverancier").value.trim() || null
   };
@@ -1339,7 +1381,7 @@ function renderVoorraad(){
     return '<tr class="klik" data-vid="' + p.id + '">' +
       '<td class="tekst">' + esc(p.naam) + '</td>' +
       '<td class="tekst">' + esc(catNaam(p.categorie_id) || "—") + '</td>' +
-      '<td class="r">' + Number(p.voorraad).toLocaleString("nl-NL") + ' ' + esc(p.eenheid || "") + '</td>' +
+      '<td class="r">' + (p.op_voorraad === false ? '<span class="chip grijs">DOORLOOP</span>' : Number(p.voorraad).toLocaleString("nl-NL") + ' ' + esc(p.eenheid || "")) + '</td>' +
       '<td class="r">' + eur2(p.inkoopprijs || 0) + '</td>' +
       '<td class="r">' + eur2(p.verkoopprijs || 0) + '</td>' +
       '<td class="r" style="color:' + (marge > 0 ? "var(--groen)" : "var(--ink3)") + '">' + eur2(marge) + '</td>' +
@@ -1353,6 +1395,9 @@ function renderVoorraad(){
     $("vCategorie").value = p.categorie_id || "";
     $("vInkoop").value = p.inkoopprijs || "";
     $("vVerkoop").value = p.verkoopprijs || "";
+    prodOpVoorraad = p.op_voorraad !== false;
+    if (prodOpVoorraad) schakel("vSoortVoorraad","vSoortDoorloop"); else schakel("vSoortDoorloop","vSoortVoorraad");
+    $("vVoorraadVeld").style.display = prodOpVoorraad ? "block" : "none";
     $("vVoorraad").value = p.voorraad || 0;
     $("vEenheid").value = p.eenheid || "";
     $("vLeverancier").value = p.leverancier || "";
