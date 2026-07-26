@@ -226,9 +226,6 @@ nav.onderbalk{display:none}
         </div>
         <div class="status-balk">
           <div><span class="bol" id="dbBol"></span><span class="t" id="dbStatus">Database verbinden…</span></div>
-          <div><span class="t">KM-prijs</span><span class="n" id="sKm">—</span></div>
-          <div><span class="t">BTW</span><span class="n" id="sBtw">—</span></div>
-          <div><span class="t">Uurtarief</span><span class="n" id="sUur">—</span></div>
         </div>
       </div>
 
@@ -248,10 +245,13 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Datum</label><input type="date" id="uDatum"></div>
             <div class="veld"><label>Aantal uur</label><input type="number" id="uAantal" step="0.25" min="0" inputmode="decimal" placeholder="bv. 8"></div>
           </div>
-          <div class="veld"><label>Soort</label>
-            <div class="schakel">
-              <button type="button" id="uSoortWerk" class="aan">Werkuren</button>
-              <button type="button" id="uSoortKantoor">Kantooruren</button>
+          <div class="rij2">
+            <div class="veld"><label>Uurtarief (€)</label><input type="number" id="uTarief" step="0.50" min="0" inputmode="decimal" placeholder="bv. 55"></div>
+            <div class="veld"><label>Soort</label>
+              <div class="schakel">
+                <button type="button" id="uSoortWerk" class="aan">Werkuren</button>
+                <button type="button" id="uSoortKantoor">Kantooruren</button>
+              </div>
             </div>
           </div>
           <div class="rij2">
@@ -291,7 +291,7 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Datum</label><input type="date" id="pDatum"></div>
           <button class="knop" id="pOpslaan">Gebruik opslaan</button>
-          <button class="link-knop" id="pNieuwToon">Product staat er niet bij? Snel toevoegen</button>
+          <button class="knop klein stil" id="pNieuwToon" style="margin-top:12px">+ Nieuw product toevoegen</button>
           <div id="pNieuwBlok" style="display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
             <div class="rij2">
               <div class="veld"><label>Naam nieuw product</label><input type="text" id="npNaam" placeholder="bv. Wandcontactdoos inbouw"></div>
@@ -317,7 +317,7 @@ nav.onderbalk{display:none}
         </div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>Datum</th><th>Soort</th><th class="r">Uren</th><th>Project / klant</th><th>Omschrijving</th><th></th></tr></thead>
+            <thead><tr><th>Datum</th><th>Soort</th><th class="r">Uren</th><th class="r">Tarief</th><th class="r">Bedrag</th><th>Project / klant</th><th>Omschrijving</th><th></th></tr></thead>
             <tbody id="urenBody"></tbody>
           </table>
         </div>
@@ -410,8 +410,37 @@ nav.onderbalk{display:none}
       <div class="tab" id="tab-facturen"><h2>Facturen</h2>
         <div class="straks"><span class="fase">FASE 3 — VOLGENDE STAP</span><p>Inkomende en uitgaande facturen, met de Factureren-knop: uren en gebruikte spullen van een project worden automatisch een kant-en-klare factuur.</p></div>
       </div>
-      <div class="tab" id="tab-voorraad"><h2>Voorraad</h2>
-        <div class="straks"><span class="fase">FASE 4</span><p>Je magazijn in categorieën met inkoopprijs, verkoopprijs en marge per product. Producten die je nu al toevoegt via het invulformulier zie je hier straks terug. Inkoopfacturen upload je als PDF en worden automatisch uitgelezen.</p></div>
+      <div class="tab" id="tab-voorraad">
+        <div class="tab-kop"><h2>Voorraad</h2>
+          <button class="knop klein" id="vNieuw">+ Nieuw product</button></div>
+        <div class="form-card" id="vForm" style="display:none;margin-bottom:18px">
+          <div class="rij2">
+            <div class="veld"><label>Naam *</label><input type="text" id="vNaam"></div>
+            <div class="veld"><label>Categorie</label><select id="vCategorie"></select></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Inkoopprijs (excl.)</label><input type="number" id="vInkoop" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld"><label>Verkoopprijs (excl.)</label><input type="number" id="vVerkoop" step="0.01" min="0" inputmode="decimal"></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Voorraad</label><input type="number" id="vVoorraad" step="0.5" inputmode="decimal"></div>
+            <div class="veld"><label>Eenheid</label><input type="text" id="vEenheid" placeholder="stuks / meter / doos"></div>
+          </div>
+          <div class="veld"><label>Leverancier</label><input type="text" id="vLeverancier"></div>
+          <div style="display:flex;gap:10px">
+            <button class="knop klein" id="vOpslaan">Opslaan</button>
+            <button class="knop klein stil" id="vAnnuleer">Annuleren</button>
+            <button class="knop klein gevaar" id="vVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+          </div>
+        </div>
+        <div class="veld" style="max-width:280px"><label>Filter op categorie</label><select id="vFilter"></select></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Product</th><th>Categorie</th><th class="r">Voorraad</th><th class="r">Inkoop</th><th class="r">Verkoop</th><th class="r">Marge</th></tr></thead>
+            <tbody id="vBody"></tbody>
+          </table>
+        </div>
+        <div class="straks" style="margin-top:18px"><span class="fase">FASE 4</span><p>Hier komt nog bij: inkoopfacturen als PDF uploaden en automatisch inlezen, eigen categorieën beheren en de goedkoopste leverancier per product.</p></div>
       </div>
       <div class="tab" id="tab-belasting"><h2>Belasting</h2>
         <div class="straks"><span class="fase">FASE 5</span><p>Tabellen met je winst en een schatting van de belasting daarover, per kwartaal en per jaar — met percentages die je zelf kunt aanpassen. En: wat je onderaan de streep naar privé overhoudt.</p></div>
@@ -597,10 +626,13 @@ async function laadAlles(){
     kmData = km.data || [];
 
     vulSelects();
+    vulVoorraadSelects();
     renderKlanten();
     renderProjecten();
     renderUren();
+    vulTariefDefault();
     renderKm();
+    renderVoorraad();
     renderHoofd();
     checkHerinnering();
 
@@ -672,9 +704,6 @@ function renderHoofd(){
   $("cProjecten").textContent = openProj;
   $("cKlantenSub").textContent = cache.klanten.length + " klanten totaal";
 
-  $("sKm").textContent = "€ " + Number(cache.inst.km_prijs || 0).toFixed(2).replace(".", ",");
-  $("sBtw").textContent = (cache.inst.btw_percentage || "—") + "%";
-  $("sUur").textContent = "€ " + Number(cache.inst.uurtarief || 0).toFixed(0);
 }
 
 async function laadFactuurCijfers(jaar){
@@ -721,8 +750,10 @@ $("uOpslaan").addEventListener("click", async () => {
   const datum = $("uDatum").value;
   const aantal = parseFloat($("uAantal").value);
   if (!datum || !(aantal > 0)) { toast("Vul een datum en aantal uur in"); return; }
+  const tarief = parseFloat($("uTarief").value);
   const rij = {
     datum, soort: urenSoort, aantal,
+    tarief: tarief > 0 ? tarief : null,
     project_id: $("uProject").value || null,
     klant_id: $("uKlant").value || null,
     omschrijving: $("uOmschrijving").value.trim() || null
@@ -742,6 +773,13 @@ async function herlaadUren(){
   renderUren(); renderHoofd(); checkHerinnering();
 }
 
+/* laatst gebruikte tarief alvast invullen als het veld leeg is */
+function vulTariefDefault(){
+  if ($("uTarief").value) return;
+  const met = urenData.find(u => u.tarief != null);
+  if (met) $("uTarief").value = met.tarief;
+}
+
 function periodes(){
   const nu = new Date();
   const wd = (nu.getDay() + 6) % 7;
@@ -757,8 +795,11 @@ function renderUren(){
   const som = (vanaf, soort) => urenData
     .filter(u => new Date(u.datum) >= vanaf && (!soort || u.soort === soort))
     .reduce((s,u) => s + Number(u.aantal || 0), 0);
+  const somBedrag = vanaf => urenData
+    .filter(u => new Date(u.datum) >= vanaf)
+    .reduce((s,u) => s + Number(u.aantal || 0) * Number(u.tarief || 0), 0);
   const fmt = n => n.toLocaleString("nl-NL");
-  const sub = vanaf => fmt(som(vanaf,"werk")) + " werk · " + fmt(som(vanaf,"kantoor")) + " kantoor";
+  const sub = vanaf => fmt(som(vanaf,"werk")) + " werk · " + fmt(som(vanaf,"kantoor")) + " kantoor · " + eur(somBedrag(vanaf));
 
   $("uwWeek").textContent = fmt(som(p.maandag));
   $("uwWeekSub").textContent = sub(p.maandag);
@@ -771,7 +812,7 @@ function renderUren(){
 
   const body = $("urenBody");
   if (!urenData.length){
-    body.innerHTML = '<tr><td colspan="6" class="leeg">Nog geen uren ingevuld — begin via het invulformulier.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="leeg">Nog geen uren ingevuld — begin via het invulformulier.</td></tr>';
     return;
   }
   body.innerHTML = urenData.slice(0, 60).map(u => {
@@ -780,6 +821,8 @@ function renderUren(){
       '<td>' + fmtDatum(u.datum) + '</td>' +
       '<td><span class="chip ' + (u.soort === "werk" ? "groen" : "grijs") + '">' + (u.soort === "werk" ? "WERK" : "KANTOOR") + '</span></td>' +
       '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
+      '<td class="r">' + (u.tarief ? eur2(u.tarief) : "—") + '</td>' +
+      '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td>' +
       '<td class="tekst">' + esc(wie) + '</td>' +
       '<td class="tekst">' + esc(u.omschrijving || "") + '</td>' +
       '<td class="r"><button class="verwijder" data-uid="' + u.id + '" title="Verwijderen">✕</button></td>' +
@@ -934,10 +977,11 @@ $("npOpslaan").addEventListener("click", async () => {
   $("npOpslaan").disabled = true;
   const { data, error } = await db.from("producten").insert(rij).select().single();
   $("npOpslaan").disabled = false;
-  if (error) { console.error(error); toast("Toevoegen mislukt"); return; }
+  if (error) { console.error(error); toast("Toevoegen mislukt: " + (error.message || "onbekende fout")); return; }
   cache.producten.push(data);
   cache.producten.sort((a,b) => a.naam.localeCompare(b.naam));
   vulSelects();
+  renderVoorraad();
   $("pProduct").value = data.id;
   $("npNaam").value = ""; $("npInkoop").value = ""; $("npVerkoop").value = "";
   $("pNieuwBlok").style.display = "none";
@@ -966,6 +1010,7 @@ $("pOpslaan").addEventListener("click", async () => {
   $("pOpslaan").disabled = false;
   if (error) { console.error(error); toast("Opslaan mislukt"); return; }
   $("pAantal").value = "";
+  renderVoorraad();
   toast("Gebruik opgeslagen bij " + (projectNaam(projectId) || "project"));
 });
 
@@ -1133,6 +1178,113 @@ function renderProjecten(){
     if (p.status === "open") schakel("prOpen","prAfgerond"); else schakel("prAfgerond","prOpen");
     $("prVerwijder").style.display = "inline-block";
     $("projForm").style.display = "block";
+    window.scrollTo(0, 0);
+  }));
+}
+
+/* =====================================================
+   VOORRAAD (basis — fase 4 breidt dit uit)
+   ===================================================== */
+function catNaam(id){
+  const c = cache.categorieen.find(x => x.id === id);
+  return c ? c.naam : "";
+}
+let bewerkProductId = null;
+
+function vulVoorraadSelects(){
+  $("vCategorie").innerHTML = '<option value="">— geen —</option>' +
+    cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
+  $("vFilter").innerHTML = '<option value="">Alle categorieën</option>' +
+    cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
+}
+
+$("vNieuw").addEventListener("click", () => {
+  bewerkProductId = null;
+  ["vNaam","vInkoop","vVerkoop","vVoorraad","vEenheid","vLeverancier"].forEach(id => $(id).value = "");
+  $("vCategorie").value = "";
+  $("vVerwijder").style.display = "none";
+  $("vForm").style.display = "block";
+  $("vNaam").focus();
+});
+$("vAnnuleer").addEventListener("click", () => { $("vForm").style.display = "none"; });
+
+$("vOpslaan").addEventListener("click", async () => {
+  const naam = $("vNaam").value.trim();
+  if (!naam) { toast("Naam is verplicht"); return; }
+  const rij = {
+    naam,
+    categorie_id: $("vCategorie").value || null,
+    inkoopprijs: parseFloat($("vInkoop").value) || 0,
+    verkoopprijs: parseFloat($("vVerkoop").value) || 0,
+    voorraad: parseFloat($("vVoorraad").value) || 0,
+    eenheid: $("vEenheid").value.trim() || "stuks",
+    leverancier: $("vLeverancier").value.trim() || null
+  };
+  $("vOpslaan").disabled = true;
+  let fout;
+  if (bewerkProductId){
+    ({ error: fout } = await db.from("producten").update(rij).eq("id", bewerkProductId));
+  } else {
+    ({ error: fout } = await db.from("producten").insert(rij));
+  }
+  $("vOpslaan").disabled = false;
+  if (fout) { console.error(fout); toast("Opslaan mislukt: " + (fout.message || "onbekende fout")); return; }
+  $("vForm").style.display = "none";
+  toast("Product opgeslagen");
+  await herlaadProducten();
+});
+
+$("vVerwijder").addEventListener("click", async () => {
+  if (!bewerkProductId) return;
+  if (!confirm("Dit product verwijderen? De gebruik-geschiedenis van dit product verdwijnt ook.")) return;
+  const { error } = await db.from("producten").delete().eq("id", bewerkProductId);
+  if (error) { toast("Verwijderen mislukt"); return; }
+  $("vForm").style.display = "none";
+  toast("Product verwijderd");
+  await herlaadProducten();
+});
+
+async function herlaadProducten(){
+  const { data } = await db.from("producten").select("*").order("naam");
+  cache.producten = data || [];
+  vulSelects();
+  renderVoorraad();
+}
+
+$("vFilter").addEventListener("change", renderVoorraad);
+
+function renderVoorraad(){
+  const filter = $("vFilter").value;
+  const lijst = cache.producten.filter(p => !filter || p.categorie_id === filter);
+  const body = $("vBody");
+  if (!lijst.length){
+    body.innerHTML = '<tr><td colspan="6" class="leeg">Nog geen producten' + (filter ? " in deze categorie" : "") + ' — voeg je eerste product toe.</td></tr>';
+    return;
+  }
+  body.innerHTML = lijst.map(p => {
+    const marge = Number(p.verkoopprijs || 0) - Number(p.inkoopprijs || 0);
+    return '<tr class="klik" data-vid="' + p.id + '">' +
+      '<td class="tekst">' + esc(p.naam) + '</td>' +
+      '<td class="tekst">' + esc(catNaam(p.categorie_id) || "—") + '</td>' +
+      '<td class="r">' + Number(p.voorraad).toLocaleString("nl-NL") + ' ' + esc(p.eenheid || "") + '</td>' +
+      '<td class="r">' + eur2(p.inkoopprijs || 0) + '</td>' +
+      '<td class="r">' + eur2(p.verkoopprijs || 0) + '</td>' +
+      '<td class="r" style="color:' + (marge > 0 ? "var(--groen)" : "var(--ink3)") + '">' + eur2(marge) + '</td>' +
+    '</tr>';
+  }).join("");
+  body.querySelectorAll("[data-vid]").forEach(r => r.addEventListener("click", () => {
+    const p = cache.producten.find(x => x.id === r.dataset.vid);
+    if (!p) return;
+    bewerkProductId = p.id;
+    $("vNaam").value = p.naam || "";
+    $("vCategorie").value = p.categorie_id || "";
+    $("vInkoop").value = p.inkoopprijs || "";
+    $("vVerkoop").value = p.verkoopprijs || "";
+    $("vVoorraad").value = p.voorraad || 0;
+    $("vEenheid").value = p.eenheid || "";
+    $("vLeverancier").value = p.leverancier || "";
+    $("vVerwijder").style.display = "inline-block";
+    $("vForm").style.display = "block";
     window.scrollTo(0, 0);
   }));
 }
