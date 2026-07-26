@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LRoks">
+<meta name="theme-color" content="#101312">
+<title>LRoks Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#F4F5F3; --surface:#FFFFFF; --surface2:#EDEFEC;
+  --ink:#171B19; --ink2:#5B625E; --ink3:#9AA19C; --line:#DDE1DD;
+  --groen:#1F7A4D; --groen-bg:#E7F3EC;
+  --amber:#B0720A; --amber-bg:#F8EFDD;
+  --rood:#B3372B; --rood-bg:#F9E8E5;
+  --accent:#171B19;
+  --nav-h:60px;
+}
+[data-theme="dark"]{
+  --bg:#101312; --surface:#181C1A; --surface2:#1F2422;
+  --ink:#EDEFEC; --ink2:#9AA19C; --ink3:#666D68; --line:#262B29;
+  --groen:#4CC58A; --groen-bg:#15291F;
+  --amber:#E0A43C; --amber-bg:#2B2213;
+  --rood:#E06A5B; --rood-bg:#2C1815;
+  --accent:#EDEFEC;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:'Archivo',sans-serif; min-height:100vh;
+  transition:background .25s,color .25s;
+}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+button{font-family:inherit}
+
+/* ================= LOGIN ================= */
+#loginScherm{
+  position:fixed; inset:0; background:var(--bg); z-index:100;
+  display:flex; align-items:center; justify-content:center; padding:20px;
+}
+.login-card{
+  width:100%; max-width:380px; background:var(--surface);
+  border:1px solid var(--line); border-radius:12px; padding:34px 28px;
+}
+.login-card .merk{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.login-card .merk h1{font-size:1.15rem;font-weight:700;letter-spacing:.06em}
+.login-card .merk span{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase}
+.login-card p{font-size:.82rem;color:var(--ink2);margin-bottom:22px}
+.veld{margin-bottom:14px}
+.veld label{display:block;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin-bottom:6px}
+.veld input{
+  width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:8px;
+  background:var(--bg); color:var(--ink); font-size:1rem; font-family:'Archivo',sans-serif;
+}
+.veld input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.knop{
+  width:100%; padding:13px; border:none; border-radius:8px;
+  background:var(--accent); color:var(--bg); font-weight:600; font-size:.95rem;
+  cursor:pointer; letter-spacing:.03em; margin-top:6px;
+}
+.knop:disabled{opacity:.55;cursor:wait}
+.login-fout{
+  display:none; margin-top:14px; padding:11px 13px; border-radius:8px;
+  background:var(--rood-bg); color:var(--rood); font-size:.82rem;
+}
+
+/* ================= APP-LAYOUT ================= */
+#app{display:none}
+header{
+  position:sticky; top:0; z-index:20; background:var(--bg);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 20px 14px; border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:baseline;gap:9px}
+.brand h1{font-size:1rem;font-weight:700;letter-spacing:.06em}
+.brand span{font-family:'IBM Plex Mono',monospace;font-size:.64rem;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.datum{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--ink2)}
+.mini-btn{
+  border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  font-family:'IBM Plex Mono',monospace; font-size:.68rem; letter-spacing:.06em;
+  padding:7px 12px; border-radius:6px; cursor:pointer;
+}
+.mini-btn:hover{border-color:var(--ink3)}
+
+.layout{display:flex; max-width:1200px; margin:0 auto}
+nav.zijbalk{
+  width:210px; flex-shrink:0; padding:22px 14px;
+  border-right:1px solid var(--line); min-height:calc(100vh - 60px);
+}
+nav.zijbalk button{
+  display:block; width:100%; text-align:left; padding:10px 13px; margin-bottom:2px;
+  border:none; background:none; color:var(--ink2); font-size:.86rem; font-weight:500;
+  border-radius:7px; cursor:pointer;
+}
+nav.zijbalk button:hover{background:var(--surface2);color:var(--ink)}
+nav.zijbalk button.actief{background:var(--surface); color:var(--ink); font-weight:600; border:1px solid var(--line)}
+nav.zijbalk .groep{
+  font-family:'IBM Plex Mono',monospace; font-size:.6rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink3); margin:18px 13px 8px;
+}
+nav.zijbalk .groep:first-child{margin-top:0}
+
+main{flex:1; padding:26px 22px 90px; min-width:0}
+.tab{display:none}
+.tab.actief{display:block}
+.tab h2{font-size:.8rem;letter-spacing:.16em;text-transform:uppercase;font-weight:700;margin-bottom:16px}
+
+/* placeholder-kaarten */
+.straks{
+  background:var(--surface); border:1px dashed var(--line); border-radius:10px;
+  padding:26px 22px; max-width:560px;
+}
+.straks .fase{
+  display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:.66rem;
+  letter-spacing:.1em; background:var(--surface2); color:var(--ink2);
+  padding:4px 10px; border-radius:5px; margin-bottom:12px;
+}
+.straks p{font-size:.88rem; color:var(--ink2); line-height:1.55}
+
+/* hoofdpagina cijfers */
+.grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+.card{
+  background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  padding:17px 17px 15px;
+}
+.card .k{font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink2);font-weight:600}
+.card .v{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;font-size:1.5rem;font-weight:600;margin-top:8px}
+.card .m{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--ink3);margin-top:6px}
+.card.groen .v{color:var(--groen)}
+.card.amber .v{color:var(--amber)}
+
+.status-balk{
+  margin-top:20px; display:flex; flex-wrap:wrap; gap:10px 26px;
+  padding:15px 17px; background:var(--surface); border:1px solid var(--line); border-radius:10px;
+}
+.status-balk div{display:flex; align-items:center; gap:8px}
+.status-balk .t{font-size:.72rem;color:var(--ink2)}
+.status-balk .n{font-family:'IBM Plex Mono',monospace;font-size:.78rem;font-weight:600}
+.bol{width:8px;height:8px;border-radius:50%;background:var(--groen);display:inline-block}
+
+/* ================= MOBIEL ================= */
+nav.onderbalk{display:none}
+.sheet{display:none}
+@media(max-width:760px){
+  nav.zijbalk{display:none}
+  main{padding:20px 16px calc(var(--nav-h) + 30px)}
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .datum{display:none}
+  nav.onderbalk{
+    display:flex; position:fixed; bottom:0; left:0; right:0; z-index:30;
+    background:var(--surface); border-top:1px solid var(--line);
+    height:calc(var(--nav-h) + env(safe-area-inset-bottom));
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  nav.onderbalk button{
+    flex:1; border:none; background:none; color:var(--ink3);
+    font-size:.64rem; font-weight:600; letter-spacing:.03em; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  }
+  nav.onderbalk button .streep{width:18px;height:2px;border-radius:2px;background:currentColor;opacity:.5}
+  nav.onderbalk button.actief{color:var(--ink)}
+  nav.onderbalk button.actief .streep{opacity:1}
+  .sheet{
+    position:fixed; bottom:calc(var(--nav-h) + env(safe-area-inset-bottom)); left:0; right:0; z-index:29;
+    background:var(--surface); border-top:1px solid var(--line);
+    padding:14px 16px 18px; display:none;
+  }
+  .sheet.open{display:block}
+  .sheet button{
+    display:block; width:100%; text-align:left; padding:12px 13px;
+    border:none; background:none; color:var(--ink); font-size:.9rem; font-weight:500;
+    border-bottom:1px solid var(--line); cursor:pointer;
+  }
+  .sheet button:last-child{border-bottom:none}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScherm">
+  <div class="login-card">
+    <div class="merk"><h1>LROKS</h1><span>Command Center</span></div>
+    <p>Log in om verder te gaan.</p>
+    <div class="veld">
+      <label for="loginEmail">E-mail</label>
+      <input id="loginEmail" type="email" autocomplete="username" inputmode="email">
+    </div>
+    <div class="veld">
+      <label for="loginWw">Wachtwoord</label>
+      <input id="loginWw" type="password" autocomplete="current-password">
+    </div>
+    <button class="knop" id="loginKnop">Inloggen</button>
+    <div class="login-fout" id="loginFout"></div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <header>
+    <div class="brand"><h1>LROKS</h1><span>Command Center</span></div>
+    <div class="hdr-right">
+      <span class="datum" id="datum"></span>
+      <button class="mini-btn" id="themaKnop">DONKER</button>
+      <button class="mini-btn" id="uitlogKnop">UITLOGGEN</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="zijbalk" id="zijbalk">
+      <div class="groep">Overzicht</div>
+      <button data-tab="hoofd">Hoofdpagina</button>
+      <button data-tab="omzet">Omzet / winst</button>
+      <div class="groep">Dagelijks</div>
+      <button data-tab="invullen">Invulformulier</button>
+      <button data-tab="uren">Urenregistratie</button>
+      <button data-tab="km">KM-registratie</button>
+      <div class="groep">Administratie</div>
+      <button data-tab="facturen">Facturen</button>
+      <button data-tab="voorraad">Voorraad</button>
+      <button data-tab="projecten">Projecten</button>
+      <button data-tab="klanten">Klanten</button>
+      <div class="groep">Cijfers</div>
+      <button data-tab="belasting">Belasting</button>
+      <button data-tab="btw">BTW</button>
+    </nav>
+
+    <main>
+      <!-- HOOFDPAGINA -->
+      <div class="tab" id="tab-hoofd">
+        <h2>Hoofdpagina</h2>
+        <div class="grid">
+          <div class="card"><div class="k">Omzet dit jaar</div><div class="v" id="cOmzet">—</div><div class="m">excl. btw</div></div>
+          <div class="card amber"><div class="k">Openstaand</div><div class="v" id="cOpen">—</div><div class="m" id="cOpenSub">facturen</div></div>
+          <div class="card groen"><div class="k">Betaald dit jaar</div><div class="v" id="cBetaald">—</div><div class="m">excl. btw</div></div>
+          <div class="card"><div class="k">Uren deze week</div><div class="v" id="cUren">—</div><div class="m">werk + kantoor</div></div>
+          <div class="card"><div class="k">KM dit jaar</div><div class="v" id="cKm">—</div><div class="m" id="cKmSub">zakelijk</div></div>
+          <div class="card"><div class="k">Open projecten</div><div class="v" id="cProjecten">—</div><div class="m" id="cKlantenSub">klanten totaal</div></div>
+        </div>
+        <div class="status-balk">
+          <div><span class="bol" id="dbBol"></span><span class="t" id="dbStatus">Database verbinden…</span></div>
+          <div><span class="t">KM-prijs</span><span class="n" id="sKm">—</span></div>
+          <div><span class="t">BTW</span><span class="n" id="sBtw">—</span></div>
+          <div><span class="t">Uurtarief</span><span class="n" id="sUur">—</span></div>
+        </div>
+      </div>
+
+      <!-- PLACEHOLDERS -->
+      <div class="tab" id="tab-omzet"><h2>Omzet / winst</h2>
+        <div class="straks"><span class="fase">FASE 5</span><p>Hier komen je omzet en winst: winst uit uren en winst uit de marge op je spullen, bij elkaar opgeteld. Met een tabblad voor doelen die je zelf kunt aanpassen.</p></div>
+      </div>
+      <div class="tab" id="tab-invullen"><h2>Invulformulier</h2>
+        <div class="straks"><span class="fase">FASE 2 — VOLGENDE STAP</span><p>Hier komen de drie formulieren die je dagelijks gebruikt: uren, kilometers en gebruikte producten per project. Eén keer invullen, en de rest van het systeem rekent mee.</p></div>
+      </div>
+      <div class="tab" id="tab-uren"><h2>Urenregistratie</h2>
+        <div class="straks"><span class="fase">FASE 2</span><p>Werkuren en kantooruren, met nette tabellen per week, maand, kwartaal en jaar. Invullen doe je via het invulformulier.</p></div>
+      </div>
+      <div class="tab" id="tab-km"><h2>KM-registratie</h2>
+        <div class="straks"><span class="fase">FASE 2</span><p>Elke dag je kilometerstand invullen; het verschil met gisteren wordt automatisch berekend, tegen jouw km-prijs. Overzichten per week, maand, kwartaal en jaar.</p></div>
+      </div>
+      <div class="tab" id="tab-facturen"><h2>Facturen</h2>
+        <div class="straks"><span class="fase">FASE 3</span><p>Inkomende en uitgaande facturen, met de Factureren-knop: uren en gebruikte spullen van een project worden automatisch een kant-en-klare factuur.</p></div>
+      </div>
+      <div class="tab" id="tab-voorraad"><h2>Voorraad</h2>
+        <div class="straks"><span class="fase">FASE 4</span><p>Je magazijn in categorieën (inbouw, opbouw, meterkast, draad, buis, bevestiging — zelf uit te breiden), met inkoopprijs, verkoopprijs en marge per product. Inkoopfacturen upload je als PDF en worden automatisch uitgelezen.</p></div>
+      </div>
+      <div class="tab" id="tab-projecten"><h2>Projecten</h2>
+        <div class="straks"><span class="fase">FASE 2</span><p>Al je klussen met zoveel tekst en notities als je wilt. Uren en producten hangen straks aan een project, zodat factureren één klik is.</p></div>
+      </div>
+      <div class="tab" id="tab-klanten"><h2>Klanten</h2>
+        <div class="straks"><span class="fase">FASE 2</span><p>Je klantenbestand: bedrijven en particulieren, met contactgegevens. Nodig voor projecten, uren en facturen.</p></div>
+      </div>
+      <div class="tab" id="tab-belasting"><h2>Belasting</h2>
+        <div class="straks"><span class="fase">FASE 5</span><p>Tabellen met je winst en een schatting van de belasting daarover, per kwartaal en per jaar — met percentages (zoals 35%, zvw, startersaftrek) die je zelf kunt aanpassen. En: wat je onderaan de streep naar privé overhoudt.</p></div>
+      </div>
+      <div class="tab" id="tab-btw"><h2>BTW</h2>
+        <div class="straks"><span class="fase">FASE 5</span><p>BTW berekend uit je inkomende en uitgaande facturen, in een net overzicht per kwartaal. Met bank-import via CSV om betalingen te koppelen.</p></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- mobiele navigatie -->
+  <div class="sheet" id="meerSheet">
+    <button data-tab="omzet">Omzet / winst</button>
+    <button data-tab="uren">Urenregistratie</button>
+    <button data-tab="km">KM-registratie</button>
+    <button data-tab="projecten">Projecten</button>
+    <button data-tab="klanten">Klanten</button>
+    <button data-tab="belasting">Belasting</button>
+    <button data-tab="btw">BTW</button>
+  </div>
+  <nav class="onderbalk">
+    <button data-tab="hoofd"><span class="streep"></span>Hoofd</button>
+    <button data-tab="invullen"><span class="streep"></span>Invullen</button>
+    <button data-tab="facturen"><span class="streep"></span>Facturen</button>
+    <button data-tab="voorraad"><span class="streep"></span>Voorraad</button>
+    <button id="meerKnop"><span class="streep"></span>Meer</button>
+  </nav>
+</div>
+
+<script>
+/* =====================================================
+   CONFIGURATIE
+   ===================================================== */
+const SUPABASE_URL = "https://boddqdbbkqmokysaienl.supabase.co";
+const SUPABASE_KEY = "sb_publishable_wZUcZyiDl9WQuAKoWOblgw_1dU1oggO";
+
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = id => document.getElementById(id);
+const eur = n => "€ " + Math.round(n).toLocaleString("nl-NL");
+const MAANDEN = ["JAN","FEB","MRT","APR","MEI","JUN","JUL","AUG","SEP","OKT","NOV","DEC"];
+
+/* =====================================================
+   THEMA (licht / donker)
+   ===================================================== */
+(function(){
+  let donker = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  try { const b = localStorage.getItem("lroks_thema"); if (b) donker = b === "donker"; } catch(e){}
+  const zet = () => {
+    document.documentElement.setAttribute("data-theme", donker ? "dark" : "light");
+    $("themaKnop").textContent = donker ? "LICHT" : "DONKER";
+    try { localStorage.setItem("lroks_thema", donker ? "donker" : "licht"); } catch(e){}
+  };
+  zet();
+  $("themaKnop").addEventListener("click", () => { donker = !donker; zet(); });
+})();
+
+/* =====================================================
+   TABBLADEN + MOBIELE NAVIGATIE
+   ===================================================== */
+function toonTab(naam){
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("actief"));
+  const doel = $("tab-" + naam);
+  if (doel) doel.classList.add("actief");
+  document.querySelectorAll("[data-tab]").forEach(k =>
+    k.classList.toggle("actief", k.dataset.tab === naam));
+  $("meerSheet").classList.remove("open");
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("[data-tab]").forEach(k =>
+  k.addEventListener("click", () => toonTab(k.dataset.tab)));
+$("meerKnop").addEventListener("click", () =>
+  $("meerSheet").classList.toggle("open"));
+
+/* =====================================================
+   LOGIN / SESSIE
+   ===================================================== */
+async function start(){
+  const { data: { session } } = await db.auth.getSession();
+  if (session) { toonApp(); } else { toonLogin(); }
+}
+function toonLogin(){
+  $("loginScherm").style.display = "flex";
+  $("app").style.display = "none";
+}
+function toonApp(){
+  $("loginScherm").style.display = "none";
+  $("app").style.display = "block";
+  const nu = new Date();
+  $("datum").textContent =
+    String(nu.getDate()).padStart(2,"0") + " " + MAANDEN[nu.getMonth()] + " " + nu.getFullYear();
+  toonTab("hoofd");
+  laadCijfers();
+}
+
+$("loginKnop").addEventListener("click", inloggen);
+$("loginWw").addEventListener("keydown", e => { if (e.key === "Enter") inloggen(); });
+
+async function inloggen(){
+  const fout = $("loginFout");
+  fout.style.display = "none";
+  $("loginKnop").disabled = true;
+  $("loginKnop").textContent = "Bezig…";
+  const { error } = await db.auth.signInWithPassword({
+    email: $("loginEmail").value.trim(),
+    password: $("loginWw").value
+  });
+  $("loginKnop").disabled = false;
+  $("loginKnop").textContent = "Inloggen";
+  if (error) {
+    fout.textContent = "Inloggen mislukt. Controleer je e-mail en wachtwoord.";
+    fout.style.display = "block";
+    return;
+  }
+  toonApp();
+}
+
+$("uitlogKnop").addEventListener("click", async () => {
+  await db.auth.signOut();
+  toonLogin();
+});
+
+/* =====================================================
+   HOOFDPAGINA: CIJFERS UIT DE DATABASE
+   ===================================================== */
+async function laadCijfers(){
+  const dbStatus = $("dbStatus");
+  const dbBol = $("dbBol");
+  try {
+    const jaar = new Date().getFullYear();
+    const jaarStart = jaar + "-01-01";
+
+    // alles tegelijk ophalen
+    const [fact, uren, km, proj, klant, inst] = await Promise.all([
+      db.from("facturen").select("type,status,bedrag_excl,datum").gte("datum", jaarStart),
+      db.from("uren").select("datum,aantal"),
+      db.from("km_registratie").select("datum,km_stand,zakelijk").gte("datum", jaarStart).order("datum", { ascending: true }),
+      db.from("projecten").select("id,status"),
+      db.from("klanten").select("id"),
+      db.from("instellingen").select("sleutel,waarde")
+    ]);
+
+    const fouten = [fact, uren, km, proj, klant, inst].filter(r => r.error);
+    if (fouten.length) throw fouten[0].error;
+
+    // facturen (alleen verkoop telt als omzet)
+    const verkoop = (fact.data || []).filter(f => f.type === "verkoop");
+    const omzet = verkoop.reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
+    const open = verkoop.filter(f => f.status === "open");
+    const openBedrag = open.reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
+    const betaald = verkoop.filter(f => f.status === "betaald")
+      .reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
+
+    $("cOmzet").textContent = eur(omzet);
+    $("cOpen").textContent = eur(openBedrag);
+    $("cOpenSub").textContent = open.length + " facturen";
+    $("cBetaald").textContent = eur(betaald);
+
+    // uren deze week (week begint op maandag)
+    const nu = new Date();
+    const wd = (nu.getDay() + 6) % 7;
+    const maandag = new Date(nu); maandag.setDate(nu.getDate() - wd); maandag.setHours(0,0,0,0);
+    const urenWeek = (uren.data || [])
+      .filter(u => new Date(u.datum) >= maandag)
+      .reduce((s, u) => s + Number(u.aantal || 0), 0);
+    $("cUren").textContent = urenWeek.toLocaleString("nl-NL");
+
+    // km dit jaar: verschil tussen opeenvolgende standen
+    const standen = km.data || [];
+    let kmTotaal = 0;
+    for (let i = 1; i < standen.length; i++) {
+      const stuk = standen[i].km_stand - standen[i-1].km_stand;
+      if (stuk > 0 && standen[i].zakelijk) kmTotaal += stuk;
+    }
+    $("cKm").textContent = kmTotaal.toLocaleString("nl-NL");
+
+    // projecten & klanten
+    const openProj = (proj.data || []).filter(p => p.status === "open").length;
+    $("cProjecten").textContent = openProj;
+    $("cKlantenSub").textContent = (klant.data || []).length + " klanten totaal";
+
+    // instellingen
+    const I = {};
+    (inst.data || []).forEach(r => I[r.sleutel] = r.waarde);
+    $("sKm").textContent = "€ " + Number(I.km_prijs || 0).toFixed(2).replace(".", ",");
+    $("sBtw").textContent = (I.btw_percentage || "—") + "%";
+    $("sUur").textContent = "€ " + Number(I.uurtarief || 0).toFixed(0);
+
+    dbStatus.textContent = "Database verbonden";
+    dbBol.style.background = "var(--groen)";
+  } catch (e) {
+    console.error(e);
+    dbStatus.textContent = "Geen verbinding met de database";
+    dbBol.style.background = "var(--rood)";
+    ["cOmzet","cOpen","cBetaald","cUren","cKm","cProjecten"].forEach(id => $(id).textContent = "—");
+  }
+}
+
+start();
+</script>
+</body>
+</html>
