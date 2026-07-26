@@ -33,153 +33,133 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{font-size:16px}
-body{
-  background:var(--bg); color:var(--ink);
-  font-family:'Archivo',sans-serif; min-height:100vh;
-  transition:background .25s,color .25s;
-}
+body{background:var(--bg);color:var(--ink);font-family:'Archivo',sans-serif;min-height:100vh;transition:background .25s,color .25s}
 .mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
 button{font-family:inherit}
 
-/* ================= LOGIN ================= */
-#loginScherm{
-  position:fixed; inset:0; background:var(--bg); z-index:100;
-  display:flex; align-items:center; justify-content:center; padding:20px;
-}
-.login-card{
-  width:100%; max-width:380px; background:var(--surface);
-  border:1px solid var(--line); border-radius:12px; padding:34px 28px;
-}
+/* ---------- login ---------- */
+#loginScherm{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:34px 28px}
 .login-card .merk{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
 .login-card .merk h1{font-size:1.15rem;font-weight:700;letter-spacing:.06em}
 .login-card .merk span{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase}
 .login-card p{font-size:.82rem;color:var(--ink2);margin-bottom:22px}
-.veld{margin-bottom:14px}
-.veld label{display:block;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin-bottom:6px}
-.veld input{
-  width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:8px;
-  background:var(--bg); color:var(--ink); font-size:1rem; font-family:'Archivo',sans-serif;
-}
-.veld input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
-.knop{
-  width:100%; padding:13px; border:none; border-radius:8px;
-  background:var(--accent); color:var(--bg); font-weight:600; font-size:.95rem;
-  cursor:pointer; letter-spacing:.03em; margin-top:6px;
-}
-.knop:disabled{opacity:.55;cursor:wait}
-.login-fout{
-  display:none; margin-top:14px; padding:11px 13px; border-radius:8px;
-  background:var(--rood-bg); color:var(--rood); font-size:.82rem;
-}
+.login-fout{display:none;margin-top:14px;padding:11px 13px;border-radius:8px;background:var(--rood-bg);color:var(--rood);font-size:.82rem}
 
-/* ================= APP-LAYOUT ================= */
-#app{display:none}
-header{
-  position:sticky; top:0; z-index:20; background:var(--bg);
-  display:flex; align-items:center; justify-content:space-between;
-  padding:16px 20px 14px; border-bottom:1px solid var(--line);
+/* ---------- formulieren ---------- */
+.veld{margin-bottom:13px}
+.veld label{display:block;font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin-bottom:6px}
+.veld input,.veld select,.veld textarea{
+  width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg);color:var(--ink);font-size:1rem;font-family:'Archivo',sans-serif;
 }
+.veld textarea{min-height:110px;resize:vertical;line-height:1.5}
+.veld input:focus,.veld select:focus,.veld textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.rij2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.knop{width:100%;padding:13px;border:none;border-radius:8px;background:var(--accent);color:var(--bg);font-weight:600;font-size:.95rem;cursor:pointer;letter-spacing:.03em;margin-top:4px}
+.knop:disabled{opacity:.55;cursor:wait}
+.knop.klein{width:auto;padding:9px 16px;font-size:.82rem}
+.knop.stil{background:var(--surface2);color:var(--ink)}
+.knop.gevaar{background:none;color:var(--rood);border:1px solid var(--line);}
+.schakel{display:flex;gap:8px}
+.schakel button{flex:1;padding:11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink2);font-size:.88rem;font-weight:600;cursor:pointer}
+.schakel button.aan{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.hint{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--ink3);margin-top:6px}
+.hint b{color:var(--ink);font-weight:600}
+.form-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;max-width:560px}
+.link-knop{background:none;border:none;color:var(--ink2);font-size:.78rem;text-decoration:underline;cursor:pointer;padding:0;margin-top:2px}
+
+/* ---------- app-layout ---------- */
+#app{display:none}
+header{position:sticky;top:0;z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:space-between;padding:16px 20px 14px;border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:baseline;gap:9px}
 .brand h1{font-size:1rem;font-weight:700;letter-spacing:.06em}
 .brand span{font-family:'IBM Plex Mono',monospace;font-size:.64rem;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase}
 .hdr-right{display:flex;align-items:center;gap:10px}
 .datum{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--ink2)}
-.mini-btn{
-  border:1px solid var(--line); background:var(--surface); color:var(--ink);
-  font-family:'IBM Plex Mono',monospace; font-size:.68rem; letter-spacing:.06em;
-  padding:7px 12px; border-radius:6px; cursor:pointer;
-}
+.mini-btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.06em;padding:7px 12px;border-radius:6px;cursor:pointer}
 .mini-btn:hover{border-color:var(--ink3)}
-
-.layout{display:flex; max-width:1200px; margin:0 auto}
-nav.zijbalk{
-  width:210px; flex-shrink:0; padding:22px 14px;
-  border-right:1px solid var(--line); min-height:calc(100vh - 60px);
-}
-nav.zijbalk button{
-  display:block; width:100%; text-align:left; padding:10px 13px; margin-bottom:2px;
-  border:none; background:none; color:var(--ink2); font-size:.86rem; font-weight:500;
-  border-radius:7px; cursor:pointer;
-}
+.layout{display:flex;max-width:1200px;margin:0 auto}
+nav.zijbalk{width:210px;flex-shrink:0;padding:22px 14px;border-right:1px solid var(--line);min-height:calc(100vh - 60px)}
+nav.zijbalk button{display:block;width:100%;text-align:left;padding:10px 13px;margin-bottom:2px;border:none;background:none;color:var(--ink2);font-size:.86rem;font-weight:500;border-radius:7px;cursor:pointer}
 nav.zijbalk button:hover{background:var(--surface2);color:var(--ink)}
-nav.zijbalk button.actief{background:var(--surface); color:var(--ink); font-weight:600; border:1px solid var(--line)}
-nav.zijbalk .groep{
-  font-family:'IBM Plex Mono',monospace; font-size:.6rem; letter-spacing:.14em;
-  text-transform:uppercase; color:var(--ink3); margin:18px 13px 8px;
-}
+nav.zijbalk button.actief{background:var(--surface);color:var(--ink);font-weight:600;border:1px solid var(--line)}
+nav.zijbalk .groep{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin:18px 13px 8px}
 nav.zijbalk .groep:first-child{margin-top:0}
-
-main{flex:1; padding:26px 22px 90px; min-width:0}
+main{flex:1;padding:26px 22px 90px;min-width:0}
 .tab{display:none}
 .tab.actief{display:block}
 .tab h2{font-size:.8rem;letter-spacing:.16em;text-transform:uppercase;font-weight:700;margin-bottom:16px}
+.tab-kop{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:10px;flex-wrap:wrap}
+.tab-kop h2{margin-bottom:0}
 
-/* placeholder-kaarten */
-.straks{
-  background:var(--surface); border:1px dashed var(--line); border-radius:10px;
-  padding:26px 22px; max-width:560px;
-}
-.straks .fase{
-  display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:.66rem;
-  letter-spacing:.1em; background:var(--surface2); color:var(--ink2);
-  padding:4px 10px; border-radius:5px; margin-bottom:12px;
-}
-.straks p{font-size:.88rem; color:var(--ink2); line-height:1.55}
+.straks{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:26px 22px;max-width:560px}
+.straks .fase{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.1em;background:var(--surface2);color:var(--ink2);padding:4px 10px;border-radius:5px;margin-bottom:12px}
+.straks p{font-size:.88rem;color:var(--ink2);line-height:1.55}
 
-/* hoofdpagina cijfers */
-.grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
-.card{
-  background:var(--surface); border:1px solid var(--line); border-radius:10px;
-  padding:17px 17px 15px;
-}
+/* ---------- cijfers & tabellen ---------- */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:17px 17px 15px}
 .card .k{font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink2);font-weight:600}
 .card .v{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;font-size:1.5rem;font-weight:600;margin-top:8px}
 .card .m{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--ink3);margin-top:6px}
 .card.groen .v{color:var(--groen)}
 .card.amber .v{color:var(--amber)}
-
-.status-balk{
-  margin-top:20px; display:flex; flex-wrap:wrap; gap:10px 26px;
-  padding:15px 17px; background:var(--surface); border:1px solid var(--line); border-radius:10px;
-}
-.status-balk div{display:flex; align-items:center; gap:8px}
+.status-balk{margin-top:20px;display:flex;flex-wrap:wrap;gap:10px 26px;padding:15px 17px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.status-balk div{display:flex;align-items:center;gap:8px}
 .status-balk .t{font-size:.72rem;color:var(--ink2)}
 .status-balk .n{font-family:'IBM Plex Mono',monospace;font-size:.78rem;font-weight:600}
 .bol{width:8px;height:8px;border-radius:50%;background:var(--groen);display:inline-block}
 
-/* ================= MOBIEL ================= */
+.tbl-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:.63rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink2);font-weight:600;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--surface2);white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:.84rem;font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td.tekst{font-family:'Archivo',sans-serif;font-weight:500;white-space:normal}
+td.r,th.r{text-align:right}
+tbody tr.klik{cursor:pointer}
+tbody tr.klik:hover td{background:var(--surface2)}
+.chip{display:inline-block;padding:3px 9px;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:.66rem;font-weight:600;letter-spacing:.04em}
+.chip.groen{background:var(--groen-bg);color:var(--groen)}
+.chip.amber{background:var(--amber-bg);color:var(--amber)}
+.chip.grijs{background:var(--surface2);color:var(--ink2)}
+.verwijder{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:.95rem;padding:4px 8px;border-radius:5px}
+.verwijder:hover{color:var(--rood);background:var(--rood-bg)}
+.leeg{padding:22px;font-size:.84rem;color:var(--ink3);font-family:'IBM Plex Mono',monospace}
+
+/* subtabs invulformulier */
+.subtabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.subtabs button{padding:9px 18px;border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--ink2);font-size:.84rem;font-weight:600;cursor:pointer}
+.subtabs button.aan{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.subform{display:none}
+.subform.actief{display:block}
+
+/* herinnering + toast */
+.banner{display:none;background:var(--amber-bg);border:1px solid var(--amber);color:var(--amber);border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:.86rem;font-weight:500}
+.banner.zichtbaar{display:block}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 20px);background:var(--accent);color:var(--bg);padding:11px 20px;border-radius:8px;font-size:.85rem;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}
+#toast.zichtbaar{opacity:1}
+
+/* ---------- mobiel ---------- */
 nav.onderbalk{display:none}
 .sheet{display:none}
 @media(max-width:760px){
   nav.zijbalk{display:none}
   main{padding:20px 16px calc(var(--nav-h) + 30px)}
   .grid{grid-template-columns:repeat(2,1fr)}
+  .grid4{grid-template-columns:repeat(2,1fr)}
+  .rij2{grid-template-columns:1fr}
   .datum{display:none}
-  nav.onderbalk{
-    display:flex; position:fixed; bottom:0; left:0; right:0; z-index:30;
-    background:var(--surface); border-top:1px solid var(--line);
-    height:calc(var(--nav-h) + env(safe-area-inset-bottom));
-    padding-bottom:env(safe-area-inset-bottom);
-  }
-  nav.onderbalk button{
-    flex:1; border:none; background:none; color:var(--ink3);
-    font-size:.64rem; font-weight:600; letter-spacing:.03em; cursor:pointer;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
-  }
+  nav.onderbalk{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
+  nav.onderbalk button{flex:1;border:none;background:none;color:var(--ink3);font-size:.64rem;font-weight:600;letter-spacing:.03em;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
   nav.onderbalk button .streep{width:18px;height:2px;border-radius:2px;background:currentColor;opacity:.5}
   nav.onderbalk button.actief{color:var(--ink)}
   nav.onderbalk button.actief .streep{opacity:1}
-  .sheet{
-    position:fixed; bottom:calc(var(--nav-h) + env(safe-area-inset-bottom)); left:0; right:0; z-index:29;
-    background:var(--surface); border-top:1px solid var(--line);
-    padding:14px 16px 18px; display:none;
-  }
+  .sheet{position:fixed;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));left:0;right:0;z-index:29;background:var(--surface);border-top:1px solid var(--line);padding:14px 16px 18px}
   .sheet.open{display:block}
-  .sheet button{
-    display:block; width:100%; text-align:left; padding:12px 13px;
-    border:none; background:none; color:var(--ink); font-size:.9rem; font-weight:500;
-    border-bottom:1px solid var(--line); cursor:pointer;
-  }
+  .sheet button{display:block;width:100%;text-align:left;padding:12px 13px;border:none;background:none;color:var(--ink);font-size:.9rem;font-weight:500;border-bottom:1px solid var(--line);cursor:pointer}
   .sheet button:last-child{border-bottom:none}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -192,14 +172,10 @@ nav.onderbalk{display:none}
   <div class="login-card">
     <div class="merk"><h1>LROKS</h1><span>Command Center</span></div>
     <p>Log in om verder te gaan.</p>
-    <div class="veld">
-      <label for="loginEmail">E-mail</label>
-      <input id="loginEmail" type="email" autocomplete="username" inputmode="email">
-    </div>
-    <div class="veld">
-      <label for="loginWw">Wachtwoord</label>
-      <input id="loginWw" type="password" autocomplete="current-password">
-    </div>
+    <div class="veld"><label for="loginEmail">E-mail</label>
+      <input id="loginEmail" type="email" autocomplete="username" inputmode="email"></div>
+    <div class="veld"><label for="loginWw">Wachtwoord</label>
+      <input id="loginWw" type="password" autocomplete="current-password"></div>
     <button class="knop" id="loginKnop">Inloggen</button>
     <div class="login-fout" id="loginFout"></div>
   </div>
@@ -236,15 +212,16 @@ nav.onderbalk{display:none}
     </nav>
 
     <main>
-      <!-- HOOFDPAGINA -->
+      <!-- ========== HOOFDPAGINA ========== -->
       <div class="tab" id="tab-hoofd">
         <h2>Hoofdpagina</h2>
+        <div class="banner" id="herinnering"></div>
         <div class="grid">
           <div class="card"><div class="k">Omzet dit jaar</div><div class="v" id="cOmzet">—</div><div class="m">excl. btw</div></div>
           <div class="card amber"><div class="k">Openstaand</div><div class="v" id="cOpen">—</div><div class="m" id="cOpenSub">facturen</div></div>
           <div class="card groen"><div class="k">Betaald dit jaar</div><div class="v" id="cBetaald">—</div><div class="m">excl. btw</div></div>
           <div class="card"><div class="k">Uren deze week</div><div class="v" id="cUren">—</div><div class="m">werk + kantoor</div></div>
-          <div class="card"><div class="k">KM dit jaar</div><div class="v" id="cKm">—</div><div class="m" id="cKmSub">zakelijk</div></div>
+          <div class="card"><div class="k">KM dit jaar</div><div class="v" id="cKm">—</div><div class="m">zakelijk</div></div>
           <div class="card"><div class="k">Open projecten</div><div class="v" id="cProjecten">—</div><div class="m" id="cKlantenSub">klanten totaal</div></div>
         </div>
         <div class="status-balk">
@@ -255,33 +232,189 @@ nav.onderbalk{display:none}
         </div>
       </div>
 
-      <!-- PLACEHOLDERS -->
+      <!-- ========== INVULFORMULIER ========== -->
+      <div class="tab" id="tab-invullen">
+        <h2>Invulformulier</h2>
+        <div class="banner" id="herinnering2"></div>
+        <div class="subtabs">
+          <button data-sub="sub-uren" class="aan">Uren</button>
+          <button data-sub="sub-km">Kilometers</button>
+          <button data-sub="sub-product">Product gebruikt</button>
+        </div>
+
+        <!-- UREN -->
+        <div class="subform actief form-card" id="sub-uren">
+          <div class="rij2">
+            <div class="veld"><label>Datum</label><input type="date" id="uDatum"></div>
+            <div class="veld"><label>Aantal uur</label><input type="number" id="uAantal" step="0.25" min="0" inputmode="decimal" placeholder="bv. 8"></div>
+          </div>
+          <div class="veld"><label>Soort</label>
+            <div class="schakel">
+              <button type="button" id="uSoortWerk" class="aan">Werkuren</button>
+              <button type="button" id="uSoortKantoor">Kantooruren</button>
+            </div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Project</label><select id="uProject"></select></div>
+            <div class="veld"><label>Klant</label><select id="uKlant"></select></div>
+          </div>
+          <div class="veld"><label>Omschrijving</label><input type="text" id="uOmschrijving" placeholder="wat heb je gedaan"></div>
+          <button class="knop" id="uOpslaan">Uren opslaan</button>
+        </div>
+
+        <!-- KM -->
+        <div class="subform form-card" id="sub-km">
+          <div class="rij2">
+            <div class="veld"><label>Datum</label><input type="date" id="kDatum"></div>
+            <div class="veld"><label>KM-stand nu</label><input type="number" id="kStand" min="0" inputmode="numeric" placeholder="bv. 84213"></div>
+          </div>
+          <div class="hint" id="kVorige">Vorige stand: —</div>
+          <div class="veld" style="margin-top:13px"><label>Waar ben je geweest</label><input type="text" id="kOmschrijving" placeholder="bv. klus Zevenbergen + groothandel"></div>
+          <div class="rij2">
+            <div class="veld"><label>Klant / bedrijf</label><select id="kKlant"></select></div>
+            <div class="veld"><label>Type rit</label>
+              <div class="schakel">
+                <button type="button" id="kZakelijk" class="aan">Zakelijk</button>
+                <button type="button" id="kPrive">Privé</button>
+              </div>
+            </div>
+          </div>
+          <button class="knop" id="kOpslaan">KM-stand opslaan</button>
+        </div>
+
+        <!-- PRODUCT -->
+        <div class="subform form-card" id="sub-product">
+          <div class="veld"><label>Project</label><select id="pProject"></select></div>
+          <div class="rij2">
+            <div class="veld"><label>Product</label><select id="pProduct"></select></div>
+            <div class="veld"><label>Aantal</label><input type="number" id="pAantal" step="0.5" min="0" inputmode="decimal" placeholder="bv. 4"></div>
+          </div>
+          <div class="veld"><label>Datum</label><input type="date" id="pDatum"></div>
+          <button class="knop" id="pOpslaan">Gebruik opslaan</button>
+          <button class="link-knop" id="pNieuwToon">Product staat er niet bij? Snel toevoegen</button>
+          <div id="pNieuwBlok" style="display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
+            <div class="rij2">
+              <div class="veld"><label>Naam nieuw product</label><input type="text" id="npNaam" placeholder="bv. Wandcontactdoos inbouw"></div>
+              <div class="veld"><label>Categorie</label><select id="npCategorie"></select></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Inkoopprijs (excl.)</label><input type="number" id="npInkoop" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
+              <div class="veld"><label>Verkoopprijs (excl.)</label><input type="number" id="npVerkoop" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
+            </div>
+            <button class="knop klein stil" id="npOpslaan">Product toevoegen</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== URENREGISTRATIE ========== -->
+      <div class="tab" id="tab-uren">
+        <h2>Urenregistratie</h2>
+        <div class="grid4">
+          <div class="card"><div class="k">Deze week</div><div class="v" id="uwWeek">—</div><div class="m" id="uwWeekSub"></div></div>
+          <div class="card"><div class="k">Deze maand</div><div class="v" id="uwMaand">—</div><div class="m" id="uwMaandSub"></div></div>
+          <div class="card"><div class="k">Dit kwartaal</div><div class="v" id="uwKwartaal">—</div><div class="m" id="uwKwartaalSub"></div></div>
+          <div class="card"><div class="k">Dit jaar</div><div class="v" id="uwJaar">—</div><div class="m" id="uwJaarSub"></div></div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Datum</th><th>Soort</th><th class="r">Uren</th><th>Project / klant</th><th>Omschrijving</th><th></th></tr></thead>
+            <tbody id="urenBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========== KM-REGISTRATIE ========== -->
+      <div class="tab" id="tab-km">
+        <h2>KM-registratie</h2>
+        <div class="grid4">
+          <div class="card"><div class="k">Deze week</div><div class="v" id="kwWeek">—</div><div class="m" id="kwWeekSub"></div></div>
+          <div class="card"><div class="k">Deze maand</div><div class="v" id="kwMaand">—</div><div class="m" id="kwMaandSub"></div></div>
+          <div class="card"><div class="k">Dit kwartaal</div><div class="v" id="kwKwartaal">—</div><div class="m" id="kwKwartaalSub"></div></div>
+          <div class="card"><div class="k">Dit jaar</div><div class="v" id="kwJaar">—</div><div class="m" id="kwJaarSub"></div></div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Datum</th><th class="r">Stand</th><th class="r">Gereden</th><th>Type</th><th>Waar</th><th class="r">Vergoeding</th><th></th></tr></thead>
+            <tbody id="kmBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========== KLANTEN ========== -->
+      <div class="tab" id="tab-klanten">
+        <div class="tab-kop"><h2>Klanten</h2>
+          <button class="knop klein" id="klantNieuw">+ Nieuwe klant</button></div>
+        <div class="form-card" id="klantForm" style="display:none;margin-bottom:18px">
+          <div class="rij2">
+            <div class="veld"><label>Naam *</label><input type="text" id="klNaam"></div>
+            <div class="veld"><label>Contactpersoon</label><input type="text" id="klContact"></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Telefoon</label><input type="tel" id="klTelefoon"></div>
+            <div class="veld"><label>E-mail</label><input type="email" id="klEmail"></div>
+          </div>
+          <div class="veld"><label>Adres</label><input type="text" id="klAdres"></div>
+          <div class="rij2">
+            <div class="veld"><label>Postcode</label><input type="text" id="klPostcode"></div>
+            <div class="veld"><label>Plaats</label><input type="text" id="klPlaats"></div>
+          </div>
+          <div class="veld"><label>Notities</label><textarea id="klNotities" style="min-height:70px"></textarea></div>
+          <div style="display:flex;gap:10px">
+            <button class="knop klein" id="klOpslaan">Opslaan</button>
+            <button class="knop klein stil" id="klAnnuleer">Annuleren</button>
+            <button class="knop klein gevaar" id="klVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Naam</th><th>Plaats</th><th>Telefoon</th></tr></thead>
+            <tbody id="klantBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========== PROJECTEN ========== -->
+      <div class="tab" id="tab-projecten">
+        <div class="tab-kop"><h2>Projecten</h2>
+          <button class="knop klein" id="projNieuw">+ Nieuw project</button></div>
+        <div class="form-card" id="projForm" style="display:none;margin-bottom:18px">
+          <div class="rij2">
+            <div class="veld"><label>Naam *</label><input type="text" id="prNaam"></div>
+            <div class="veld"><label>Klant</label><select id="prKlant"></select></div>
+          </div>
+          <div class="veld"><label>Status</label>
+            <div class="schakel">
+              <button type="button" id="prOpen" class="aan">Open</button>
+              <button type="button" id="prAfgerond">Afgerond</button>
+            </div>
+          </div>
+          <div class="veld"><label>Omschrijving / notities</label><textarea id="prOmschrijving" placeholder="Hier kun je zoveel opschrijven als je wilt."></textarea></div>
+          <div style="display:flex;gap:10px">
+            <button class="knop klein" id="prOpslaan">Opslaan</button>
+            <button class="knop klein stil" id="prAnnuleer">Annuleren</button>
+            <button class="knop klein gevaar" id="prVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Project</th><th>Klant</th><th>Status</th></tr></thead>
+            <tbody id="projBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========== PLACEHOLDERS ========== -->
       <div class="tab" id="tab-omzet"><h2>Omzet / winst</h2>
-        <div class="straks"><span class="fase">FASE 5</span><p>Hier komen je omzet en winst: winst uit uren en winst uit de marge op je spullen, bij elkaar opgeteld. Met een tabblad voor doelen die je zelf kunt aanpassen.</p></div>
-      </div>
-      <div class="tab" id="tab-invullen"><h2>Invulformulier</h2>
-        <div class="straks"><span class="fase">FASE 2 — VOLGENDE STAP</span><p>Hier komen de drie formulieren die je dagelijks gebruikt: uren, kilometers en gebruikte producten per project. Eén keer invullen, en de rest van het systeem rekent mee.</p></div>
-      </div>
-      <div class="tab" id="tab-uren"><h2>Urenregistratie</h2>
-        <div class="straks"><span class="fase">FASE 2</span><p>Werkuren en kantooruren, met nette tabellen per week, maand, kwartaal en jaar. Invullen doe je via het invulformulier.</p></div>
-      </div>
-      <div class="tab" id="tab-km"><h2>KM-registratie</h2>
-        <div class="straks"><span class="fase">FASE 2</span><p>Elke dag je kilometerstand invullen; het verschil met gisteren wordt automatisch berekend, tegen jouw km-prijs. Overzichten per week, maand, kwartaal en jaar.</p></div>
+        <div class="straks"><span class="fase">FASE 5</span><p>Hier komen je omzet en winst: winst uit uren en winst uit de marge op je spullen, bij elkaar opgeteld. Met doelen die je zelf kunt aanpassen.</p></div>
       </div>
       <div class="tab" id="tab-facturen"><h2>Facturen</h2>
-        <div class="straks"><span class="fase">FASE 3</span><p>Inkomende en uitgaande facturen, met de Factureren-knop: uren en gebruikte spullen van een project worden automatisch een kant-en-klare factuur.</p></div>
+        <div class="straks"><span class="fase">FASE 3 — VOLGENDE STAP</span><p>Inkomende en uitgaande facturen, met de Factureren-knop: uren en gebruikte spullen van een project worden automatisch een kant-en-klare factuur.</p></div>
       </div>
       <div class="tab" id="tab-voorraad"><h2>Voorraad</h2>
-        <div class="straks"><span class="fase">FASE 4</span><p>Je magazijn in categorieën (inbouw, opbouw, meterkast, draad, buis, bevestiging — zelf uit te breiden), met inkoopprijs, verkoopprijs en marge per product. Inkoopfacturen upload je als PDF en worden automatisch uitgelezen.</p></div>
-      </div>
-      <div class="tab" id="tab-projecten"><h2>Projecten</h2>
-        <div class="straks"><span class="fase">FASE 2</span><p>Al je klussen met zoveel tekst en notities als je wilt. Uren en producten hangen straks aan een project, zodat factureren één klik is.</p></div>
-      </div>
-      <div class="tab" id="tab-klanten"><h2>Klanten</h2>
-        <div class="straks"><span class="fase">FASE 2</span><p>Je klantenbestand: bedrijven en particulieren, met contactgegevens. Nodig voor projecten, uren en facturen.</p></div>
+        <div class="straks"><span class="fase">FASE 4</span><p>Je magazijn in categorieën met inkoopprijs, verkoopprijs en marge per product. Producten die je nu al toevoegt via het invulformulier zie je hier straks terug. Inkoopfacturen upload je als PDF en worden automatisch uitgelezen.</p></div>
       </div>
       <div class="tab" id="tab-belasting"><h2>Belasting</h2>
-        <div class="straks"><span class="fase">FASE 5</span><p>Tabellen met je winst en een schatting van de belasting daarover, per kwartaal en per jaar — met percentages (zoals 35%, zvw, startersaftrek) die je zelf kunt aanpassen. En: wat je onderaan de streep naar privé overhoudt.</p></div>
+        <div class="straks"><span class="fase">FASE 5</span><p>Tabellen met je winst en een schatting van de belasting daarover, per kwartaal en per jaar — met percentages die je zelf kunt aanpassen. En: wat je onderaan de streep naar privé overhoudt.</p></div>
       </div>
       <div class="tab" id="tab-btw"><h2>BTW</h2>
         <div class="straks"><span class="fase">FASE 5</span><p>BTW berekend uit je inkomende en uitgaande facturen, in een net overzicht per kwartaal. Met bank-import via CSV om betalingen te koppelen.</p></div>
@@ -306,6 +439,8 @@ nav.onderbalk{display:none}
     <button data-tab="voorraad"><span class="streep"></span>Voorraad</button>
     <button id="meerKnop"><span class="streep"></span>Meer</button>
   </nav>
+
+  <div id="toast"></div>
 </div>
 
 <script>
@@ -314,15 +449,37 @@ nav.onderbalk{display:none}
    ===================================================== */
 const SUPABASE_URL = "https://boddqdbbkqmokysaienl.supabase.co";
 const SUPABASE_KEY = "sb_publishable_wZUcZyiDl9WQuAKoWOblgw_1dU1oggO";
-
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = id => document.getElementById(id);
 const eur = n => "€ " + Math.round(n).toLocaleString("nl-NL");
+const eur2 = n => "€ " + Number(n).toLocaleString("nl-NL", {minimumFractionDigits:2, maximumFractionDigits:2});
 const MAANDEN = ["JAN","FEB","MRT","APR","MEI","JUN","JUL","AUG","SEP","OKT","NOV","DEC"];
+const esc = t => String(t ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+function vandaagISO(){
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function fmtDatum(iso){
+  if (!iso) return "";
+  const [j,m,d] = iso.split("-");
+  return d + "-" + m + "-" + j.slice(2);
+}
+function toast(msg){
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("zichtbaar");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("zichtbaar"), 2200);
+}
+
+/* centrale gegevens */
+const cache = { klanten:[], projecten:[], categorieen:[], producten:[], inst:{} };
+let urenData = [];
+let kmData = [];
 
 /* =====================================================
-   THEMA (licht / donker)
+   THEMA
    ===================================================== */
 (function(){
   let donker = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -337,7 +494,7 @@ const MAANDEN = ["JAN","FEB","MRT","APR","MEI","JUN","JUL","AUG","SEP","OKT","NO
 })();
 
 /* =====================================================
-   TABBLADEN + MOBIELE NAVIGATIE
+   NAVIGATIE
    ===================================================== */
 function toonTab(naam){
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("actief"));
@@ -350,132 +507,638 @@ function toonTab(naam){
 }
 document.querySelectorAll("[data-tab]").forEach(k =>
   k.addEventListener("click", () => toonTab(k.dataset.tab)));
-$("meerKnop").addEventListener("click", () =>
-  $("meerSheet").classList.toggle("open"));
+$("meerKnop").addEventListener("click", () => $("meerSheet").classList.toggle("open"));
+
+document.querySelectorAll(".subtabs button").forEach(k =>
+  k.addEventListener("click", () => {
+    document.querySelectorAll(".subtabs button").forEach(b => b.classList.remove("aan"));
+    k.classList.add("aan");
+    document.querySelectorAll(".subform").forEach(f => f.classList.remove("actief"));
+    $(k.dataset.sub).classList.add("actief");
+  }));
+
+/* schakelknoppen (werk/kantoor, zakelijk/privé, open/afgerond) */
+function schakel(idAan, idUit){
+  $(idAan).classList.add("aan");
+  $(idUit).classList.remove("aan");
+}
+let urenSoort = "werk";
+$("uSoortWerk").addEventListener("click", () => { urenSoort = "werk"; schakel("uSoortWerk","uSoortKantoor"); });
+$("uSoortKantoor").addEventListener("click", () => { urenSoort = "kantoor"; schakel("uSoortKantoor","uSoortWerk"); });
+let kmZakelijk = true;
+$("kZakelijk").addEventListener("click", () => { kmZakelijk = true; schakel("kZakelijk","kPrive"); });
+$("kPrive").addEventListener("click", () => { kmZakelijk = false; schakel("kPrive","kZakelijk"); });
+let projStatus = "open";
+$("prOpen").addEventListener("click", () => { projStatus = "open"; schakel("prOpen","prAfgerond"); });
+$("prAfgerond").addEventListener("click", () => { projStatus = "afgerond"; schakel("prAfgerond","prOpen"); });
 
 /* =====================================================
    LOGIN / SESSIE
    ===================================================== */
 async function start(){
   const { data: { session } } = await db.auth.getSession();
-  if (session) { toonApp(); } else { toonLogin(); }
+  if (session) toonApp(); else toonLogin();
 }
 function toonLogin(){
   $("loginScherm").style.display = "flex";
   $("app").style.display = "none";
 }
-function toonApp(){
+async function toonApp(){
   $("loginScherm").style.display = "none";
   $("app").style.display = "block";
   const nu = new Date();
-  $("datum").textContent =
-    String(nu.getDate()).padStart(2,"0") + " " + MAANDEN[nu.getMonth()] + " " + nu.getFullYear();
+  $("datum").textContent = String(nu.getDate()).padStart(2,"0") + " " + MAANDEN[nu.getMonth()] + " " + nu.getFullYear();
+  $("uDatum").value = vandaagISO();
+  $("kDatum").value = vandaagISO();
+  $("pDatum").value = vandaagISO();
   toonTab("hoofd");
-  laadCijfers();
+  await laadAlles();
 }
-
 $("loginKnop").addEventListener("click", inloggen);
 $("loginWw").addEventListener("keydown", e => { if (e.key === "Enter") inloggen(); });
-
 async function inloggen(){
   const fout = $("loginFout");
   fout.style.display = "none";
-  $("loginKnop").disabled = true;
-  $("loginKnop").textContent = "Bezig…";
+  $("loginKnop").disabled = true; $("loginKnop").textContent = "Bezig…";
   const { error } = await db.auth.signInWithPassword({
-    email: $("loginEmail").value.trim(),
-    password: $("loginWw").value
+    email: $("loginEmail").value.trim(), password: $("loginWw").value
   });
-  $("loginKnop").disabled = false;
-  $("loginKnop").textContent = "Inloggen";
-  if (error) {
-    fout.textContent = "Inloggen mislukt. Controleer je e-mail en wachtwoord.";
-    fout.style.display = "block";
-    return;
-  }
+  $("loginKnop").disabled = false; $("loginKnop").textContent = "Inloggen";
+  if (error) { fout.textContent = "Inloggen mislukt. Controleer je e-mail en wachtwoord."; fout.style.display = "block"; return; }
   toonApp();
 }
-
-$("uitlogKnop").addEventListener("click", async () => {
-  await db.auth.signOut();
-  toonLogin();
-});
+$("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut(); toonLogin(); });
 
 /* =====================================================
-   HOOFDPAGINA: CIJFERS UIT DE DATABASE
+   ALLES LADEN
    ===================================================== */
-async function laadCijfers(){
-  const dbStatus = $("dbStatus");
-  const dbBol = $("dbBol");
+async function laadAlles(){
+  const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const jaar = new Date().getFullYear();
-    const jaarStart = jaar + "-01-01";
-
-    // alles tegelijk ophalen
-    const [fact, uren, km, proj, klant, inst] = await Promise.all([
-      db.from("facturen").select("type,status,bedrag_excl,datum").gte("datum", jaarStart),
-      db.from("uren").select("datum,aantal"),
-      db.from("km_registratie").select("datum,km_stand,zakelijk").gte("datum", jaarStart).order("datum", { ascending: true }),
-      db.from("projecten").select("id,status"),
-      db.from("klanten").select("id"),
-      db.from("instellingen").select("sleutel,waarde")
+    const [kl, pr, cat, prod, inst, ur, km] = await Promise.all([
+      db.from("klanten").select("*").order("naam"),
+      db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
+      db.from("categorieen").select("*").order("volgorde"),
+      db.from("producten").select("*").order("naam"),
+      db.from("instellingen").select("*"),
+      db.from("uren").select("*").order("datum", { ascending:false }).limit(400),
+      db.from("km_registratie").select("*").order("datum", { ascending:true })
     ]);
+    const eerste = [kl,pr,cat,prod,inst,ur,km].find(r => r.error);
+    if (eerste) throw eerste.error;
 
-    const fouten = [fact, uren, km, proj, klant, inst].filter(r => r.error);
-    if (fouten.length) throw fouten[0].error;
+    cache.klanten = kl.data || [];
+    cache.projecten = pr.data || [];
+    cache.categorieen = cat.data || [];
+    cache.producten = prod.data || [];
+    cache.inst = {};
+    (inst.data || []).forEach(r => cache.inst[r.sleutel] = r.waarde);
+    urenData = ur.data || [];
+    kmData = km.data || [];
 
-    // facturen (alleen verkoop telt als omzet)
-    const verkoop = (fact.data || []).filter(f => f.type === "verkoop");
-    const omzet = verkoop.reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
-    const open = verkoop.filter(f => f.status === "open");
-    const openBedrag = open.reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
-    const betaald = verkoop.filter(f => f.status === "betaald")
-      .reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
-
-    $("cOmzet").textContent = eur(omzet);
-    $("cOpen").textContent = eur(openBedrag);
-    $("cOpenSub").textContent = open.length + " facturen";
-    $("cBetaald").textContent = eur(betaald);
-
-    // uren deze week (week begint op maandag)
-    const nu = new Date();
-    const wd = (nu.getDay() + 6) % 7;
-    const maandag = new Date(nu); maandag.setDate(nu.getDate() - wd); maandag.setHours(0,0,0,0);
-    const urenWeek = (uren.data || [])
-      .filter(u => new Date(u.datum) >= maandag)
-      .reduce((s, u) => s + Number(u.aantal || 0), 0);
-    $("cUren").textContent = urenWeek.toLocaleString("nl-NL");
-
-    // km dit jaar: verschil tussen opeenvolgende standen
-    const standen = km.data || [];
-    let kmTotaal = 0;
-    for (let i = 1; i < standen.length; i++) {
-      const stuk = standen[i].km_stand - standen[i-1].km_stand;
-      if (stuk > 0 && standen[i].zakelijk) kmTotaal += stuk;
-    }
-    $("cKm").textContent = kmTotaal.toLocaleString("nl-NL");
-
-    // projecten & klanten
-    const openProj = (proj.data || []).filter(p => p.status === "open").length;
-    $("cProjecten").textContent = openProj;
-    $("cKlantenSub").textContent = (klant.data || []).length + " klanten totaal";
-
-    // instellingen
-    const I = {};
-    (inst.data || []).forEach(r => I[r.sleutel] = r.waarde);
-    $("sKm").textContent = "€ " + Number(I.km_prijs || 0).toFixed(2).replace(".", ",");
-    $("sBtw").textContent = (I.btw_percentage || "—") + "%";
-    $("sUur").textContent = "€ " + Number(I.uurtarief || 0).toFixed(0);
+    vulSelects();
+    renderKlanten();
+    renderProjecten();
+    renderUren();
+    renderKm();
+    renderHoofd();
+    checkHerinnering();
 
     dbStatus.textContent = "Database verbonden";
     dbBol.style.background = "var(--groen)";
-  } catch (e) {
+  } catch(e){
     console.error(e);
     dbStatus.textContent = "Geen verbinding met de database";
     dbBol.style.background = "var(--rood)";
-    ["cOmzet","cOpen","cBetaald","cUren","cKm","cProjecten"].forEach(id => $(id).textContent = "—");
   }
 }
+
+function klantNaam(id){
+  const k = cache.klanten.find(x => x.id === id);
+  return k ? k.naam : "";
+}
+function projectNaam(id){
+  const p = cache.projecten.find(x => x.id === id);
+  return p ? p.naam : "";
+}
+
+function vulSelects(){
+  const kOpties = '<option value="">— geen —</option>' +
+    cache.klanten.map(k => '<option value="' + k.id + '">' + esc(k.naam) + '</option>').join("");
+  $("uKlant").innerHTML = kOpties;
+  $("kKlant").innerHTML = kOpties;
+  $("prKlant").innerHTML = kOpties;
+
+  const open = cache.projecten.filter(p => p.status === "open");
+  const pOpties = '<option value="">— geen project —</option>' +
+    open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
+  $("uProject").innerHTML = pOpties;
+  $("pProject").innerHTML = '<option value="">— kies project —</option>' +
+    open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
+
+  $("pProduct").innerHTML = '<option value="">— kies product —</option>' +
+    cache.producten.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
+
+  $("npCategorie").innerHTML = '<option value="">— geen —</option>' +
+    cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
+
+  bijwerkKmHint();
+}
+
+/* project kiezen vult klant automatisch in (urenformulier) */
+$("uProject").addEventListener("change", () => {
+  const p = cache.projecten.find(x => x.id === $("uProject").value);
+  if (p && p.klant_id) $("uKlant").value = p.klant_id;
+});
+
+/* =====================================================
+   HOOFDPAGINA
+   ===================================================== */
+function renderHoofd(){
+  const jaar = new Date().getFullYear();
+  // facturen komen in fase 3; tot dan staan die op nul
+  laadFactuurCijfers(jaar);
+
+  const nu = new Date();
+  const wd = (nu.getDay() + 6) % 7;
+  const maandag = new Date(nu); maandag.setDate(nu.getDate() - wd); maandag.setHours(0,0,0,0);
+  const urenWeek = urenData.filter(u => new Date(u.datum) >= maandag)
+    .reduce((s,u) => s + Number(u.aantal || 0), 0);
+  $("cUren").textContent = urenWeek.toLocaleString("nl-NL");
+
+  $("cKm").textContent = kmJaarTotaal(jaar).toLocaleString("nl-NL");
+
+  const openProj = cache.projecten.filter(p => p.status === "open").length;
+  $("cProjecten").textContent = openProj;
+  $("cKlantenSub").textContent = cache.klanten.length + " klanten totaal";
+
+  $("sKm").textContent = "€ " + Number(cache.inst.km_prijs || 0).toFixed(2).replace(".", ",");
+  $("sBtw").textContent = (cache.inst.btw_percentage || "—") + "%";
+  $("sUur").textContent = "€ " + Number(cache.inst.uurtarief || 0).toFixed(0);
+}
+
+async function laadFactuurCijfers(jaar){
+  try {
+    const { data, error } = await db.from("facturen")
+      .select("type,status,bedrag_excl").gte("datum", jaar + "-01-01");
+    if (error) throw error;
+    const verkoop = (data || []).filter(f => f.type === "verkoop");
+    const omzet = verkoop.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0);
+    const open = verkoop.filter(f => f.status === "open");
+    $("cOmzet").textContent = eur(omzet);
+    $("cOpen").textContent = eur(open.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
+    $("cOpenSub").textContent = open.length + " facturen";
+    $("cBetaald").textContent = eur(verkoop.filter(f => f.status === "betaald")
+      .reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
+  } catch(e){ console.error(e); }
+}
+
+/* =====================================================
+   HERINNERING (na 16:30)
+   ===================================================== */
+function checkHerinnering(){
+  const nu = new Date();
+  const laat = nu.getHours() > 16 || (nu.getHours() === 16 && nu.getMinutes() >= 30);
+  const vandaag = vandaagISO();
+  const mist = [];
+  if (!urenData.some(u => u.datum === vandaag)) mist.push("je uren");
+  if (!kmData.some(k => k.datum === vandaag)) mist.push("je km-stand");
+  const banners = [$("herinnering"), $("herinnering2")];
+  if (laat && mist.length){
+    banners.forEach(b => {
+      b.textContent = "Nog niet ingevuld vandaag: " + mist.join(" en ") + ". Even doen via het invulformulier.";
+      b.classList.add("zichtbaar");
+    });
+  } else {
+    banners.forEach(b => b.classList.remove("zichtbaar"));
+  }
+}
+
+/* =====================================================
+   UREN
+   ===================================================== */
+$("uOpslaan").addEventListener("click", async () => {
+  const datum = $("uDatum").value;
+  const aantal = parseFloat($("uAantal").value);
+  if (!datum || !(aantal > 0)) { toast("Vul een datum en aantal uur in"); return; }
+  const rij = {
+    datum, soort: urenSoort, aantal,
+    project_id: $("uProject").value || null,
+    klant_id: $("uKlant").value || null,
+    omschrijving: $("uOmschrijving").value.trim() || null
+  };
+  $("uOpslaan").disabled = true;
+  const { error } = await db.from("uren").insert(rij);
+  $("uOpslaan").disabled = false;
+  if (error) { console.error(error); toast("Opslaan mislukt"); return; }
+  $("uAantal").value = ""; $("uOmschrijving").value = "";
+  toast("Uren opgeslagen");
+  await herlaadUren();
+});
+
+async function herlaadUren(){
+  const { data } = await db.from("uren").select("*").order("datum", { ascending:false }).limit(400);
+  urenData = data || [];
+  renderUren(); renderHoofd(); checkHerinnering();
+}
+
+function periodes(){
+  const nu = new Date();
+  const wd = (nu.getDay() + 6) % 7;
+  const maandag = new Date(nu); maandag.setDate(nu.getDate() - wd); maandag.setHours(0,0,0,0);
+  const maandStart = new Date(nu.getFullYear(), nu.getMonth(), 1);
+  const kwartaalStart = new Date(nu.getFullYear(), Math.floor(nu.getMonth()/3)*3, 1);
+  const jaarStart = new Date(nu.getFullYear(), 0, 1);
+  return { maandag, maandStart, kwartaalStart, jaarStart, kwartaal: Math.floor(nu.getMonth()/3)+1 };
+}
+
+function renderUren(){
+  const p = periodes();
+  const som = (vanaf, soort) => urenData
+    .filter(u => new Date(u.datum) >= vanaf && (!soort || u.soort === soort))
+    .reduce((s,u) => s + Number(u.aantal || 0), 0);
+  const fmt = n => n.toLocaleString("nl-NL");
+  const sub = vanaf => fmt(som(vanaf,"werk")) + " werk · " + fmt(som(vanaf,"kantoor")) + " kantoor";
+
+  $("uwWeek").textContent = fmt(som(p.maandag));
+  $("uwWeekSub").textContent = sub(p.maandag);
+  $("uwMaand").textContent = fmt(som(p.maandStart));
+  $("uwMaandSub").textContent = sub(p.maandStart);
+  $("uwKwartaal").textContent = fmt(som(p.kwartaalStart));
+  $("uwKwartaalSub").textContent = "K" + p.kwartaal + " · " + sub(p.kwartaalStart);
+  $("uwJaar").textContent = fmt(som(p.jaarStart));
+  $("uwJaarSub").textContent = sub(p.jaarStart);
+
+  const body = $("urenBody");
+  if (!urenData.length){
+    body.innerHTML = '<tr><td colspan="6" class="leeg">Nog geen uren ingevuld — begin via het invulformulier.</td></tr>';
+    return;
+  }
+  body.innerHTML = urenData.slice(0, 60).map(u => {
+    const wie = projectNaam(u.project_id) || klantNaam(u.klant_id) || "—";
+    return '<tr>' +
+      '<td>' + fmtDatum(u.datum) + '</td>' +
+      '<td><span class="chip ' + (u.soort === "werk" ? "groen" : "grijs") + '">' + (u.soort === "werk" ? "WERK" : "KANTOOR") + '</span></td>' +
+      '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
+      '<td class="tekst">' + esc(wie) + '</td>' +
+      '<td class="tekst">' + esc(u.omschrijving || "") + '</td>' +
+      '<td class="r"><button class="verwijder" data-uid="' + u.id + '" title="Verwijderen">✕</button></td>' +
+    '</tr>';
+  }).join("");
+  body.querySelectorAll("[data-uid]").forEach(k => k.addEventListener("click", async () => {
+    if (!confirm("Deze urenregel verwijderen?")) return;
+    const { error } = await db.from("uren").delete().eq("id", k.dataset.uid);
+    if (error) { toast("Verwijderen mislukt"); return; }
+    toast("Verwijderd");
+    await herlaadUren();
+  }));
+}
+
+/* =====================================================
+   KILOMETERS
+   ===================================================== */
+function laatsteStandVoor(datumISO){
+  const eerder = kmData.filter(k => k.datum < datumISO);
+  return eerder.length ? eerder[eerder.length - 1] : null;
+}
+function bijwerkKmHint(){
+  const datum = $("kDatum").value || vandaagISO();
+  const vorige = laatsteStandVoor(datum);
+  const stand = parseInt($("kStand").value, 10);
+  let tekst = vorige
+    ? "Vorige stand: <b>" + vorige.km_stand.toLocaleString("nl-NL") + "</b> (" + fmtDatum(vorige.datum) + ")"
+    : "Eerste invulling — deze stand wordt je startpunt.";
+  if (vorige && stand > vorige.km_stand){
+    const diff = stand - vorige.km_stand;
+    const prijs = Number(cache.inst.km_prijs || 0);
+    tekst += " · vandaag gereden: <b>" + diff.toLocaleString("nl-NL") + " km</b>" +
+      (kmZakelijk ? " = <b>" + eur2(diff * prijs) + "</b>" : "");
+  }
+  $("kVorige").innerHTML = tekst;
+}
+$("kStand").addEventListener("input", bijwerkKmHint);
+$("kDatum").addEventListener("change", bijwerkKmHint);
+$("kZakelijk").addEventListener("click", bijwerkKmHint);
+$("kPrive").addEventListener("click", bijwerkKmHint);
+
+$("kOpslaan").addEventListener("click", async () => {
+  const datum = $("kDatum").value;
+  const stand = parseInt($("kStand").value, 10);
+  if (!datum || !(stand >= 0)) { toast("Vul een datum en km-stand in"); return; }
+  const vorige = laatsteStandVoor(datum);
+  if (vorige && stand < vorige.km_stand){
+    if (!confirm("Deze stand (" + stand.toLocaleString("nl-NL") + ") is lager dan de vorige (" +
+      vorige.km_stand.toLocaleString("nl-NL") + "). Toch opslaan?")) return;
+  }
+  const bestaand = kmData.find(k => k.datum === datum);
+  if (bestaand && !confirm("Er staat al een stand voor deze dag. Overschrijven?")) return;
+
+  const rij = {
+    datum, km_stand: stand,
+    omschrijving: $("kOmschrijving").value.trim() || null,
+    klant_id: $("kKlant").value || null,
+    zakelijk: kmZakelijk
+  };
+  $("kOpslaan").disabled = true;
+  let fout;
+  if (bestaand){
+    ({ error: fout } = await db.from("km_registratie").update(rij).eq("id", bestaand.id));
+  } else {
+    ({ error: fout } = await db.from("km_registratie").insert(rij));
+  }
+  $("kOpslaan").disabled = false;
+  if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
+  $("kStand").value = ""; $("kOmschrijving").value = "";
+  toast("KM-stand opgeslagen");
+  await herlaadKm();
+});
+
+async function herlaadKm(){
+  const { data } = await db.from("km_registratie").select("*").order("datum", { ascending:true });
+  kmData = data || [];
+  renderKm(); renderHoofd(); checkHerinnering(); bijwerkKmHint();
+}
+
+/* per regel: gereden = stand - vorige stand */
+function kmRegels(){
+  return kmData.map((k, i) => {
+    const gereden = i > 0 ? Math.max(0, k.km_stand - kmData[i-1].km_stand) : 0;
+    return { ...k, gereden };
+  });
+}
+function kmJaarTotaal(jaar){
+  return kmRegels()
+    .filter(r => r.zakelijk && new Date(r.datum).getFullYear() === jaar)
+    .reduce((s,r) => s + r.gereden, 0);
+}
+
+function renderKm(){
+  const p = periodes();
+  const prijs = Number(cache.inst.km_prijs || 0);
+  const regels = kmRegels();
+  const som = vanaf => regels.filter(r => r.zakelijk && new Date(r.datum) >= vanaf)
+    .reduce((s,r) => s + r.gereden, 0);
+  const zet = (idKm, idSub, vanaf, extra) => {
+    const kmTot = som(vanaf);
+    $(idKm).textContent = kmTot.toLocaleString("nl-NL");
+    $(idSub).textContent = (extra ? extra + " · " : "") + eur2(kmTot * prijs);
+  };
+  zet("kwWeek","kwWeekSub", p.maandag);
+  zet("kwMaand","kwMaandSub", p.maandStart);
+  zet("kwKwartaal","kwKwartaalSub", p.kwartaalStart, "K" + p.kwartaal);
+  zet("kwJaar","kwJaarSub", p.jaarStart);
+
+  const body = $("kmBody");
+  if (!regels.length){
+    body.innerHTML = '<tr><td colspan="7" class="leeg">Nog geen km-standen — vul je eerste stand in via het invulformulier.</td></tr>';
+    return;
+  }
+  body.innerHTML = regels.slice().reverse().slice(0, 60).map((r, idx) => {
+    const eersteOoit = r.datum === kmData[0].datum;
+    return '<tr>' +
+      '<td>' + fmtDatum(r.datum) + '</td>' +
+      '<td class="r">' + r.km_stand.toLocaleString("nl-NL") + '</td>' +
+      '<td class="r">' + (eersteOoit ? "start" : r.gereden.toLocaleString("nl-NL")) + '</td>' +
+      '<td><span class="chip ' + (r.zakelijk ? "groen" : "grijs") + '">' + (r.zakelijk ? "ZAKELIJK" : "PRIVÉ") + '</span></td>' +
+      '<td class="tekst">' + esc((r.omschrijving || "") + (r.klant_id ? (r.omschrijving ? " · " : "") + klantNaam(r.klant_id) : "")) + '</td>' +
+      '<td class="r">' + (r.zakelijk && !eersteOoit ? eur2(r.gereden * prijs) : "—") + '</td>' +
+      '<td class="r"><button class="verwijder" data-kid="' + r.id + '" title="Verwijderen">✕</button></td>' +
+    '</tr>';
+  }).join("");
+  body.querySelectorAll("[data-kid]").forEach(k => k.addEventListener("click", async () => {
+    if (!confirm("Deze km-regel verwijderen?")) return;
+    const { error } = await db.from("km_registratie").delete().eq("id", k.dataset.kid);
+    if (error) { toast("Verwijderen mislukt"); return; }
+    toast("Verwijderd");
+    await herlaadKm();
+  }));
+}
+
+/* =====================================================
+   PRODUCT GEBRUIKT
+   ===================================================== */
+$("pNieuwToon").addEventListener("click", () => {
+  const blok = $("pNieuwBlok");
+  blok.style.display = blok.style.display === "none" ? "block" : "none";
+});
+
+$("npOpslaan").addEventListener("click", async () => {
+  const naam = $("npNaam").value.trim();
+  if (!naam) { toast("Vul een productnaam in"); return; }
+  const rij = {
+    naam,
+    categorie_id: $("npCategorie").value || null,
+    inkoopprijs: parseFloat($("npInkoop").value) || 0,
+    verkoopprijs: parseFloat($("npVerkoop").value) || 0
+  };
+  $("npOpslaan").disabled = true;
+  const { data, error } = await db.from("producten").insert(rij).select().single();
+  $("npOpslaan").disabled = false;
+  if (error) { console.error(error); toast("Toevoegen mislukt"); return; }
+  cache.producten.push(data);
+  cache.producten.sort((a,b) => a.naam.localeCompare(b.naam));
+  vulSelects();
+  $("pProduct").value = data.id;
+  $("npNaam").value = ""; $("npInkoop").value = ""; $("npVerkoop").value = "";
+  $("pNieuwBlok").style.display = "none";
+  toast("Product toegevoegd");
+});
+
+$("pOpslaan").addEventListener("click", async () => {
+  const projectId = $("pProject").value;
+  const productId = $("pProduct").value;
+  const aantal = parseFloat($("pAantal").value);
+  const datum = $("pDatum").value || vandaagISO();
+  if (!projectId) { toast("Kies een project"); return; }
+  if (!productId || !(aantal > 0)) { toast("Kies een product en aantal"); return; }
+
+  $("pOpslaan").disabled = true;
+  const { error } = await db.from("voorraad_mutaties").insert({
+    product_id: productId, aantal: -aantal, type: "gebruik",
+    project_id: projectId, datum
+  });
+  if (!error){
+    const prod = cache.producten.find(p => p.id === productId);
+    const nieuw = Number(prod ? prod.voorraad : 0) - aantal;
+    const { error: e2 } = await db.from("producten").update({ voorraad: nieuw }).eq("id", productId);
+    if (!e2 && prod) prod.voorraad = nieuw;
+  }
+  $("pOpslaan").disabled = false;
+  if (error) { console.error(error); toast("Opslaan mislukt"); return; }
+  $("pAantal").value = "";
+  toast("Gebruik opgeslagen bij " + (projectNaam(projectId) || "project"));
+});
+
+/* =====================================================
+   KLANTEN
+   ===================================================== */
+let bewerkKlantId = null;
+function klantFormLeeg(){
+  ["klNaam","klContact","klTelefoon","klEmail","klAdres","klPostcode","klPlaats","klNotities"]
+    .forEach(id => $(id).value = "");
+}
+$("klantNieuw").addEventListener("click", () => {
+  bewerkKlantId = null;
+  klantFormLeeg();
+  $("klVerwijder").style.display = "none";
+  $("klantForm").style.display = "block";
+  $("klNaam").focus();
+});
+$("klAnnuleer").addEventListener("click", () => { $("klantForm").style.display = "none"; });
+
+$("klOpslaan").addEventListener("click", async () => {
+  const naam = $("klNaam").value.trim();
+  if (!naam) { toast("Naam is verplicht"); return; }
+  const rij = {
+    naam,
+    contactpersoon: $("klContact").value.trim() || null,
+    telefoon: $("klTelefoon").value.trim() || null,
+    email: $("klEmail").value.trim() || null,
+    adres: $("klAdres").value.trim() || null,
+    postcode: $("klPostcode").value.trim() || null,
+    plaats: $("klPlaats").value.trim() || null,
+    notities: $("klNotities").value.trim() || null
+  };
+  $("klOpslaan").disabled = true;
+  let fout;
+  if (bewerkKlantId){
+    ({ error: fout } = await db.from("klanten").update(rij).eq("id", bewerkKlantId));
+  } else {
+    ({ error: fout } = await db.from("klanten").insert(rij));
+  }
+  $("klOpslaan").disabled = false;
+  if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
+  $("klantForm").style.display = "none";
+  toast("Klant opgeslagen");
+  const { data } = await db.from("klanten").select("*").order("naam");
+  cache.klanten = data || [];
+  vulSelects(); renderKlanten(); renderProjecten(); renderHoofd();
+});
+
+$("klVerwijder").addEventListener("click", async () => {
+  if (!bewerkKlantId) return;
+  if (!confirm("Deze klant verwijderen? Uren, projecten en km-regels blijven bestaan, maar zonder deze klant eraan.")) return;
+  const { error } = await db.from("klanten").delete().eq("id", bewerkKlantId);
+  if (error) { toast("Verwijderen mislukt"); return; }
+  $("klantForm").style.display = "none";
+  toast("Klant verwijderd");
+  const { data } = await db.from("klanten").select("*").order("naam");
+  cache.klanten = data || [];
+  vulSelects(); renderKlanten(); renderProjecten(); renderHoofd();
+});
+
+function renderKlanten(){
+  const body = $("klantBody");
+  if (!cache.klanten.length){
+    body.innerHTML = '<tr><td colspan="3" class="leeg">Nog geen klanten — voeg je eerste klant toe.</td></tr>';
+    return;
+  }
+  body.innerHTML = cache.klanten.map(k =>
+    '<tr class="klik" data-klid="' + k.id + '">' +
+      '<td class="tekst">' + esc(k.naam) + '</td>' +
+      '<td class="tekst">' + esc(k.plaats || "") + '</td>' +
+      '<td>' + esc(k.telefoon || "") + '</td>' +
+    '</tr>').join("");
+  body.querySelectorAll("[data-klid]").forEach(r => r.addEventListener("click", () => {
+    const k = cache.klanten.find(x => x.id === r.dataset.klid);
+    if (!k) return;
+    bewerkKlantId = k.id;
+    $("klNaam").value = k.naam || "";
+    $("klContact").value = k.contactpersoon || "";
+    $("klTelefoon").value = k.telefoon || "";
+    $("klEmail").value = k.email || "";
+    $("klAdres").value = k.adres || "";
+    $("klPostcode").value = k.postcode || "";
+    $("klPlaats").value = k.plaats || "";
+    $("klNotities").value = k.notities || "";
+    $("klVerwijder").style.display = "inline-block";
+    $("klantForm").style.display = "block";
+    window.scrollTo(0, 0);
+  }));
+}
+
+/* =====================================================
+   PROJECTEN
+   ===================================================== */
+let bewerkProjectId = null;
+$("projNieuw").addEventListener("click", () => {
+  bewerkProjectId = null;
+  $("prNaam").value = ""; $("prKlant").value = ""; $("prOmschrijving").value = "";
+  projStatus = "open"; schakel("prOpen","prAfgerond");
+  $("prVerwijder").style.display = "none";
+  $("projForm").style.display = "block";
+  $("prNaam").focus();
+});
+$("prAnnuleer").addEventListener("click", () => { $("projForm").style.display = "none"; });
+
+$("prOpslaan").addEventListener("click", async () => {
+  const naam = $("prNaam").value.trim();
+  if (!naam) { toast("Naam is verplicht"); return; }
+  const rij = {
+    naam,
+    klant_id: $("prKlant").value || null,
+    omschrijving: $("prOmschrijving").value.trim() || null,
+    status: projStatus
+  };
+  $("prOpslaan").disabled = true;
+  let fout;
+  if (bewerkProjectId){
+    ({ error: fout } = await db.from("projecten").update(rij).eq("id", bewerkProjectId));
+  } else {
+    ({ error: fout } = await db.from("projecten").insert(rij));
+  }
+  $("prOpslaan").disabled = false;
+  if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
+  $("projForm").style.display = "none";
+  toast("Project opgeslagen");
+  const { data } = await db.from("projecten").select("*").order("aangemaakt_op", { ascending:false });
+  cache.projecten = data || [];
+  vulSelects(); renderProjecten(); renderHoofd();
+});
+
+$("prVerwijder").addEventListener("click", async () => {
+  if (!bewerkProjectId) return;
+  if (!confirm("Dit project verwijderen?")) return;
+  const { error } = await db.from("projecten").delete().eq("id", bewerkProjectId);
+  if (error) { toast("Verwijderen mislukt"); return; }
+  $("projForm").style.display = "none";
+  toast("Project verwijderd");
+  const { data } = await db.from("projecten").select("*").order("aangemaakt_op", { ascending:false });
+  cache.projecten = data || [];
+  vulSelects(); renderProjecten(); renderHoofd();
+});
+
+function renderProjecten(){
+  const body = $("projBody");
+  if (!cache.projecten.length){
+    body.innerHTML = '<tr><td colspan="3" class="leeg">Nog geen projecten — maak je eerste project aan.</td></tr>';
+    return;
+  }
+  const volgorde = cache.projecten.slice().sort((a,b) =>
+    (a.status === "open" ? 0 : 1) - (b.status === "open" ? 0 : 1));
+  body.innerHTML = volgorde.map(p =>
+    '<tr class="klik" data-prid="' + p.id + '">' +
+      '<td class="tekst">' + esc(p.naam) + '</td>' +
+      '<td class="tekst">' + esc(klantNaam(p.klant_id) || "—") + '</td>' +
+      '<td><span class="chip ' + (p.status === "open" ? "amber" : "grijs") + '">' + (p.status === "open" ? "OPEN" : "AFGEROND") + '</span></td>' +
+    '</tr>').join("");
+  body.querySelectorAll("[data-prid]").forEach(r => r.addEventListener("click", () => {
+    const p = cache.projecten.find(x => x.id === r.dataset.prid);
+    if (!p) return;
+    bewerkProjectId = p.id;
+    $("prNaam").value = p.naam || "";
+    $("prKlant").value = p.klant_id || "";
+    $("prOmschrijving").value = p.omschrijving || "";
+    projStatus = p.status;
+    if (p.status === "open") schakel("prOpen","prAfgerond"); else schakel("prAfgerond","prOpen");
+    $("prVerwijder").style.display = "inline-block";
+    $("projForm").style.display = "block";
+    window.scrollTo(0, 0);
+  }));
+}
+
+/* elke minuut checken of de halfvijf-herinnering moet verschijnen */
+setInterval(checkHerinnering, 60000);
 
 start();
 </script>
