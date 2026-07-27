@@ -433,6 +433,15 @@ nav.onderbalk{display:none}
               </table>
             </div>
           </div>
+          <div class="veld" id="prFacturenBlok" style="display:none"><label>Facturen van dit project</label>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>Nr</th><th>Datum</th><th>Status</th><th class="r">Excl.</th></tr></thead>
+                <tbody id="prFacturenBody"></tbody>
+                <tfoot><tr><td colspan="3" style="font-family:'Archivo',sans-serif;font-weight:600">Totaal gefactureerd</td><td class="r" id="prFacturenTotaal" style="font-weight:600"></td></tr></tfoot>
+              </table>
+            </div>
+          </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="knop klein" id="prOpslaan">Opslaan</button>
             <button class="knop klein stil" id="prAnnuleer">Annuleren</button>
@@ -1360,9 +1369,9 @@ async function laadProjectGebruik(projectId){
   body.innerHTML = lijst.map(g =>
     '<tr>' +
       '<td>' + fmtDatum(g.datum) + '</td>' +
-      '<td class="tekst">' + esc(productNaam(g.product_id)) + '</td>' +
+      '<td class="tekst">' + esc(productNaam(g.product_id)) + (g.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
       '<td class="r">' + Math.abs(Number(g.aantal)).toLocaleString("nl-NL") + '</td>' +
-      '<td class="r"><button class="verwijder" data-gid="' + g.id + '" title="Verwijderen">✕</button></td>' +
+      '<td class="r">' + (g.gefactureerd ? '' : '<button class="verwijder" data-gid="' + g.id + '" title="Verwijderen">✕</button>') + '</td>' +
     '</tr>').join("");
   body.querySelectorAll("[data-gid]").forEach(k => k.addEventListener("click", async () => {
     const g = lijst.find(x => x.id === k.dataset.gid);
@@ -1381,11 +1390,38 @@ async function laadProjectGebruik(projectId){
     laadProjectGebruik(projectId);
   }));
 }
+
+function laadProjectFacturen(projectId){
+  const body = $("prFacturenBody");
+  const lijst = factData.filter(f => f.project_id === projectId && f.type === "verkoop");
+  if (!lijst.length){
+    body.innerHTML = '<tr><td colspan="4" class="leeg">Nog geen facturen voor dit project.</td></tr>';
+    $("prFacturenTotaal").textContent = "€ 0,00";
+    return;
+  }
+  const chip = s => s === "betaald" ? '<span class="chip groen">BETAALD</span>'
+    : s === "concept" ? '<span class="chip grijs">CONCEPT</span>'
+    : '<span class="chip amber">OPEN</span>';
+  body.innerHTML = lijst.map(f =>
+    '<tr class="klik" data-pfid="' + f.id + '">' +
+      '<td>' + esc(f.nummer || "") + '</td>' +
+      '<td>' + fmtDatum(f.datum) + '</td>' +
+      '<td>' + chip(f.status) + '</td>' +
+      '<td class="r">' + eur2(f.bedrag_excl || 0) + '</td>' +
+    '</tr>').join("");
+  $("prFacturenTotaal").textContent = eur2(lijst.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
+  body.querySelectorAll("[data-pfid]").forEach(r => r.addEventListener("click", () => {
+    toonTab("facturen");
+    kiesFSub("fUit");
+    openFactuur(r.dataset.pfid);
+  }));
+}
 $("projNieuw").addEventListener("click", () => {
   bewerkProjectId = null;
   $("prNaam").value = ""; $("prKlant").value = ""; $("prOmschrijving").value = "";
   projStatus = "open"; schakel("prOpen","prAfgerond");
   $("prGebruikBlok").style.display = "none";
+  $("prFacturenBlok").style.display = "none";
   $("prFactureer").style.display = "none";
   $("prVerwijder").style.display = "none";
   $("projForm").style.display = "block";
@@ -1455,6 +1491,8 @@ function renderProjecten(){
     if (p.status === "open") schakel("prOpen","prAfgerond"); else schakel("prAfgerond","prOpen");
     $("prGebruikBlok").style.display = "block";
     laadProjectGebruik(p.id);
+    $("prFacturenBlok").style.display = "block";
+    laadProjectFacturen(p.id);
     $("prFactureer").style.display = "inline-block";
     $("prVerwijder").style.display = "inline-block";
     $("projForm").style.display = "block";
