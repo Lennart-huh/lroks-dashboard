@@ -591,7 +591,10 @@ nav.onderbalk{display:none}
           </div>
           <div class="rij2">
             <div class="veld"><label>Inkoopprijs (excl.)</label><input type="number" id="vInkoop" step="0.01" min="0" inputmode="decimal"></div>
-            <div class="veld"><label>Verkoopprijs (excl.)</label><input type="number" id="vVerkoop" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld"><label>Marge %</label><input type="number" id="vMarge" step="1" inputmode="decimal" placeholder="bv. 30"></div>
+          </div>
+          <div class="veld"><label>Verkoopprijs (excl.)</label><input type="number" id="vVerkoop" step="0.01" min="0" inputmode="decimal">
+            <div class="hint">Marge % ingevuld? Dan rekent de app de verkoopprijs zelf uit — ook als de inkoopprijs later verandert. Leeg laten = verkoopprijs zelf bepalen.</div>
           </div>
           <div class="veld"><label>Soort product</label>
             <div class="schakel">
@@ -630,6 +633,8 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Inkoopfactuur (PDF of foto)</label>
             <input type="file" id="pdfBestand" accept="application/pdf,image/jpeg,image/png"></div>
+          <div class="veld" style="max-width:260px"><label>Standaard marge % (nieuwe producten)</label>
+            <input type="number" id="stdMarge" step="1" inputmode="decimal"></div>
           <div style="display:flex;gap:10px">
             <button class="knop klein" id="pdfLees">Inlezen</button>
             <button class="knop klein stil" id="pdfSluit">Sluiten</button>
@@ -1691,6 +1696,15 @@ let npOpVoorraad = true;
 $("npSoortVoorraad").addEventListener("click", () => { npOpVoorraad = true; schakel("npSoortVoorraad","npSoortDoorloop"); });
 $("npSoortDoorloop").addEventListener("click", () => { npOpVoorraad = false; schakel("npSoortDoorloop","npSoortVoorraad"); });
 
+function herberekenVerkoopForm(){
+  const m = parseFloat($("vMarge").value);
+  if (isNaN(m)) return;
+  const ink = parseFloat($("vInkoop").value) || 0;
+  $("vVerkoop").value = Math.round(ink * (1 + m / 100) * 100) / 100;
+}
+$("vMarge").addEventListener("input", herberekenVerkoopForm);
+$("vInkoop").addEventListener("input", herberekenVerkoopForm);
+
 function vulVoorraadSelects(){
   $("vCategorie").innerHTML = '<option value="">— geen —</option>' +
     cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
@@ -1700,7 +1714,7 @@ function vulVoorraadSelects(){
 
 $("vNieuw").addEventListener("click", () => {
   bewerkProductId = null;
-  ["vNaam","vInkoop","vVerkoop","vVoorraad","vEenheid","vLeverancier"].forEach(id => $(id).value = "");
+  ["vNaam","vInkoop","vMarge","vVerkoop","vVoorraad","vEenheid","vLeverancier"].forEach(id => $(id).value = "");
   $("vCategorie").value = "";
   prodOpVoorraad = true; schakel("vSoortVoorraad","vSoortDoorloop");
   $("vVoorraadVeld").style.display = "block";
@@ -1714,11 +1728,14 @@ $("vAnnuleer").addEventListener("click", () => { $("vForm").style.display = "non
 $("vOpslaan").addEventListener("click", async () => {
   const naam = $("vNaam").value.trim();
   if (!naam) { toast("Naam is verplicht"); return; }
+  const margeV = parseFloat($("vMarge").value);
+  const inkoopV = parseFloat($("vInkoop").value) || 0;
   const rij = {
     naam,
     categorie_id: $("vCategorie").value || null,
-    inkoopprijs: parseFloat($("vInkoop").value) || 0,
-    verkoopprijs: parseFloat($("vVerkoop").value) || 0,
+    inkoopprijs: inkoopV,
+    marge_pct: isNaN(margeV) ? null : margeV,
+    verkoopprijs: isNaN(margeV) ? (parseFloat($("vVerkoop").value) || 0) : r2(inkoopV * (1 + margeV / 100)),
     op_voorraad: prodOpVoorraad,
     voorraad: prodOpVoorraad ? (parseFloat($("vVoorraad").value) || 0) : 0,
     eenheid: $("vEenheid").value.trim() || "stuks",
@@ -1785,6 +1802,7 @@ function renderVoorraad(){
     $("vNaam").value = p.naam || "";
     $("vCategorie").value = p.categorie_id || "";
     $("vInkoop").value = p.inkoopprijs || "";
+    $("vMarge").value = (p.marge_pct ?? "");
     $("vVerkoop").value = p.verkoopprijs || "";
     prodOpVoorraad = p.op_voorraad !== false;
     if (prodOpVoorraad) schakel("vSoortVoorraad","vSoortDoorloop"); else schakel("vSoortDoorloop","vSoortVoorraad");
@@ -1917,6 +1935,7 @@ $("vPdfToon").addEventListener("click", () => {
   const b = $("pdfBlok");
   b.style.display = b.style.display === "none" ? "block" : "none";
   $("pdfKeyVeld").style.display = (cache.inst.anthropic_api_key || "").trim() ? "none" : "block";
+  if (!$("stdMarge").value) $("stdMarge").value = cache.inst.standaard_marge_pct || 30;
 });
 $("pdfSluit").addEventListener("click", () => { $("pdfBlok").style.display = "none"; });
 
@@ -2026,6 +2045,11 @@ $("pfVerwerk").addEventListener("click", async () => {
   const datum = $("pfDatum").value || vandaagISO();
   const bedrag = parseFloat($("pfBedrag").value) || 0;
   const btw = parseFloat($("pfBtw").value) || 0;
+  const stdM = parseFloat($("stdMarge").value);
+  const stdMarge = isNaN(stdM) ? 0 : stdM;
+  await db.from("instellingen").upsert(
+    { sleutel: "standaard_marge_pct", waarde: String(stdMarge) }, { onConflict: "sleutel" });
+  cache.inst.standaard_marge_pct = String(stdMarge);
   $("pfVerwerk").disabled = true;
   const status = $("pdfStatus");
   status.textContent = "Bezig met verwerken…";
@@ -2051,7 +2075,9 @@ $("pfVerwerk").addEventListener("click", async () => {
     if (keuze === "_nieuw"){
       if (!naam) continue;
       const { data: np, error: npF } = await db.from("producten").insert({
-        naam: naam.slice(0, 120), inkoopprijs: prijs, verkoopprijs: 0,
+        naam: naam.slice(0, 120), inkoopprijs: prijs,
+        marge_pct: stdMarge > 0 ? stdMarge : null,
+        verkoopprijs: stdMarge > 0 ? r2(prijs * (1 + stdMarge / 100)) : 0,
         op_voorraad: true, voorraad: 0, leverancier: lev
       }).select().single();
       if (npF || !np) continue;
@@ -2067,9 +2093,11 @@ $("pfVerwerk").addEventListener("click", async () => {
     const prod = cache.producten.find(p => p.id === productId);
     if (prod){
       const updates = { inkoopprijs: prijs };
+      if (prod.marge_pct != null) updates.verkoopprijs = r2(prijs * (1 + Number(prod.marge_pct) / 100));
       if (prod.op_voorraad !== false && aantal > 0) updates.voorraad = Number(prod.voorraad || 0) + aantal;
       await db.from("producten").update(updates).eq("id", productId);
       prod.inkoopprijs = prijs;
+      if (updates.verkoopprijs !== undefined) prod.verkoopprijs = updates.verkoopprijs;
       if (updates.voorraad !== undefined) prod.voorraad = updates.voorraad;
     }
     await db.from("product_prijzen").insert({
