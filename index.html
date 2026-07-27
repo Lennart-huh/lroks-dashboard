@@ -296,17 +296,17 @@ nav.onderbalk{display:none}
           <div class="hint" id="kVorige">Vorige stand: —</div>
           <div class="veld" style="margin-top:13px"><label>Waar ben je geweest</label><input type="text" id="kOmschrijving" placeholder="bv. klus Zevenbergen + groothandel"></div>
           <div class="rij2">
+            <div class="veld"><label>Project</label><select id="kProject"></select></div>
             <div class="veld"><label>Klant / bedrijf</label><select id="kKlant"></select></div>
+          </div>
+          <div class="rij2">
             <div class="veld"><label>Type rit</label>
               <div class="schakel">
                 <button type="button" id="kZakelijk" class="aan">Zakelijk</button>
                 <button type="button" id="kPrive">Privé</button>
               </div>
             </div>
-          </div>
-          <div class="rij2">
             <div class="veld"><label>Vergoeding per km (€)</label><input type="number" id="kPrijs" step="0.01" min="0" inputmode="decimal" placeholder="0,35"></div>
-            <div></div>
           </div>
           <button class="knop" id="kOpslaan">KM-stand opslaan</button>
           <button class="knop klein stil" id="kAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
@@ -321,6 +321,7 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Datum</label><input type="date" id="pDatum"></div>
           <button class="knop" id="pOpslaan">Gebruik opslaan</button>
+          <button class="knop klein stil" id="pAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
           <button class="knop klein stil" id="pNieuwToon" style="margin-top:12px">+ Nieuw product toevoegen</button>
           <div id="pNieuwBlok" style="display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
             <div class="rij2">
@@ -395,6 +396,15 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Plaats</label><input type="text" id="klPlaats"></div>
           </div>
           <div class="veld"><label>Notities</label><textarea id="klNotities" style="min-height:70px"></textarea></div>
+          <div class="veld" id="klFacturenBlok" style="display:none"><label>Facturen van deze klant</label>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>Nr</th><th>Datum</th><th>Status</th><th class="r">Excl.</th></tr></thead>
+                <tbody id="klFacturenBody"></tbody>
+                <tfoot><tr><td colspan="3" style="font-family:'Archivo',sans-serif;font-weight:600">Totaal gefactureerd</td><td class="r" id="klFacturenTotaal" style="font-weight:600"></td></tr></tfoot>
+              </table>
+            </div>
+          </div>
           <div style="display:flex;gap:10px">
             <button class="knop klein" id="klOpslaan">Opslaan</button>
             <button class="knop klein stil" id="klAnnuleer">Annuleren</button>
@@ -836,6 +846,7 @@ function vulSelects(){
   const pOpties = '<option value="">— geen project —</option>' +
     open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
   $("uProject").innerHTML = pOpties;
+  $("kProject").innerHTML = pOpties;
   $("pProject").innerHTML = '<option value="">— kies project —</option>' +
     open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
 
@@ -852,6 +863,10 @@ function vulSelects(){
 $("uProject").addEventListener("change", () => {
   const p = cache.projecten.find(x => x.id === $("uProject").value);
   if (p && p.klant_id) $("uKlant").value = p.klant_id;
+});
+$("kProject").addEventListener("change", () => {
+  const p = cache.projecten.find(x => x.id === $("kProject").value);
+  if (p && p.klant_id) $("kKlant").value = p.klant_id;
 });
 
 /* =====================================================
@@ -1069,6 +1084,7 @@ function stopKmBewerken(){
   $("kAnnuleer").style.display = "none";
   $("kStand").value = ""; $("kOmschrijving").value = "";
   $("kKlant").value = "";
+  $("kProject").value = "";
   $("kPrijs").value = Number(cache.inst.km_prijs || 0.35).toFixed(2);
   $("kDatum").value = vandaagISO();
   kmZakelijk = true; schakel("kZakelijk","kPrive");
@@ -1093,6 +1109,7 @@ $("kOpslaan").addEventListener("click", async () => {
     datum, km_stand: stand,
     omschrijving: $("kOmschrijving").value.trim() || null,
     klant_id: $("kKlant").value || null,
+    project_id: $("kProject").value || null,
     km_prijs: (parseFloat($("kPrijs").value) > 0 ? parseFloat($("kPrijs").value) : null),
     zakelijk: kmZakelijk
   };
@@ -1114,11 +1131,18 @@ $("kOpslaan").addEventListener("click", async () => {
 function startKmBewerken(id){
   const k = kmData.find(x => x.id === id);
   if (!k) return;
+  if (k.gefactureerd) { toast("Deze dag staat al op een factuur"); return; }
   bewerkKmId = id;
   $("kDatum").value = k.datum;
   $("kStand").value = k.km_stand;
   $("kOmschrijving").value = k.omschrijving || "";
   $("kKlant").value = k.klant_id || "";
+  if (k.project_id && ![...$("kProject").options].some(o => o.value === k.project_id)){
+    const p = cache.projecten.find(x => x.id === k.project_id);
+    if (p) $("kProject").insertAdjacentHTML("beforeend",
+      '<option value="' + p.id + '">' + esc(p.naam) + ' (afgerond)</option>');
+  }
+  $("kProject").value = k.project_id || "";
   $("kPrijs").value = (k.km_prijs ?? Number(cache.inst.km_prijs || 0.35));
   kmZakelijk = !!k.zakelijk;
   if (kmZakelijk) schakel("kZakelijk","kPrive"); else schakel("kPrive","kZakelijk");
@@ -1172,15 +1196,16 @@ function renderKm(){
   }
   body.innerHTML = regels.slice().reverse().slice(0, 60).map((r, idx) => {
     const eersteOoit = r.datum === kmData[0].datum;
-    return '<tr class="klik" data-kedit="' + r.id + '">' +
+    const waar = [r.omschrijving, projectNaam(r.project_id), klantNaam(r.klant_id)].filter(Boolean).join(" · ");
+    return '<tr' + (r.gefactureerd ? '' : ' class="klik" data-kedit="' + r.id + '"') + '>' +
       '<td>' + fmtDatum(r.datum) + '</td>' +
       '<td class="r">' + r.km_stand.toLocaleString("nl-NL") + '</td>' +
       '<td class="r">' + (eersteOoit ? "start" : r.gereden.toLocaleString("nl-NL")) + '</td>' +
-      '<td><span class="chip ' + (r.zakelijk ? "groen" : "grijs") + '">' + (r.zakelijk ? "ZAKELIJK" : "PRIVÉ") + '</span></td>' +
-      '<td class="tekst">' + esc((r.omschrijving || "") + (r.klant_id ? (r.omschrijving ? " · " : "") + klantNaam(r.klant_id) : "")) + '</td>' +
+      '<td><span class="chip ' + (r.zakelijk ? "groen" : "grijs") + '">' + (r.zakelijk ? "ZAKELIJK" : "PRIVÉ") + '</span>' + (r.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
+      '<td class="tekst">' + esc(waar) + '</td>' +
       '<td class="r">' + eur2(rijPrijs(r)) + '</td>' +
       '<td class="r">' + (r.zakelijk && !eersteOoit ? eur2(r.gereden * rijPrijs(r)) : "—") + '</td>' +
-      '<td class="r"><button class="verwijder" data-kid="' + r.id + '" title="Verwijderen">✕</button></td>' +
+      '<td class="r">' + (r.gefactureerd ? '' : '<button class="verwijder" data-kid="' + r.id + '" title="Verwijderen">✕</button>') + '</td>' +
     '</tr>';
   }).join("");
   body.querySelectorAll("[data-kedit]").forEach(r =>
@@ -1228,6 +1253,33 @@ $("npOpslaan").addEventListener("click", async () => {
   toast("Product toegevoegd");
 });
 
+let bewerkGebruikRow = null;
+function stopGebruikBewerken(){
+  bewerkGebruikRow = null;
+  $("pOpslaan").textContent = "Gebruik opslaan";
+  $("pAnnuleer").style.display = "none";
+  $("pAantal").value = "";
+  $("pDatum").value = vandaagISO();
+}
+$("pAnnuleer").addEventListener("click", stopGebruikBewerken);
+
+function startGebruikBewerken(g){
+  bewerkGebruikRow = g;
+  if (g.project_id && ![...$("pProject").options].some(o => o.value === g.project_id)){
+    const p = cache.projecten.find(x => x.id === g.project_id);
+    if (p) $("pProject").insertAdjacentHTML("beforeend",
+      '<option value="' + p.id + '">' + esc(p.naam) + ' (afgerond)</option>');
+  }
+  $("pProject").value = g.project_id || "";
+  $("pProduct").value = g.product_id || "";
+  $("pAantal").value = Math.abs(Number(g.aantal));
+  $("pDatum").value = g.datum;
+  $("pOpslaan").textContent = "Wijziging opslaan";
+  $("pAnnuleer").style.display = "block";
+  toonTab("invullen");
+  kiesSub("sub-product");
+}
+
 $("pOpslaan").addEventListener("click", async () => {
   const projectId = $("pProject").value;
   const productId = $("pProduct").value;
@@ -1237,23 +1289,48 @@ $("pOpslaan").addEventListener("click", async () => {
   if (!productId || !(aantal > 0)) { toast("Kies een product en aantal"); return; }
 
   $("pOpslaan").disabled = true;
-  const { error } = await db.from("voorraad_mutaties").insert({
-    product_id: productId, aantal: -aantal, type: "gebruik",
-    project_id: projectId, datum
-  });
-  if (!error){
-    const prod = cache.producten.find(p => p.id === productId);
-    if (prod && prod.op_voorraad !== false){
-      const nieuw = Number(prod.voorraad || 0) - aantal;
-      const { error: e2 } = await db.from("producten").update({ voorraad: nieuw }).eq("id", productId);
-      if (!e2) prod.voorraad = nieuw;
+  let fout;
+  if (bewerkGebruikRow){
+    ({ error: fout } = await db.from("voorraad_mutaties").update({
+      product_id: productId, aantal: -aantal, project_id: projectId, datum
+    }).eq("id", bewerkGebruikRow.id));
+    if (!fout){
+      // oude afboeking terugdraaien
+      const oud = cache.producten.find(p => p.id === bewerkGebruikRow.product_id);
+      if (oud && oud.op_voorraad !== false){
+        const terug = Number(oud.voorraad || 0) - Number(bewerkGebruikRow.aantal);
+        const { error: eT } = await db.from("producten").update({ voorraad: terug }).eq("id", oud.id);
+        if (!eT) oud.voorraad = terug;
+      }
+      // nieuwe afboeking doorvoeren
+      const nw = cache.producten.find(p => p.id === productId);
+      if (nw && nw.op_voorraad !== false){
+        const af = Number(nw.voorraad || 0) - aantal;
+        const { error: eN } = await db.from("producten").update({ voorraad: af }).eq("id", nw.id);
+        if (!eN) nw.voorraad = af;
+      }
+    }
+  } else {
+    ({ error: fout } = await db.from("voorraad_mutaties").insert({
+      product_id: productId, aantal: -aantal, type: "gebruik",
+      project_id: projectId, datum
+    }));
+    if (!fout){
+      const prod = cache.producten.find(p => p.id === productId);
+      if (prod && prod.op_voorraad !== false){
+        const nieuw = Number(prod.voorraad || 0) - aantal;
+        const { error: e2 } = await db.from("producten").update({ voorraad: nieuw }).eq("id", productId);
+        if (!e2) prod.voorraad = nieuw;
+      }
     }
   }
   $("pOpslaan").disabled = false;
-  if (error) { console.error(error); toast("Opslaan mislukt"); return; }
-  $("pAantal").value = "";
+  if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
+  const wasBewerken = !!bewerkGebruikRow;
+  stopGebruikBewerken();
   renderVoorraad();
-  toast("Gebruik opgeslagen bij " + (projectNaam(projectId) || "project"));
+  if (bewerkProjectId) laadProjectGebruik(bewerkProjectId);
+  toast(wasBewerken ? "Gebruik gewijzigd" : "Gebruik opgeslagen bij " + (projectNaam(projectId) || "project"));
 });
 
 /* =====================================================
@@ -1267,6 +1344,7 @@ function klantFormLeeg(){
 $("klantNieuw").addEventListener("click", () => {
   bewerkKlantId = null;
   klantFormLeeg();
+  $("klFacturenBlok").style.display = "none";
   $("klVerwijder").style.display = "none";
   $("klantForm").style.display = "block";
   $("klNaam").focus();
@@ -1338,6 +1416,8 @@ function renderKlanten(){
     $("klPostcode").value = k.postcode || "";
     $("klPlaats").value = k.plaats || "";
     $("klNotities").value = k.notities || "";
+    $("klFacturenBlok").style.display = "block";
+    laadKlantFacturen(k.id);
     $("klVerwijder").style.display = "inline-block";
     $("klantForm").style.display = "block";
     window.scrollTo(0, 0);
@@ -1367,13 +1447,18 @@ async function laadProjectGebruik(projectId){
     return;
   }
   body.innerHTML = lijst.map(g =>
-    '<tr>' +
+    '<tr' + (g.gefactureerd ? '' : ' class="klik" data-gedit="' + g.id + '"') + '>' +
       '<td>' + fmtDatum(g.datum) + '</td>' +
       '<td class="tekst">' + esc(productNaam(g.product_id)) + (g.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
       '<td class="r">' + Math.abs(Number(g.aantal)).toLocaleString("nl-NL") + '</td>' +
       '<td class="r">' + (g.gefactureerd ? '' : '<button class="verwijder" data-gid="' + g.id + '" title="Verwijderen">✕</button>') + '</td>' +
     '</tr>').join("");
-  body.querySelectorAll("[data-gid]").forEach(k => k.addEventListener("click", async () => {
+  body.querySelectorAll("[data-gedit]").forEach(r => r.addEventListener("click", () => {
+    const g = lijst.find(x => x.id === r.dataset.gedit);
+    if (g) startGebruikBewerken(g);
+  }));
+  body.querySelectorAll("[data-gid]").forEach(k => k.addEventListener("click", async (e) => {
+    e.stopPropagation();
     const g = lijst.find(x => x.id === k.dataset.gid);
     if (!g) return;
     if (!confirm("Deze productregel verwijderen?")) return;
@@ -1414,6 +1499,32 @@ function laadProjectFacturen(projectId){
     toonTab("facturen");
     kiesFSub("fUit");
     openFactuur(r.dataset.pfid);
+  }));
+}
+
+function laadKlantFacturen(klantId){
+  const body = $("klFacturenBody");
+  const lijst = factData.filter(f => f.klant_id === klantId && f.type === "verkoop");
+  if (!lijst.length){
+    body.innerHTML = '<tr><td colspan="4" class="leeg">Nog geen facturen voor deze klant.</td></tr>';
+    $("klFacturenTotaal").textContent = "€ 0,00";
+    return;
+  }
+  const chip = s => s === "betaald" ? '<span class="chip groen">BETAALD</span>'
+    : s === "concept" ? '<span class="chip grijs">CONCEPT</span>'
+    : '<span class="chip amber">OPEN</span>';
+  body.innerHTML = lijst.map(f =>
+    '<tr class="klik" data-kfid="' + f.id + '">' +
+      '<td>' + esc(f.nummer || "") + '</td>' +
+      '<td>' + fmtDatum(f.datum) + '</td>' +
+      '<td>' + chip(f.status) + '</td>' +
+      '<td class="r">' + eur2(f.bedrag_excl || 0) + '</td>' +
+    '</tr>').join("");
+  $("klFacturenTotaal").textContent = eur2(lijst.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
+  body.querySelectorAll("[data-kfid]").forEach(r => r.addEventListener("click", () => {
+    toonTab("facturen");
+    kiesFSub("fUit");
+    openFactuur(r.dataset.kfid);
   }));
 }
 $("projNieuw").addEventListener("click", () => {
@@ -1742,17 +1853,20 @@ $("fdVerwijder").addEventListener("click", async () => {
   if (!bewerkFactuurId) return;
   if (!confirm("Deze factuur verwijderen? De uren en producten komen dan weer klaar te staan om opnieuw te factureren.")) return;
   const { data: regels } = await db.from("factuur_regels")
-    .select("uren_id,mutatie_id").eq("factuur_id", bewerkFactuurId);
+    .select("uren_id,mutatie_id,km_id").eq("factuur_id", bewerkFactuurId);
   const urenIds = (regels || []).map(r => r.uren_id).filter(Boolean);
   const mutIds = (regels || []).map(r => r.mutatie_id).filter(Boolean);
+  const kmIds = (regels || []).map(r => r.km_id).filter(Boolean);
   if (urenIds.length) await db.from("uren").update({ gefactureerd: false }).in("id", urenIds);
   if (mutIds.length) await db.from("voorraad_mutaties").update({ gefactureerd: false }).in("id", mutIds);
+  if (kmIds.length) await db.from("km_registratie").update({ gefactureerd: false }).in("id", kmIds);
   const { error } = await db.from("facturen").delete().eq("id", bewerkFactuurId);
   if (error){ toast("Verwijderen mislukt"); return; }
   toast("Factuur verwijderd");
   sluitFd();
   await herlaadFacturen();
   await herlaadUren();
+  await herlaadKm();
 });
 
 /* ---- Factureren vanaf een project ---- */
@@ -1770,7 +1884,9 @@ async function startFacturering(projectId){
   ]);
   const uren = urenRes.data || [];
   const gebruik = gebrRes.data || [];
-  if (!uren.length && !gebruik.length){
+  const kmVoor = kmRegels().filter(r =>
+    r.project_id === projectId && !r.gefactureerd && r.zakelijk && r.gereden > 0);
+  if (!uren.length && !gebruik.length && !kmVoor.length){
     toast("Niets te factureren bij dit project");
     return;
   }
@@ -1781,7 +1897,7 @@ async function startFacturering(projectId){
     regels.push({
       omschrijving: "Arbeid " + fmtDatum(u.datum) + (u.omschrijving ? " — " + u.omschrijving : ""),
       aantal: Number(u.aantal), prijs: Number(u.tarief || 0),
-      uren_id: u.id, mutatie_id: null
+      uren_id: u.id, mutatie_id: null, km_id: null
     });
   });
   gebruik.forEach(g => {
@@ -1790,7 +1906,15 @@ async function startFacturering(projectId){
       omschrijving: (prod ? prod.naam : "Product") + " " + fmtDatum(g.datum),
       aantal: Math.abs(Number(g.aantal)),
       prijs: Number(prod ? (prod.verkoopprijs || 0) : 0),
-      uren_id: null, mutatie_id: g.id
+      uren_id: null, mutatie_id: g.id, km_id: null
+    });
+  });
+  kmVoor.forEach(r => {
+    regels.push({
+      omschrijving: "Kilometers " + fmtDatum(r.datum) + (r.omschrijving ? " — " + r.omschrijving : ""),
+      aantal: r.gereden,
+      prijs: Number(r.km_prijs ?? (cache.inst.km_prijs || 0)),
+      uren_id: null, mutatie_id: null, km_id: r.id
     });
   });
   pendingFactuur = { projectId, regels };
@@ -1841,7 +1965,7 @@ async function maakFactuurAan(){
   const regels = pendingFactuur.regels.map(r => ({
     factuur_id: nieuw.id, omschrijving: r.omschrijving,
     aantal: r.aantal, prijs: r.prijs,
-    uren_id: r.uren_id, mutatie_id: r.mutatie_id
+    uren_id: r.uren_id, mutatie_id: r.mutatie_id, km_id: r.km_id || null
   }));
   const { error: e2 } = await db.from("factuur_regels").insert(regels);
   if (e2){
@@ -1852,13 +1976,16 @@ async function maakFactuurAan(){
   }
   const urenIds = regels.map(r => r.uren_id).filter(Boolean);
   const mutIds = regels.map(r => r.mutatie_id).filter(Boolean);
+  const kmIds = regels.map(r => r.km_id).filter(Boolean);
   if (urenIds.length) await db.from("uren").update({ gefactureerd: true }).in("id", urenIds);
   if (mutIds.length) await db.from("voorraad_mutaties").update({ gefactureerd: true }).in("id", mutIds);
+  if (kmIds.length) await db.from("km_registratie").update({ gefactureerd: true }).in("id", kmIds);
   $("fdOpslaan").disabled = false;
   toast("Factuur " + nieuw.nummer + " aangemaakt");
   pendingFactuur = null;
   await herlaadFacturen();
   await herlaadUren();
+  await herlaadKm();
   openFactuur(nieuw.id);
 }
 
