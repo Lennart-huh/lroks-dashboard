@@ -142,6 +142,30 @@ tbody tr.klik:hover td{background:var(--surface2)}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 20px);background:var(--accent);color:var(--bg);padding:11px 20px;border-radius:8px;font-size:.85rem;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}
 #toast.zichtbaar{opacity:1}
 
+.fpanel{display:none}
+.fpanel.actief{display:block}
+
+/* ---------- printbare factuur ---------- */
+#printvel{display:none}
+@media print{
+  #app,#loginScherm,#toast{display:none!important}
+  body{background:#fff}
+  #printvel{display:block;color:#000;font-family:'Archivo',sans-serif;padding:6mm;font-size:12px}
+  #printvel .pkop{display:flex;justify-content:space-between;margin-bottom:24px}
+  #printvel .pnaam{font-size:18px;font-weight:700;letter-spacing:.04em}
+  #printvel .pklein{font-size:10.5px;color:#333;line-height:1.5;margin-top:4px}
+  #printvel h1{font-size:15px;letter-spacing:.12em;margin:18px 0 14px}
+  #printvel .pinfo{display:flex;justify-content:space-between;margin-bottom:18px;line-height:1.5}
+  #printvel .ptab{width:100%;border-collapse:collapse;margin-bottom:14px}
+  #printvel .ptab th{text-align:left;border-bottom:1.5px solid #000;padding:6px;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+  #printvel .ptab td{border-bottom:1px solid #ccc;padding:7px 6px;font-family:'IBM Plex Mono',monospace;font-size:11px}
+  #printvel .ptab td:first-child{font-family:'Archivo',sans-serif}
+  #printvel .pr{text-align:right}
+  #printvel .ptot{margin-left:auto;width:230px;line-height:1.9}
+  #printvel .ptot div{display:flex;justify-content:space-between}
+  #printvel .pgroot{font-size:14px;border-top:1.5px solid #000;padding-top:4px;margin-top:4px}
+}
+
 /* ---------- mobiel ---------- */
 nav.onderbalk{display:none}
 .sheet{display:none}
@@ -409,9 +433,10 @@ nav.onderbalk{display:none}
               </table>
             </div>
           </div>
-          <div style="display:flex;gap:10px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="knop klein" id="prOpslaan">Opslaan</button>
             <button class="knop klein stil" id="prAnnuleer">Annuleren</button>
+            <button class="knop klein" id="prFactureer" style="display:none">Factureren →</button>
             <button class="knop klein gevaar" id="prVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
           </div>
         </div>
@@ -427,8 +452,111 @@ nav.onderbalk{display:none}
       <div class="tab" id="tab-omzet"><h2>Omzet / winst</h2>
         <div class="straks"><span class="fase">FASE 5</span><p>Hier komen je omzet en winst: winst uit uren en winst uit de marge op je spullen, bij elkaar opgeteld. Met doelen die je zelf kunt aanpassen.</p></div>
       </div>
-      <div class="tab" id="tab-facturen"><h2>Facturen</h2>
-        <div class="straks"><span class="fase">FASE 3 — VOLGENDE STAP</span><p>Inkomende en uitgaande facturen, met de Factureren-knop: uren en gebruikte spullen van een project worden automatisch een kant-en-klare factuur.</p></div>
+      <div class="tab" id="tab-facturen">
+        <h2>Facturen</h2>
+        <div class="grid4">
+          <div class="card"><div class="k">Facturen dit jaar</div><div class="v" id="fkAantal">—</div><div class="m">uitgaand</div></div>
+          <div class="card"><div class="k">Totaal dit jaar</div><div class="v" id="fkTotaal">—</div><div class="m">excl. btw</div></div>
+          <div class="card"><div class="k">Gemiddelde factuur</div><div class="v" id="fkGemiddeld">—</div><div class="m">excl. btw</div></div>
+          <div class="card amber"><div class="k">Openstaand</div><div class="v" id="fkOpen">—</div><div class="m" id="fkOpenSub"></div></div>
+        </div>
+        <div class="subtabs" id="fSubtabs">
+          <button data-fsub="fUit" class="aan">Uitgaand</button>
+          <button data-fsub="fIn">Inkomend</button>
+          <button data-fsub="fGeg">Bedrijfsgegevens</button>
+        </div>
+
+        <div class="fpanel actief" id="fUit">
+          <div class="form-card" id="fDetail" style="display:none;margin-bottom:18px;max-width:680px">
+            <div class="rij2">
+              <div class="veld"><label>Factuurnummer</label><input type="text" id="fdNummer" readonly></div>
+              <div class="veld"><label>Klant</label><select id="fdKlant"></select></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Factuurdatum</label><input type="date" id="fdDatum"></div>
+              <div class="veld"><label>Vervaldatum</label><input type="date" id="fdVervaldatum"></div>
+            </div>
+            <div class="veld"><label>Status</label>
+              <div class="schakel">
+                <button type="button" id="fdStatusConcept">Concept</button>
+                <button type="button" id="fdStatusOpen" class="aan">Open</button>
+                <button type="button" id="fdStatusBetaald">Betaald</button>
+              </div>
+            </div>
+            <div class="veld"><label>Regels</label>
+              <div class="tbl-wrap"><table>
+                <thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Bedrag</th></tr></thead>
+                <tbody id="fdRegelsBody"></tbody>
+              </table></div>
+              <div class="hint" style="margin-top:8px">Excl: <b id="fdExcl">—</b> · BTW: <b id="fdBtw">—</b> · Incl: <b id="fdIncl">—</b></div>
+            </div>
+            <div class="veld"><label>Notities</label><input type="text" id="fdNotities"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="knop klein" id="fdOpslaan">Opslaan</button>
+              <button class="knop klein stil" id="fdPrint">Bekijk / print</button>
+              <button class="knop klein stil" id="fdAnnuleer">Sluiten</button>
+              <button class="knop klein gevaar" id="fdVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+            </div>
+          </div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Nr</th><th>Datum</th><th>Klant</th><th>Status</th><th class="r">Excl.</th></tr></thead>
+            <tbody id="fUitBody"></tbody>
+          </table></div>
+        </div>
+
+        <div class="fpanel" id="fIn">
+          <div style="margin-bottom:14px"><button class="knop klein" id="fiNieuw">+ Inkoopfactuur</button></div>
+          <div class="form-card" id="fiForm" style="display:none;margin-bottom:18px">
+            <div class="rij2">
+              <div class="veld"><label>Leverancier</label><input type="text" id="fiLeverancier" placeholder="bv. Technische Unie"></div>
+              <div class="veld"><label>Factuurnummer</label><input type="text" id="fiNummer"></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Datum</label><input type="date" id="fiDatum"></div>
+              <div class="veld"><label>Status</label>
+                <div class="schakel">
+                  <button type="button" id="fiStatusOpen" class="aan">Open</button>
+                  <button type="button" id="fiStatusBetaald">Betaald</button>
+                </div>
+              </div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Bedrag excl. btw (€)</label><input type="number" id="fiBedrag" step="0.01" min="0" inputmode="decimal"></div>
+              <div class="veld"><label>BTW (€)</label><input type="number" id="fiBtw" step="0.01" min="0" inputmode="decimal"></div>
+            </div>
+            <div class="veld"><label>Notities</label><input type="text" id="fiNotities"></div>
+            <div style="display:flex;gap:10px">
+              <button class="knop klein" id="fiOpslaan">Opslaan</button>
+              <button class="knop klein stil" id="fiAnnuleer">Annuleren</button>
+              <button class="knop klein gevaar" id="fiVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+            </div>
+          </div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Datum</th><th>Leverancier</th><th>Nr</th><th>Status</th><th class="r">Excl.</th></tr></thead>
+            <tbody id="fiBody"></tbody>
+          </table></div>
+        </div>
+
+        <div class="fpanel" id="fGeg">
+          <div class="form-card">
+            <p style="font-size:.82rem;color:var(--ink2);margin-bottom:14px">Deze gegevens komen op je facturen te staan. Eén keer invullen is genoeg.</p>
+            <div class="veld"><label>Bedrijfsnaam</label><input type="text" id="bgNaam"></div>
+            <div class="rij2">
+              <div class="veld"><label>Adres</label><input type="text" id="bgAdres"></div>
+              <div class="veld"><label>Postcode + plaats</label><input type="text" id="bgPostcodePlaats"></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>KVK-nummer</label><input type="text" id="bgKvk"></div>
+              <div class="veld"><label>BTW-nummer</label><input type="text" id="bgBtw"></div>
+            </div>
+            <div class="veld"><label>IBAN</label><input type="text" id="bgIban"></div>
+            <div class="rij2">
+              <div class="veld"><label>E-mail</label><input type="text" id="bgEmail"></div>
+              <div class="veld"><label>Telefoon</label><input type="text" id="bgTelefoon"></div>
+            </div>
+            <button class="knop klein" id="bgOpslaan">Opslaan</button>
+          </div>
+        </div>
       </div>
       <div class="tab" id="tab-voorraad">
         <div class="tab-kop"><h2>Voorraad</h2>
@@ -498,6 +626,8 @@ nav.onderbalk{display:none}
   <div id="toast"></div>
 </div>
 
+<div id="printvel"></div>
+
 <script>
 /* =====================================================
    CONFIGURATIE
@@ -532,6 +662,7 @@ function toast(msg){
 const cache = { klanten:[], projecten:[], categorieen:[], producten:[], inst:{} };
 let urenData = [];
 let kmData = [];
+let factData = [];
 
 /* =====================================================
    THEMA
@@ -630,16 +761,17 @@ $("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut();
 async function laadAlles(){
   const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const [kl, pr, cat, prod, inst, ur, km] = await Promise.all([
+    const [kl, pr, cat, prod, inst, ur, km, ft] = await Promise.all([
       db.from("klanten").select("*").order("naam"),
       db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
       db.from("categorieen").select("*").order("volgorde"),
       db.from("producten").select("*").order("naam"),
       db.from("instellingen").select("*"),
       db.from("uren").select("*").order("datum", { ascending:false }).limit(400),
-      db.from("km_registratie").select("*").order("datum", { ascending:true })
+      db.from("km_registratie").select("*").order("datum", { ascending:true }),
+      db.from("facturen").select("*").order("datum", { ascending:false }).limit(500)
     ]);
-    const eerste = [kl,pr,cat,prod,inst,ur,km].find(r => r.error);
+    const eerste = [kl,pr,cat,prod,inst,ur,km,ft].find(r => r.error);
     if (eerste) throw eerste.error;
 
     cache.klanten = kl.data || [];
@@ -650,6 +782,7 @@ async function laadAlles(){
     (inst.data || []).forEach(r => cache.inst[r.sleutel] = r.waarde);
     urenData = ur.data || [];
     kmData = km.data || [];
+    factData = ft.data || [];
 
     vulSelects();
     vulVoorraadSelects();
@@ -660,6 +793,8 @@ async function laadAlles(){
     if (!$("kPrijs").value) $("kPrijs").value = Number(cache.inst.km_prijs || 0.35).toFixed(2);
     renderKm();
     renderVoorraad();
+    renderFacturen();
+    vulBedrijf();
     renderHoofd();
     checkHerinnering();
 
@@ -715,8 +850,14 @@ $("uProject").addEventListener("change", () => {
    ===================================================== */
 function renderHoofd(){
   const jaar = new Date().getFullYear();
-  // facturen komen in fase 3; tot dan staan die op nul
-  laadFactuurCijfers(jaar);
+  const verkoop = factData.filter(f => f.type === "verkoop" && new Date(f.datum).getFullYear() === jaar);
+  const omzet = verkoop.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0);
+  const openF = verkoop.filter(f => f.status === "open");
+  $("cOmzet").textContent = eur(omzet);
+  $("cOpen").textContent = eur(openF.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
+  $("cOpenSub").textContent = openF.length + " facturen";
+  $("cBetaald").textContent = eur(verkoop.filter(f => f.status === "betaald")
+    .reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
 
   const nu = new Date();
   const wd = (nu.getDay() + 6) % 7;
@@ -731,22 +872,6 @@ function renderHoofd(){
   $("cProjecten").textContent = openProj;
   $("cKlantenSub").textContent = cache.klanten.length + " klanten totaal";
 
-}
-
-async function laadFactuurCijfers(jaar){
-  try {
-    const { data, error } = await db.from("facturen")
-      .select("type,status,bedrag_excl").gte("datum", jaar + "-01-01");
-    if (error) throw error;
-    const verkoop = (data || []).filter(f => f.type === "verkoop");
-    const omzet = verkoop.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0);
-    const open = verkoop.filter(f => f.status === "open");
-    $("cOmzet").textContent = eur(omzet);
-    $("cOpen").textContent = eur(open.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
-    $("cOpenSub").textContent = open.length + " facturen";
-    $("cBetaald").textContent = eur(verkoop.filter(f => f.status === "betaald")
-      .reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
-  } catch(e){ console.error(e); }
 }
 
 /* =====================================================
@@ -879,7 +1004,7 @@ function renderUren(){
     const wie = projectNaam(u.project_id) || klantNaam(u.klant_id) || "—";
     return '<tr class="klik" data-uedit="' + u.id + '">' +
       '<td>' + fmtDatum(u.datum) + '</td>' +
-      '<td><span class="chip ' + (u.soort === "werk" ? "groen" : "grijs") + '">' + (u.soort === "werk" ? "WERK" : "KANTOOR") + '</span></td>' +
+      '<td><span class="chip ' + (u.soort === "werk" ? "groen" : "grijs") + '">' + (u.soort === "werk" ? "WERK" : "KANTOOR") + '</span>' + (u.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
       '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
       '<td class="r">' + (u.tarief ? eur2(u.tarief) : "—") + '</td>' +
       '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td>' +
@@ -1261,6 +1386,7 @@ $("projNieuw").addEventListener("click", () => {
   $("prNaam").value = ""; $("prKlant").value = ""; $("prOmschrijving").value = "";
   projStatus = "open"; schakel("prOpen","prAfgerond");
   $("prGebruikBlok").style.display = "none";
+  $("prFactureer").style.display = "none";
   $("prVerwijder").style.display = "none";
   $("projForm").style.display = "block";
   $("prNaam").focus();
@@ -1329,6 +1455,7 @@ function renderProjecten(){
     if (p.status === "open") schakel("prOpen","prAfgerond"); else schakel("prAfgerond","prOpen");
     $("prGebruikBlok").style.display = "block";
     laadProjectGebruik(p.id);
+    $("prFactureer").style.display = "inline-block";
     $("prVerwijder").style.display = "inline-block";
     $("projForm").style.display = "block";
     window.scrollTo(0, 0);
@@ -1459,6 +1586,430 @@ function renderVoorraad(){
     window.scrollTo(0, 0);
   }));
 }
+
+/* =====================================================
+   FACTUREN (fase 3)
+   ===================================================== */
+let bewerkFactuurId = null;
+let bewerkInkoopId = null;
+let huidigeRegels = [];
+let pendingFactuur = null;
+let statusFactuur = "open";
+let inkoopStatus = "open";
+
+const r2 = n => Math.round(n * 100) / 100;
+const btwPct = () => Number(cache.inst.btw_percentage || 21);
+
+function kiesFSub(id){
+  document.querySelectorAll("#fSubtabs button").forEach(b => b.classList.toggle("aan", b.dataset.fsub === id));
+  ["fUit","fIn","fGeg"].forEach(p => $(p).classList.toggle("actief", p === id));
+}
+document.querySelectorAll("#fSubtabs button").forEach(k =>
+  k.addEventListener("click", () => kiesFSub(k.dataset.fsub)));
+
+function volgendNummer(){
+  const jaar = new Date().getFullYear();
+  let max = 0;
+  factData.filter(f => f.type === "verkoop").forEach(f => {
+    const m = String(f.nummer || "").match(new RegExp("^" + jaar + "-(\\d+)$"));
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return jaar + "-" + String(max + 1).padStart(3, "0");
+}
+
+function zetFactuurStatus(s){
+  statusFactuur = s;
+  ["Concept","Open","Betaald"].forEach(x =>
+    $("fdStatus" + x).classList.toggle("aan", x.toLowerCase() === s));
+}
+$("fdStatusConcept").addEventListener("click", () => zetFactuurStatus("concept"));
+$("fdStatusOpen").addEventListener("click", () => zetFactuurStatus("open"));
+$("fdStatusBetaald").addEventListener("click", () => zetFactuurStatus("betaald"));
+
+function vulFdKlanten(){
+  $("fdKlant").innerHTML = '<option value="">— geen —</option>' +
+    cache.klanten.map(k => '<option value="' + k.id + '">' + esc(k.naam) + '</option>').join("");
+}
+
+function toonFdRegels(regels){
+  const body = $("fdRegelsBody");
+  if (!regels.length){
+    body.innerHTML = '<tr><td colspan="4" class="leeg">Geen regels.</td></tr>';
+  } else {
+    body.innerHTML = regels.map(r =>
+      '<tr><td class="tekst">' + esc(r.omschrijving) + '</td>' +
+      '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
+      '<td class="r">' + eur2(r.prijs) + '</td>' +
+      '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
+  }
+  const excl = regels.reduce((s,r) => s + Number(r.aantal) * Number(r.prijs), 0);
+  const btw = r2(excl * btwPct() / 100);
+  $("fdExcl").textContent = eur2(excl);
+  $("fdBtw").textContent = eur2(btw);
+  $("fdIncl").textContent = eur2(excl + btw);
+  return { excl: r2(excl), btw, incl: r2(excl + btw) };
+}
+
+function sluitFd(){
+  $("fDetail").style.display = "none";
+  bewerkFactuurId = null;
+  pendingFactuur = null;
+  huidigeRegels = [];
+}
+$("fdAnnuleer").addEventListener("click", sluitFd);
+
+async function openFactuur(id){
+  const f = factData.find(x => x.id === id);
+  if (!f) return;
+  bewerkFactuurId = id;
+  pendingFactuur = null;
+  vulFdKlanten();
+  $("fdNummer").value = f.nummer || "";
+  $("fdKlant").value = f.klant_id || "";
+  $("fdDatum").value = f.datum || "";
+  $("fdVervaldatum").value = f.vervaldatum || "";
+  $("fdNotities").value = f.notities || "";
+  zetFactuurStatus(f.status || "open");
+  $("fdOpslaan").textContent = "Wijzigingen opslaan";
+  $("fdVerwijder").style.display = "inline-block";
+  $("fdPrint").style.display = "inline-block";
+  $("fDetail").style.display = "block";
+  const { data } = await db.from("factuur_regels").select("*")
+    .eq("factuur_id", id).order("aangemaakt_op");
+  huidigeRegels = data || [];
+  toonFdRegels(huidigeRegels);
+  window.scrollTo(0, 0);
+}
+
+$("fdOpslaan").addEventListener("click", async () => {
+  if (pendingFactuur){ await maakFactuurAan(); return; }
+  if (!bewerkFactuurId) return;
+  const rij = {
+    klant_id: $("fdKlant").value || null,
+    datum: $("fdDatum").value || vandaagISO(),
+    vervaldatum: $("fdVervaldatum").value || null,
+    status: statusFactuur,
+    notities: $("fdNotities").value.trim() || null
+  };
+  $("fdOpslaan").disabled = true;
+  const { error } = await db.from("facturen").update(rij).eq("id", bewerkFactuurId);
+  $("fdOpslaan").disabled = false;
+  if (error){ console.error(error); toast("Opslaan mislukt"); return; }
+  toast("Factuur opgeslagen");
+  sluitFd();
+  await herlaadFacturen();
+});
+
+$("fdVerwijder").addEventListener("click", async () => {
+  if (!bewerkFactuurId) return;
+  if (!confirm("Deze factuur verwijderen? De uren en producten komen dan weer klaar te staan om opnieuw te factureren.")) return;
+  const { data: regels } = await db.from("factuur_regels")
+    .select("uren_id,mutatie_id").eq("factuur_id", bewerkFactuurId);
+  const urenIds = (regels || []).map(r => r.uren_id).filter(Boolean);
+  const mutIds = (regels || []).map(r => r.mutatie_id).filter(Boolean);
+  if (urenIds.length) await db.from("uren").update({ gefactureerd: false }).in("id", urenIds);
+  if (mutIds.length) await db.from("voorraad_mutaties").update({ gefactureerd: false }).in("id", mutIds);
+  const { error } = await db.from("facturen").delete().eq("id", bewerkFactuurId);
+  if (error){ toast("Verwijderen mislukt"); return; }
+  toast("Factuur verwijderd");
+  sluitFd();
+  await herlaadFacturen();
+  await herlaadUren();
+});
+
+/* ---- Factureren vanaf een project ---- */
+$("prFactureer").addEventListener("click", () => {
+  if (bewerkProjectId) startFacturering(bewerkProjectId);
+});
+
+async function startFacturering(projectId){
+  const project = cache.projecten.find(p => p.id === projectId);
+  const [urenRes, gebrRes] = await Promise.all([
+    db.from("uren").select("*").eq("project_id", projectId)
+      .eq("gefactureerd", false).order("datum"),
+    db.from("voorraad_mutaties").select("*").eq("project_id", projectId)
+      .eq("type", "gebruik").eq("gefactureerd", false).order("datum")
+  ]);
+  const uren = urenRes.data || [];
+  const gebruik = gebrRes.data || [];
+  if (!uren.length && !gebruik.length){
+    toast("Niets te factureren bij dit project");
+    return;
+  }
+  const regels = [];
+  let zonderTarief = 0;
+  uren.forEach(u => {
+    if (!u.tarief) zonderTarief++;
+    regels.push({
+      omschrijving: "Arbeid " + fmtDatum(u.datum) + (u.omschrijving ? " — " + u.omschrijving : ""),
+      aantal: Number(u.aantal), prijs: Number(u.tarief || 0),
+      uren_id: u.id, mutatie_id: null
+    });
+  });
+  gebruik.forEach(g => {
+    const prod = cache.producten.find(p => p.id === g.product_id);
+    regels.push({
+      omschrijving: (prod ? prod.naam : "Product") + " " + fmtDatum(g.datum),
+      aantal: Math.abs(Number(g.aantal)),
+      prijs: Number(prod ? (prod.verkoopprijs || 0) : 0),
+      uren_id: null, mutatie_id: g.id
+    });
+  });
+  pendingFactuur = { projectId, regels };
+  bewerkFactuurId = null;
+  huidigeRegels = [];
+  vulFdKlanten();
+  $("fdNummer").value = volgendNummer();
+  $("fdKlant").value = (project && project.klant_id) || "";
+  $("fdDatum").value = vandaagISO();
+  const verval = new Date();
+  verval.setDate(verval.getDate() + Number(cache.inst.betaaltermijn_dagen || 30));
+  $("fdVervaldatum").value = verval.getFullYear() + "-" +
+    String(verval.getMonth()+1).padStart(2,"0") + "-" + String(verval.getDate()).padStart(2,"0");
+  $("fdNotities").value = project ? project.naam : "";
+  zetFactuurStatus("open");
+  $("fdOpslaan").textContent = "Factuur aanmaken";
+  $("fdVerwijder").style.display = "none";
+  $("fdPrint").style.display = "none";
+  $("fDetail").style.display = "block";
+  toonFdRegels(pendingFactuur.regels);
+  if (zonderTarief) toast(zonderTarief + " urenregel(s) zonder tarief — die staan op € 0");
+  toonTab("facturen");
+  kiesFSub("fUit");
+  window.scrollTo(0, 0);
+}
+
+async function maakFactuurAan(){
+  const tot = toonFdRegels(pendingFactuur.regels);
+  const rij = {
+    nummer: $("fdNummer").value.trim() || volgendNummer(),
+    type: "verkoop",
+    klant_id: $("fdKlant").value || null,
+    project_id: pendingFactuur.projectId,
+    datum: $("fdDatum").value || vandaagISO(),
+    vervaldatum: $("fdVervaldatum").value || null,
+    status: statusFactuur,
+    bedrag_excl: tot.excl, btw_bedrag: tot.btw, bedrag_incl: tot.incl,
+    notities: $("fdNotities").value.trim() || null
+  };
+  $("fdOpslaan").disabled = true;
+  const { data: nieuw, error } = await db.from("facturen").insert(rij).select().single();
+  if (error){
+    $("fdOpslaan").disabled = false;
+    console.error(error);
+    toast("Aanmaken mislukt: " + (error.message || "onbekende fout"));
+    return;
+  }
+  const regels = pendingFactuur.regels.map(r => ({
+    factuur_id: nieuw.id, omschrijving: r.omschrijving,
+    aantal: r.aantal, prijs: r.prijs,
+    uren_id: r.uren_id, mutatie_id: r.mutatie_id
+  }));
+  const { error: e2 } = await db.from("factuur_regels").insert(regels);
+  if (e2){
+    $("fdOpslaan").disabled = false;
+    console.error(e2);
+    toast("Regels opslaan mislukt");
+    return;
+  }
+  const urenIds = regels.map(r => r.uren_id).filter(Boolean);
+  const mutIds = regels.map(r => r.mutatie_id).filter(Boolean);
+  if (urenIds.length) await db.from("uren").update({ gefactureerd: true }).in("id", urenIds);
+  if (mutIds.length) await db.from("voorraad_mutaties").update({ gefactureerd: true }).in("id", mutIds);
+  $("fdOpslaan").disabled = false;
+  toast("Factuur " + nieuw.nummer + " aangemaakt");
+  pendingFactuur = null;
+  await herlaadFacturen();
+  await herlaadUren();
+  openFactuur(nieuw.id);
+}
+
+async function herlaadFacturen(){
+  const { data } = await db.from("facturen").select("*")
+    .order("datum", { ascending:false }).limit(500);
+  factData = data || [];
+  renderFacturen();
+  renderHoofd();
+}
+
+function renderFacturen(){
+  const jaar = new Date().getFullYear();
+  const verkoopJaar = factData.filter(f => f.type === "verkoop" && new Date(f.datum).getFullYear() === jaar);
+  const totaal = verkoopJaar.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0);
+  const openF = verkoopJaar.filter(f => f.status === "open");
+  $("fkAantal").textContent = verkoopJaar.length;
+  $("fkTotaal").textContent = eur(totaal);
+  $("fkGemiddeld").textContent = verkoopJaar.length ? eur(totaal / verkoopJaar.length) : "€ 0";
+  $("fkOpen").textContent = eur(openF.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
+  $("fkOpenSub").textContent = openF.length + " facturen";
+
+  const statusChip = s => s === "betaald" ? '<span class="chip groen">BETAALD</span>'
+    : s === "concept" ? '<span class="chip grijs">CONCEPT</span>'
+    : '<span class="chip amber">OPEN</span>';
+
+  const uit = factData.filter(f => f.type === "verkoop");
+  $("fUitBody").innerHTML = !uit.length
+    ? '<tr><td colspan="5" class="leeg">Nog geen uitgaande facturen — gebruik de Factureren-knop bij een project.</td></tr>'
+    : uit.slice(0, 80).map(f =>
+      '<tr class="klik" data-fid="' + f.id + '">' +
+        '<td>' + esc(f.nummer || "") + '</td>' +
+        '<td>' + fmtDatum(f.datum) + '</td>' +
+        '<td class="tekst">' + esc(klantNaam(f.klant_id) || "—") + '</td>' +
+        '<td>' + statusChip(f.status) + '</td>' +
+        '<td class="r">' + eur2(f.bedrag_excl || 0) + '</td>' +
+      '</tr>').join("");
+  document.querySelectorAll("#fUitBody [data-fid]").forEach(r =>
+    r.addEventListener("click", () => openFactuur(r.dataset.fid)));
+
+  const inl = factData.filter(f => f.type === "inkoop");
+  $("fiBody").innerHTML = !inl.length
+    ? '<tr><td colspan="5" class="leeg">Nog geen inkoopfacturen.</td></tr>'
+    : inl.slice(0, 80).map(f =>
+      '<tr class="klik" data-fiid="' + f.id + '">' +
+        '<td>' + fmtDatum(f.datum) + '</td>' +
+        '<td class="tekst">' + esc(f.leverancier || "—") + '</td>' +
+        '<td>' + esc(f.nummer || "") + '</td>' +
+        '<td>' + statusChip(f.status) + '</td>' +
+        '<td class="r">' + eur2(f.bedrag_excl || 0) + '</td>' +
+      '</tr>').join("");
+  document.querySelectorAll("#fiBody [data-fiid]").forEach(r =>
+    r.addEventListener("click", () => openInkoop(r.dataset.fiid)));
+}
+
+/* ---- inkoopfacturen ---- */
+function zetInkoopStatus(s){
+  inkoopStatus = s;
+  $("fiStatusOpen").classList.toggle("aan", s === "open");
+  $("fiStatusBetaald").classList.toggle("aan", s === "betaald");
+}
+$("fiStatusOpen").addEventListener("click", () => zetInkoopStatus("open"));
+$("fiStatusBetaald").addEventListener("click", () => zetInkoopStatus("betaald"));
+$("fiBedrag").addEventListener("input", () => {
+  const b = parseFloat($("fiBedrag").value) || 0;
+  $("fiBtw").value = r2(b * btwPct() / 100);
+});
+$("fiNieuw").addEventListener("click", () => {
+  bewerkInkoopId = null;
+  ["fiLeverancier","fiNummer","fiBedrag","fiBtw","fiNotities"].forEach(id => $(id).value = "");
+  $("fiDatum").value = vandaagISO();
+  zetInkoopStatus("open");
+  $("fiVerwijder").style.display = "none";
+  $("fiForm").style.display = "block";
+  $("fiLeverancier").focus();
+});
+$("fiAnnuleer").addEventListener("click", () => {
+  $("fiForm").style.display = "none";
+  bewerkInkoopId = null;
+});
+
+function openInkoop(id){
+  const f = factData.find(x => x.id === id);
+  if (!f) return;
+  bewerkInkoopId = id;
+  $("fiLeverancier").value = f.leverancier || "";
+  $("fiNummer").value = f.nummer || "";
+  $("fiDatum").value = f.datum || "";
+  $("fiBedrag").value = f.bedrag_excl || "";
+  $("fiBtw").value = f.btw_bedrag || "";
+  $("fiNotities").value = f.notities || "";
+  zetInkoopStatus(f.status === "betaald" ? "betaald" : "open");
+  $("fiVerwijder").style.display = "inline-block";
+  $("fiForm").style.display = "block";
+  window.scrollTo(0, 0);
+}
+
+$("fiOpslaan").addEventListener("click", async () => {
+  const bedrag = parseFloat($("fiBedrag").value);
+  if (!(bedrag >= 0)) { toast("Vul een bedrag in"); return; }
+  const btw = parseFloat($("fiBtw").value) || 0;
+  const rij = {
+    type: "inkoop",
+    leverancier: $("fiLeverancier").value.trim() || null,
+    nummer: $("fiNummer").value.trim() || "-",
+    datum: $("fiDatum").value || vandaagISO(),
+    status: inkoopStatus,
+    bedrag_excl: r2(bedrag), btw_bedrag: r2(btw), bedrag_incl: r2(bedrag + btw),
+    notities: $("fiNotities").value.trim() || null
+  };
+  $("fiOpslaan").disabled = true;
+  let fout;
+  if (bewerkInkoopId){
+    ({ error: fout } = await db.from("facturen").update(rij).eq("id", bewerkInkoopId));
+  } else {
+    ({ error: fout } = await db.from("facturen").insert(rij));
+  }
+  $("fiOpslaan").disabled = false;
+  if (fout){ console.error(fout); toast("Opslaan mislukt"); return; }
+  $("fiForm").style.display = "none";
+  bewerkInkoopId = null;
+  toast("Inkoopfactuur opgeslagen");
+  await herlaadFacturen();
+});
+
+$("fiVerwijder").addEventListener("click", async () => {
+  if (!bewerkInkoopId) return;
+  if (!confirm("Deze inkoopfactuur verwijderen?")) return;
+  const { error } = await db.from("facturen").delete().eq("id", bewerkInkoopId);
+  if (error){ toast("Verwijderen mislukt"); return; }
+  $("fiForm").style.display = "none";
+  bewerkInkoopId = null;
+  toast("Inkoopfactuur verwijderd");
+  await herlaadFacturen();
+});
+
+/* ---- bedrijfsgegevens ---- */
+const BG_VELDEN = [
+  ["bgNaam","bedrijf_naam"],["bgAdres","bedrijf_adres"],
+  ["bgPostcodePlaats","bedrijf_postcode_plaats"],["bgKvk","bedrijf_kvk"],
+  ["bgBtw","bedrijf_btw"],["bgIban","bedrijf_iban"],
+  ["bgEmail","bedrijf_email"],["bgTelefoon","bedrijf_telefoon"]
+];
+function vulBedrijf(){
+  BG_VELDEN.forEach(([id, key]) => { $(id).value = cache.inst[key] || ""; });
+}
+$("bgOpslaan").addEventListener("click", async () => {
+  const rows = BG_VELDEN.map(([id, key]) => ({ sleutel: key, waarde: $(id).value.trim() }));
+  $("bgOpslaan").disabled = true;
+  const { error } = await db.from("instellingen").upsert(rows, { onConflict: "sleutel" });
+  $("bgOpslaan").disabled = false;
+  if (error){ console.error(error); toast("Opslaan mislukt"); return; }
+  rows.forEach(r => cache.inst[r.sleutel] = r.waarde);
+  toast("Bedrijfsgegevens opgeslagen");
+});
+
+/* ---- printen ---- */
+$("fdPrint").addEventListener("click", () => {
+  if (!bewerkFactuurId) return;
+  const f = factData.find(x => x.id === bewerkFactuurId);
+  if (!f) return;
+  const k = cache.klanten.find(x => x.id === f.klant_id);
+  const I = cache.inst;
+  const regelsHtml = huidigeRegels.map(r =>
+    '<tr><td>' + esc(r.omschrijving) + '</td>' +
+    '<td class="pr">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
+    '<td class="pr">' + eur2(r.prijs) + '</td>' +
+    '<td class="pr">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
+  $("printvel").innerHTML =
+    '<div class="pkop"><div><div class="pnaam">' + esc(I.bedrijf_naam || "LRoks Elektrotechniek") + '</div>' +
+    '<div class="pklein">' + esc(I.bedrijf_adres || "") + '<br>' + esc(I.bedrijf_postcode_plaats || "") + '<br>' +
+    esc(I.bedrijf_email || "") + (I.bedrijf_telefoon ? " · " + esc(I.bedrijf_telefoon) : "") + '</div></div>' +
+    '<div class="pklein" style="text-align:right">KVK ' + esc(I.bedrijf_kvk || "-") +
+    '<br>BTW ' + esc(I.bedrijf_btw || "-") + '<br>IBAN ' + esc(I.bedrijf_iban || "-") + '</div></div>' +
+    '<h1>FACTUUR ' + esc(f.nummer || "") + '</h1>' +
+    '<div class="pinfo"><div><b>Aan</b><br>' + esc(k ? k.naam : "—") + '<br>' +
+    esc(k && k.adres ? k.adres : "") + '<br>' +
+    esc(k ? [k.postcode, k.plaats].filter(Boolean).join(" ") : "") + '</div>' +
+    '<div style="text-align:right">Factuurdatum: ' + fmtDatum(f.datum) +
+    '<br>Vervaldatum: ' + (f.vervaldatum ? fmtDatum(f.vervaldatum) : "-") + '</div></div>' +
+    '<table class="ptab"><thead><tr><th>Omschrijving</th><th class="pr">Aantal</th><th class="pr">Prijs</th><th class="pr">Bedrag</th></tr></thead>' +
+    '<tbody>' + regelsHtml + '</tbody></table>' +
+    '<div class="ptot"><div>Subtotaal <b>' + eur2(f.bedrag_excl || 0) + '</b></div>' +
+    '<div>BTW ' + btwPct() + '% <b>' + eur2(f.btw_bedrag || 0) + '</b></div>' +
+    '<div class="pgroot">Totaal <b>' + eur2(f.bedrag_incl || 0) + '</b></div></div>' +
+    '<p class="pklein">Graag betalen voor de vervaldatum op ' + esc(I.bedrijf_iban || "ons rekeningnummer") +
+    ' onder vermelding van factuurnummer ' + esc(f.nummer || "") + '.</p>';
+  window.print();
+});
 
 /* elke minuut checken of de halfvijf-herinnering moet verschijnen */
 setInterval(checkHerinnering, 60000);
