@@ -579,7 +579,11 @@ nav.onderbalk{display:none}
       </div>
       <div class="tab" id="tab-voorraad">
         <div class="tab-kop"><h2>Voorraad</h2>
-          <button class="knop klein" id="vNieuw">+ Nieuw product</button></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="knop klein" id="vNieuw">+ Nieuw product</button>
+            <button class="knop klein stil" id="vPdfToon">PDF inlezen</button>
+            <button class="knop klein stil" id="vCatToon">Categorieën</button>
+          </div></div>
         <div class="form-card" id="vForm" style="display:none;margin-bottom:18px">
           <div class="rij2">
             <div class="veld"><label>Naam *</label><input type="text" id="vNaam"></div>
@@ -600,16 +604,69 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Eenheid</label><input type="text" id="vEenheid" placeholder="stuks / meter / doos"></div>
           </div>
           <div class="veld"><label>Leverancier</label><input type="text" id="vLeverancier"></div>
+          <div class="veld" id="vPrijzenBlok" style="display:none"><label>Prijzen per leverancier</label>
+            <div class="tbl-wrap"><table>
+              <thead><tr><th>Leverancier</th><th class="r">Prijs</th><th>Datum</th><th></th></tr></thead>
+              <tbody id="vPrijzenBody"></tbody>
+            </table></div>
+            <div class="rij2" style="margin-top:10px">
+              <div class="veld"><label>Leverancier</label><input type="text" id="vpLeverancier" placeholder="bv. Technische Unie"></div>
+              <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="vpPrijs" step="0.01" min="0" inputmode="decimal"></div>
+            </div>
+            <button class="knop klein stil" id="vpToevoegen">Prijs toevoegen</button>
+          </div>
           <div style="display:flex;gap:10px">
             <button class="knop klein" id="vOpslaan">Opslaan</button>
             <button class="knop klein stil" id="vAnnuleer">Annuleren</button>
             <button class="knop klein gevaar" id="vVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
           </div>
         </div>
+
+        <div class="form-card" id="pdfBlok" style="display:none;margin-bottom:18px;max-width:680px">
+          <div class="veld" id="pdfKeyVeld" style="display:none"><label>Anthropic API-sleutel (eenmalig)</label>
+            <input type="password" id="pdfKey" placeholder="sk-ant-...">
+            <div class="hint">Nodig om PDF's te laten uitlezen. Wordt in je database bewaard, achter je login. Aanmaken kan op console.anthropic.com.</div>
+            <button class="knop klein stil" id="pdfKeyOpslaan" style="margin-top:10px">Sleutel opslaan</button>
+          </div>
+          <div class="veld"><label>Inkoopfactuur (PDF of foto)</label>
+            <input type="file" id="pdfBestand" accept="application/pdf,image/jpeg,image/png"></div>
+          <div style="display:flex;gap:10px">
+            <button class="knop klein" id="pdfLees">Inlezen</button>
+            <button class="knop klein stil" id="pdfSluit">Sluiten</button>
+          </div>
+          <div class="hint" id="pdfStatus" style="margin-top:10px"></div>
+          <div id="pdfResultaat" style="display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
+            <div class="rij2">
+              <div class="veld"><label>Leverancier</label><input type="text" id="pfLeverancier"></div>
+              <div class="veld"><label>Factuurnummer</label><input type="text" id="pfNummer"></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Datum</label><input type="date" id="pfDatum"></div>
+              <div class="veld"><label>Bedrag excl. (€)</label><input type="number" id="pfBedrag" step="0.01" inputmode="decimal"></div>
+            </div>
+            <div class="veld"><label>BTW (€)</label><input type="number" id="pfBtw" step="0.01" inputmode="decimal"></div>
+            <div class="veld"><label>Regels — kies per regel wat ermee moet gebeuren</label>
+              <div id="pfRegels"></div>
+            </div>
+            <button class="knop klein" id="pfVerwerk">Verwerken</button>
+          </div>
+        </div>
+
+        <div class="form-card" id="catBlok" style="display:none;margin-bottom:18px">
+          <div class="veld"><label>Categorieën — tik op een naam om te hernoemen</label>
+            <div class="tbl-wrap"><table><tbody id="catBody"></tbody></table></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Nieuwe categorie</label><input type="text" id="catNieuwNaam"></div>
+            <div class="veld" style="display:flex;align-items:flex-end"><button class="knop klein" id="catToevoegen">Toevoegen</button></div>
+          </div>
+          <button class="knop klein stil" id="catSluit">Sluiten</button>
+        </div>
+
         <div class="veld" style="max-width:280px"><label>Filter op categorie</label><select id="vFilter"></select></div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>Product</th><th>Categorie</th><th class="r">Voorraad</th><th class="r">Inkoop</th><th class="r">Verkoop</th><th class="r">Marge</th></tr></thead>
+            <thead><tr><th>Product</th><th>Categorie</th><th class="r">Voorraad</th><th class="r">Inkoop</th><th class="r">Verkoop</th><th class="r">Marge</th><th>Goedkoopst</th></tr></thead>
             <tbody id="vBody"></tbody>
           </table>
         </div>
@@ -780,7 +837,7 @@ $("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut();
 async function laadAlles(){
   const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const [kl, pr, cat, prod, inst, ur, km, ft] = await Promise.all([
+    const [kl, pr, cat, prod, inst, ur, km, ft, pp] = await Promise.all([
       db.from("klanten").select("*").order("naam"),
       db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
       db.from("categorieen").select("*").order("volgorde"),
@@ -788,9 +845,10 @@ async function laadAlles(){
       db.from("instellingen").select("*"),
       db.from("uren").select("*").order("datum", { ascending:false }).limit(400),
       db.from("km_registratie").select("*").order("datum", { ascending:true }),
-      db.from("facturen").select("*").order("datum", { ascending:false }).limit(500)
+      db.from("facturen").select("*").order("datum", { ascending:false }).limit(500),
+      db.from("product_prijzen").select("*").order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false })
     ]);
-    const eerste = [kl,pr,cat,prod,inst,ur,km,ft].find(r => r.error);
+    const eerste = [kl,pr,cat,prod,inst,ur,km,ft,pp].find(r => r.error);
     if (eerste) throw eerste.error;
 
     cache.klanten = kl.data || [];
@@ -802,6 +860,7 @@ async function laadAlles(){
     urenData = ur.data || [];
     kmData = km.data || [];
     factData = ft.data || [];
+    cache.prijzen = pp.data || [];
 
     vulSelects();
     vulVoorraadSelects();
@@ -1645,6 +1704,7 @@ $("vNieuw").addEventListener("click", () => {
   $("vCategorie").value = "";
   prodOpVoorraad = true; schakel("vSoortVoorraad","vSoortDoorloop");
   $("vVoorraadVeld").style.display = "block";
+  $("vPrijzenBlok").style.display = "none";
   $("vVerwijder").style.display = "none";
   $("vForm").style.display = "block";
   $("vNaam").focus();
@@ -1702,11 +1762,12 @@ function renderVoorraad(){
   const lijst = cache.producten.filter(p => !filter || p.categorie_id === filter);
   const body = $("vBody");
   if (!lijst.length){
-    body.innerHTML = '<tr><td colspan="6" class="leeg">Nog geen producten' + (filter ? " in deze categorie" : "") + ' — voeg je eerste product toe.</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="leeg">Nog geen producten' + (filter ? " in deze categorie" : "") + ' — voeg je eerste product toe.</td></tr>';
     return;
   }
   body.innerHTML = lijst.map(p => {
     const marge = Number(p.verkoopprijs || 0) - Number(p.inkoopprijs || 0);
+    const g = goedkoopsteVoor(p.id);
     return '<tr class="klik" data-vid="' + p.id + '">' +
       '<td class="tekst">' + esc(p.naam) + '</td>' +
       '<td class="tekst">' + esc(catNaam(p.categorie_id) || "—") + '</td>' +
@@ -1714,6 +1775,7 @@ function renderVoorraad(){
       '<td class="r">' + eur2(p.inkoopprijs || 0) + '</td>' +
       '<td class="r">' + eur2(p.verkoopprijs || 0) + '</td>' +
       '<td class="r" style="color:' + (marge > 0 ? "var(--groen)" : "var(--ink3)") + '">' + eur2(marge) + '</td>' +
+      '<td class="tekst">' + (g ? esc(g.leverancier) + ' · ' + eur2(g.prijs) : "—") + '</td>' +
     '</tr>';
   }).join("");
   body.querySelectorAll("[data-vid]").forEach(r => r.addEventListener("click", () => {
@@ -1731,10 +1793,301 @@ function renderVoorraad(){
     $("vEenheid").value = p.eenheid || "";
     $("vLeverancier").value = p.leverancier || "";
     $("vVerwijder").style.display = "inline-block";
+    $("vPrijzenBlok").style.display = "block";
+    renderVPrijzen(p.id);
     $("vForm").style.display = "block";
     window.scrollTo(0, 0);
   }));
 }
+
+/* =====================================================
+   LEVERANCIERSPRIJZEN, CATEGORIEËN & PDF-INLEZER (fase 4)
+   ===================================================== */
+function goedkoopsteVoor(pid){
+  const per = {};
+  cache.prijzen.filter(r => r.product_id === pid)
+    .forEach(r => { if (!(r.leverancier in per)) per[r.leverancier] = r; });
+  const arr = Object.values(per);
+  if (!arr.length) return null;
+  return arr.reduce((a,b) => Number(a.prijs) <= Number(b.prijs) ? a : b);
+}
+
+async function herlaadPrijzen(){
+  const { data } = await db.from("product_prijzen").select("*")
+    .order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false });
+  cache.prijzen = data || [];
+  renderVoorraad();
+  if (bewerkProductId && $("vForm").style.display !== "none") renderVPrijzen(bewerkProductId);
+}
+
+function renderVPrijzen(pid){
+  const body = $("vPrijzenBody");
+  const lijst = cache.prijzen.filter(r => r.product_id === pid);
+  if (!lijst.length){
+    body.innerHTML = '<tr><td colspan="4" class="leeg">Nog geen leveranciersprijzen.</td></tr>';
+    return;
+  }
+  const g = goedkoopsteVoor(pid);
+  body.innerHTML = lijst.map(r =>
+    '<tr>' +
+      '<td class="tekst">' + esc(r.leverancier) + (g && g.id === r.id ? ' <span class="chip groen">GOEDKOOPST</span>' : '') + '</td>' +
+      '<td class="r">' + eur2(r.prijs) + '</td>' +
+      '<td>' + fmtDatum(r.datum) + '</td>' +
+      '<td class="r"><button class="verwijder" data-vpid="' + r.id + '">✕</button></td>' +
+    '</tr>').join("");
+  body.querySelectorAll("[data-vpid]").forEach(k => k.addEventListener("click", async () => {
+    if (!confirm("Deze prijs verwijderen?")) return;
+    await db.from("product_prijzen").delete().eq("id", k.dataset.vpid);
+    toast("Prijs verwijderd");
+    herlaadPrijzen();
+  }));
+}
+
+$("vpToevoegen").addEventListener("click", async () => {
+  if (!bewerkProductId) return;
+  const lev = $("vpLeverancier").value.trim();
+  const prijs = parseFloat($("vpPrijs").value);
+  if (!lev || !(prijs >= 0)) { toast("Vul leverancier en prijs in"); return; }
+  const { error } = await db.from("product_prijzen").insert({
+    product_id: bewerkProductId, leverancier: lev, prijs: r2(prijs), datum: vandaagISO()
+  });
+  if (error){ console.error(error); toast("Toevoegen mislukt"); return; }
+  $("vpLeverancier").value = ""; $("vpPrijs").value = "";
+  toast("Prijs toegevoegd");
+  herlaadPrijzen();
+});
+
+/* ---- categoriebeheer ---- */
+$("vCatToon").addEventListener("click", () => {
+  const b = $("catBlok");
+  b.style.display = b.style.display === "none" ? "block" : "none";
+  if (b.style.display === "block") renderCategorieen();
+});
+$("catSluit").addEventListener("click", () => { $("catBlok").style.display = "none"; });
+
+function renderCategorieen(){
+  const body = $("catBody");
+  if (!cache.categorieen.length){
+    body.innerHTML = '<tr><td class="leeg">Nog geen categorieën.</td></tr>';
+    return;
+  }
+  body.innerHTML = cache.categorieen.map(c =>
+    '<tr><td class="tekst klik" data-cid="' + c.id + '">' + esc(c.naam) + '</td>' +
+    '<td class="r"><button class="verwijder" data-cdel="' + c.id + '">✕</button></td></tr>').join("");
+  body.querySelectorAll("[data-cid]").forEach(el => el.addEventListener("click", async () => {
+    const c = cache.categorieen.find(x => x.id === el.dataset.cid);
+    const nieuw = prompt("Nieuwe naam voor deze categorie:", c ? c.naam : "");
+    if (!nieuw || !nieuw.trim()) return;
+    await db.from("categorieen").update({ naam: nieuw.trim() }).eq("id", el.dataset.cid);
+    toast("Categorie hernoemd");
+    herlaadCategorieen();
+  }));
+  body.querySelectorAll("[data-cdel]").forEach(el => el.addEventListener("click", async () => {
+    if (!confirm("Categorie verwijderen? Producten blijven bestaan, maar zonder categorie.")) return;
+    await db.from("categorieen").delete().eq("id", el.dataset.cdel);
+    toast("Categorie verwijderd");
+    herlaadCategorieen();
+  }));
+}
+
+$("catToevoegen").addEventListener("click", async () => {
+  const naam = $("catNieuwNaam").value.trim();
+  if (!naam) { toast("Vul een naam in"); return; }
+  const maxV = cache.categorieen.reduce((m,c) => Math.max(m, c.volgorde || 0), 0);
+  const { error } = await db.from("categorieen").insert({ naam, volgorde: maxV + 1 });
+  if (error){ console.error(error); toast("Toevoegen mislukt"); return; }
+  $("catNieuwNaam").value = "";
+  toast("Categorie toegevoegd");
+  herlaadCategorieen();
+});
+
+async function herlaadCategorieen(){
+  const { data } = await db.from("categorieen").select("*").order("volgorde");
+  cache.categorieen = data || [];
+  vulSelects();
+  vulVoorraadSelects();
+  renderVoorraad();
+  renderCategorieen();
+}
+
+/* ---- PDF-inlezer ---- */
+let pfParsed = null;
+
+$("vPdfToon").addEventListener("click", () => {
+  const b = $("pdfBlok");
+  b.style.display = b.style.display === "none" ? "block" : "none";
+  $("pdfKeyVeld").style.display = (cache.inst.anthropic_api_key || "").trim() ? "none" : "block";
+});
+$("pdfSluit").addEventListener("click", () => { $("pdfBlok").style.display = "none"; });
+
+$("pdfKeyOpslaan").addEventListener("click", async () => {
+  const key = $("pdfKey").value.trim();
+  if (!key) { toast("Plak eerst je sleutel"); return; }
+  const { error } = await db.from("instellingen").upsert(
+    { sleutel: "anthropic_api_key", waarde: key }, { onConflict: "sleutel" });
+  if (error){ console.error(error); toast("Opslaan mislukt"); return; }
+  cache.inst.anthropic_api_key = key;
+  $("pdfKey").value = "";
+  $("pdfKeyVeld").style.display = "none";
+  toast("Sleutel opgeslagen");
+});
+
+function bestandNaarBase64(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(",")[1]);
+    r.onerror = () => rej(new Error("Bestand lezen mislukt"));
+    r.readAsDataURL(file);
+  });
+}
+
+$("pdfLees").addEventListener("click", async () => {
+  const key = (cache.inst.anthropic_api_key || "").trim();
+  if (!key){ $("pdfKeyVeld").style.display = "block"; toast("Vul eerst je API-sleutel in"); return; }
+  const file = $("pdfBestand").files[0];
+  if (!file){ toast("Kies eerst een bestand"); return; }
+  const status = $("pdfStatus");
+  status.textContent = "Bezig met inlezen… dit duurt een paar seconden.";
+  $("pdfLees").disabled = true;
+  $("pdfResultaat").style.display = "none";
+  try {
+    const b64 = await bestandNaarBase64(file);
+    const isPdf = file.type === "application/pdf";
+    const blok = isPdf
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }
+      : { type: "image", source: { type: "base64", media_type: file.type, data: b64 } };
+    const antwoord = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 3000,
+        messages: [{ role: "user", content: [ blok, { type: "text", text:
+          'Lees deze inkoopfactuur van een elektrotechnische groothandel. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","bedrag_excl":0,"btw_bedrag":0,"regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0}]} Alle bedragen excl. btw met een punt als decimaalteken. prijs_per_stuk is de stukprijs, niet het regeltotaal. Neem ook verzendkosten en statiegeld op als regel.' } ] }]
+      })
+    });
+    const data = await antwoord.json();
+    if (!antwoord.ok) throw new Error((data.error && data.error.message) || "API-fout");
+    const tekst = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
+    const schoon = tekst.replace(/```json|```/g, "").trim();
+    pfParsed = JSON.parse(schoon);
+    $("pfLeverancier").value = pfParsed.leverancier || "";
+    $("pfNummer").value = pfParsed.factuurnummer || "";
+    $("pfDatum").value = pfParsed.datum || vandaagISO();
+    $("pfBedrag").value = pfParsed.bedrag_excl || "";
+    $("pfBtw").value = pfParsed.btw_bedrag || r2((pfParsed.bedrag_excl || 0) * btwPct() / 100);
+    toonPfRegels(pfParsed.regels || []);
+    $("pdfResultaat").style.display = "block";
+    status.textContent = "Gelukt — controleer hieronder en klik op Verwerken.";
+  } catch(e){
+    console.error(e);
+    status.textContent = "Inlezen mislukt: " + e.message;
+  }
+  $("pdfLees").disabled = false;
+});
+
+function matchProduct(oms){
+  const o = String(oms || "").toLowerCase();
+  return cache.producten.find(p => {
+    const n = p.naam.toLowerCase();
+    return o.includes(n) || n.includes(o);
+  }) || null;
+}
+
+function toonPfRegels(regels){
+  $("pfRegels").innerHTML = regels.map((r, i) => {
+    const match = matchProduct(r.omschrijving);
+    const opties = cache.producten.map(p =>
+      '<option value="' + p.id + '"' + (match && match.id === p.id ? ' selected' : '') + '>' + esc(p.naam) + '</option>').join("");
+    return '<div class="pf-regel" data-i="' + i + '" style="border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px">' +
+      '<div class="rij2">' +
+        '<div class="veld"><label>Omschrijving</label><input type="text" class="pfr-naam" value="' + esc(r.omschrijving || "") + '"></div>' +
+        '<div class="veld"><label>Koppel aan</label><select class="pfr-select">' +
+          '<option value="_skip">— overslaan —</option>' +
+          '<option value="_nieuw"' + (!match ? ' selected' : '') + '>+ Nieuw product</option>' +
+          opties +
+        '</select></div>' +
+      '</div>' +
+      '<div class="rij2">' +
+        '<div class="veld"><label>Aantal</label><input type="number" class="pfr-aantal" step="0.5" value="' + (r.aantal || 1) + '"></div>' +
+        '<div class="veld"><label>Prijs p/st excl. (€)</label><input type="number" class="pfr-prijs" step="0.01" value="' + (r.prijs_per_stuk || 0) + '"></div>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+
+$("pfVerwerk").addEventListener("click", async () => {
+  const lev = $("pfLeverancier").value.trim() || "Onbekend";
+  const datum = $("pfDatum").value || vandaagISO();
+  const bedrag = parseFloat($("pfBedrag").value) || 0;
+  const btw = parseFloat($("pfBtw").value) || 0;
+  $("pfVerwerk").disabled = true;
+  const status = $("pdfStatus");
+  status.textContent = "Bezig met verwerken…";
+
+  const { error: fFout } = await db.from("facturen").insert({
+    type: "inkoop", leverancier: lev,
+    nummer: $("pfNummer").value.trim() || "-",
+    datum, status: "open",
+    bedrag_excl: r2(bedrag), btw_bedrag: r2(btw), bedrag_incl: r2(bedrag + btw),
+    notities: "Automatisch ingelezen uit PDF"
+  });
+  if (fFout){ $("pfVerwerk").disabled = false; status.textContent = "Inkoopfactuur opslaan mislukt."; return; }
+
+  let verwerkt = 0, nieuw = 0;
+  const regels = [...document.querySelectorAll("#pfRegels .pf-regel")];
+  for (const el of regels){
+    const keuze = el.querySelector(".pfr-select").value;
+    if (keuze === "_skip") continue;
+    const naam = el.querySelector(".pfr-naam").value.trim();
+    const aantal = parseFloat(el.querySelector(".pfr-aantal").value) || 0;
+    const prijs = r2(parseFloat(el.querySelector(".pfr-prijs").value) || 0);
+    let productId = keuze;
+    if (keuze === "_nieuw"){
+      if (!naam) continue;
+      const { data: np, error: npF } = await db.from("producten").insert({
+        naam: naam.slice(0, 120), inkoopprijs: prijs, verkoopprijs: 0,
+        op_voorraad: true, voorraad: 0, leverancier: lev
+      }).select().single();
+      if (npF || !np) continue;
+      cache.producten.push(np);
+      productId = np.id;
+      nieuw++;
+    }
+    if (aantal > 0){
+      await db.from("voorraad_mutaties").insert({
+        product_id: productId, aantal: aantal, type: "inkoop", datum
+      });
+    }
+    const prod = cache.producten.find(p => p.id === productId);
+    if (prod){
+      const updates = { inkoopprijs: prijs };
+      if (prod.op_voorraad !== false && aantal > 0) updates.voorraad = Number(prod.voorraad || 0) + aantal;
+      await db.from("producten").update(updates).eq("id", productId);
+      prod.inkoopprijs = prijs;
+      if (updates.voorraad !== undefined) prod.voorraad = updates.voorraad;
+    }
+    await db.from("product_prijzen").insert({
+      product_id: productId, leverancier: lev, prijs, datum
+    });
+    verwerkt++;
+  }
+
+  $("pfVerwerk").disabled = false;
+  $("pdfResultaat").style.display = "none";
+  $("pdfBestand").value = "";
+  pfParsed = null;
+  status.textContent = "";
+  toast(verwerkt + " regel(s) verwerkt" + (nieuw ? ", " + nieuw + " nieuw product(en)" : ""));
+  await herlaadProducten();
+  await herlaadFacturen();
+  await herlaadPrijzen();
+});
 
 /* =====================================================
    FACTUREN (fase 3)
