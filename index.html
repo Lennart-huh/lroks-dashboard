@@ -401,6 +401,14 @@ nav.onderbalk{display:none}
             </div>
           </div>
           <div class="veld"><label>Omschrijving / notities</label><textarea id="prOmschrijving" placeholder="Hier kun je zoveel opschrijven als je wilt."></textarea></div>
+          <div class="veld" id="prGebruikBlok" style="display:none"><label>Gebruikte producten (per dag)</label>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>Datum</th><th>Product</th><th class="r">Aantal</th><th></th></tr></thead>
+                <tbody id="prGebruikBody"></tbody>
+              </table>
+            </div>
+          </div>
           <div style="display:flex;gap:10px">
             <button class="knop klein" id="prOpslaan">Opslaan</button>
             <button class="knop klein stil" id="prAnnuleer">Annuleren</button>
@@ -1206,10 +1214,53 @@ function renderKlanten(){
    PROJECTEN
    ===================================================== */
 let bewerkProjectId = null;
+
+function productNaam(id){
+  const p = cache.producten.find(x => x.id === id);
+  return p ? p.naam : "—";
+}
+
+async function laadProjectGebruik(projectId){
+  const body = $("prGebruikBody");
+  body.innerHTML = '<tr><td colspan="4" class="leeg">Laden…</td></tr>';
+  const { data, error } = await db.from("voorraad_mutaties")
+    .select("*").eq("project_id", projectId).eq("type", "gebruik")
+    .order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false });
+  if (error){ console.error(error); body.innerHTML = '<tr><td colspan="4" class="leeg">Kon het gebruik niet laden.</td></tr>'; return; }
+  const lijst = data || [];
+  if (!lijst.length){
+    body.innerHTML = '<tr><td colspan="4" class="leeg">Nog geen producten gebruikt bij dit project.</td></tr>';
+    return;
+  }
+  body.innerHTML = lijst.map(g =>
+    '<tr>' +
+      '<td>' + fmtDatum(g.datum) + '</td>' +
+      '<td class="tekst">' + esc(productNaam(g.product_id)) + '</td>' +
+      '<td class="r">' + Math.abs(Number(g.aantal)).toLocaleString("nl-NL") + '</td>' +
+      '<td class="r"><button class="verwijder" data-gid="' + g.id + '" title="Verwijderen">✕</button></td>' +
+    '</tr>').join("");
+  body.querySelectorAll("[data-gid]").forEach(k => k.addEventListener("click", async () => {
+    const g = lijst.find(x => x.id === k.dataset.gid);
+    if (!g) return;
+    if (!confirm("Deze productregel verwijderen?")) return;
+    const { error: delFout } = await db.from("voorraad_mutaties").delete().eq("id", g.id);
+    if (delFout){ toast("Verwijderen mislukt"); return; }
+    const prod = cache.producten.find(p => p.id === g.product_id);
+    if (prod && prod.op_voorraad !== false){
+      const nieuw = Number(prod.voorraad || 0) - Number(g.aantal); // gebruik is negatief, dus dit boekt terug
+      const { error: e2 } = await db.from("producten").update({ voorraad: nieuw }).eq("id", prod.id);
+      if (!e2) prod.voorraad = nieuw;
+      renderVoorraad();
+    }
+    toast("Regel verwijderd");
+    laadProjectGebruik(projectId);
+  }));
+}
 $("projNieuw").addEventListener("click", () => {
   bewerkProjectId = null;
   $("prNaam").value = ""; $("prKlant").value = ""; $("prOmschrijving").value = "";
   projStatus = "open"; schakel("prOpen","prAfgerond");
+  $("prGebruikBlok").style.display = "none";
   $("prVerwijder").style.display = "none";
   $("projForm").style.display = "block";
   $("prNaam").focus();
@@ -1276,6 +1327,8 @@ function renderProjecten(){
     $("prOmschrijving").value = p.omschrijving || "";
     projStatus = p.status;
     if (p.status === "open") schakel("prOpen","prAfgerond"); else schakel("prAfgerond","prOpen");
+    $("prGebruikBlok").style.display = "block";
+    laadProjectGebruik(p.id);
     $("prVerwijder").style.display = "inline-block";
     $("projForm").style.display = "block";
     window.scrollTo(0, 0);
