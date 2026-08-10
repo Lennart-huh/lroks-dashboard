@@ -125,6 +125,7 @@ tbody tr.klik:hover td{background:var(--surface2)}
 .chip.groen{background:var(--groen-bg);color:var(--groen)}
 .chip.amber{background:var(--amber-bg);color:var(--amber)}
 .chip.grijs{background:var(--surface2);color:var(--ink2)}
+.chip.rood{background:var(--rood-bg,rgba(220,60,60,.14));color:var(--rood)}
 .verwijder{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:.95rem;padding:4px 8px;border-radius:5px}
 .verwijder:hover{color:var(--rood);background:var(--rood-bg)}
 .leeg{padding:22px;font-size:.84rem;color:var(--ink3);font-family:'IBM Plex Mono',monospace}
@@ -144,6 +145,8 @@ tbody tr.klik:hover td{background:var(--surface2)}
 
 .fpanel{display:none}
 .fpanel.actief{display:block}
+.vpanel{display:none}
+.vpanel.actief{display:block}
 
 /* ---------- printbare factuur ---------- */
 #printvel{display:none}
@@ -344,7 +347,56 @@ nav.onderbalk{display:none}
         </div>
 
         <!-- INKOOPFACTUUR -->
-        <div class="subform form-card" id="sub-inkoop">
+        <div class="subform" id="sub-inkoop">
+          <div class="schakel" style="margin-bottom:16px">
+            <button type="button" id="ikModusPdf" class="aan">PDF / foto inlezen</button>
+            <button type="button" id="ikModusHand">Zelf invullen</button>
+          </div>
+<div class="form-card" id="pdfBlok" style="display:none;margin-bottom:18px">
+          <div class="veld" id="pdfKeyVeld" style="display:none"><label>Anthropic API-sleutel (eenmalig)</label>
+            <input type="password" id="pdfKey" placeholder="sk-ant-...">
+            <div class="hint">Nodig om PDF's te laten uitlezen. Wordt in je database bewaard, achter je login. Aanmaken kan op console.anthropic.com.</div>
+            <button class="knop klein stil" id="pdfKeyOpslaan" style="margin-top:10px">Sleutel opslaan</button>
+          </div>
+          <div class="veld"><label>Inkoopfactuur (PDF of foto)</label>
+            <input type="file" id="pdfBestand" accept="application/pdf,image/jpeg,image/png"></div>
+          <div class="veld" style="max-width:260px"><label>Standaard marge % (nieuwe producten)</label>
+            <input type="number" id="stdMarge" step="1" inputmode="decimal"></div>
+          <div style="display:flex;gap:10px">
+            <button class="knop klein" id="pdfLees">Inlezen</button>
+            <button class="knop klein stil" id="pdfSluit">Sluiten</button>
+          </div>
+          <div class="hint" id="pdfStatus" style="margin-top:10px"></div>
+          <div id="pdfResultaat" style="display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
+            <div class="rij2">
+              <div class="veld"><label>Leverancier</label><input type="text" id="pfLeverancier"></div>
+              <div class="veld"><label>Factuurnummer</label><input type="text" id="pfNummer"></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Datum</label><input type="date" id="pfDatum"></div>
+              <div class="veld"><label>Bedrag excl. (€)</label><input type="number" id="pfBedrag" step="0.01" inputmode="decimal"></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>BTW (€)</label><input type="number" id="pfBtw" step="0.01" inputmode="decimal"></div>
+              <div class="veld"><label>Kostensoort</label><select id="pfCategorie"></select></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Project</label><select id="pfProject"></select></div>
+              <div class="veld"><label>Investering (KIA)</label>
+                <div class="schakel">
+                  <button type="button" id="pfInvNee" class="aan">Nee</button>
+                  <button type="button" id="pfInvJa">Ja</button>
+                </div>
+              </div>
+            </div>
+            <div class="veld"><label>Regels — kies per regel wat ermee moet gebeuren</label>
+              <div id="pfRegels"></div>
+            </div>
+            <button class="knop klein" id="pfVerwerk">Verwerken</button>
+          </div>
+        </div>
+
+                  <div class="form-card" id="ikHandBlok" style="display:none">
           <div class="rij2">
             <div class="veld"><label>Leverancier</label><input type="text" id="ikLeverancier" list="ikLevLijst" placeholder="bv. Technische Unie">
               <datalist id="ikLevLijst"></datalist>
@@ -384,8 +436,8 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Notitie</label><input type="text" id="ikNotities" placeholder="optioneel"></div>
           <button class="knop" id="ikOpslaan">Inkoopfactuur opslaan</button>
-          <div class="hint" style="margin-top:12px">Regels met producten erin? Gebruik dan de PDF-lezer bij Voorraad — die vult je voorraad meteen mee.</div>
         </div>
+      </div>
       </div>
 
       <!-- ========== URENREGISTRATIE ========== -->
@@ -635,9 +687,14 @@ nav.onderbalk{display:none}
         <div class="tab-kop"><h2>Voorraad</h2>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="knop klein" id="vNieuw">+ Nieuw product</button>
-            <button class="knop klein stil" id="vPdfToon">PDF inlezen</button>
             <button class="knop klein stil" id="vCatToon">Categorieën</button>
+            <button class="knop klein" id="gwNieuw" style="display:none">+ Gereedschap</button>
           </div></div>
+        <div class="subtabs" id="vSubtabs">
+          <button data-vsub="vProducten" class="aan">Producten</button>
+          <button data-vsub="vGereedschap">Gereedschap</button>
+        </div>
+        <div class="vpanel actief" id="vProducten">
         <div class="form-card" id="vForm" style="display:none;margin-bottom:18px">
           <div class="rij2">
             <div class="veld"><label>Naam *</label><input type="text" id="vNaam"></div>
@@ -679,50 +736,6 @@ nav.onderbalk{display:none}
           </div>
         </div>
 
-        <div class="form-card" id="pdfBlok" style="display:none;margin-bottom:18px;max-width:680px">
-          <div class="veld" id="pdfKeyVeld" style="display:none"><label>Anthropic API-sleutel (eenmalig)</label>
-            <input type="password" id="pdfKey" placeholder="sk-ant-...">
-            <div class="hint">Nodig om PDF's te laten uitlezen. Wordt in je database bewaard, achter je login. Aanmaken kan op console.anthropic.com.</div>
-            <button class="knop klein stil" id="pdfKeyOpslaan" style="margin-top:10px">Sleutel opslaan</button>
-          </div>
-          <div class="veld"><label>Inkoopfactuur (PDF of foto)</label>
-            <input type="file" id="pdfBestand" accept="application/pdf,image/jpeg,image/png"></div>
-          <div class="veld" style="max-width:260px"><label>Standaard marge % (nieuwe producten)</label>
-            <input type="number" id="stdMarge" step="1" inputmode="decimal"></div>
-          <div style="display:flex;gap:10px">
-            <button class="knop klein" id="pdfLees">Inlezen</button>
-            <button class="knop klein stil" id="pdfSluit">Sluiten</button>
-          </div>
-          <div class="hint" id="pdfStatus" style="margin-top:10px"></div>
-          <div id="pdfResultaat" style="display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
-            <div class="rij2">
-              <div class="veld"><label>Leverancier</label><input type="text" id="pfLeverancier"></div>
-              <div class="veld"><label>Factuurnummer</label><input type="text" id="pfNummer"></div>
-            </div>
-            <div class="rij2">
-              <div class="veld"><label>Datum</label><input type="date" id="pfDatum"></div>
-              <div class="veld"><label>Bedrag excl. (€)</label><input type="number" id="pfBedrag" step="0.01" inputmode="decimal"></div>
-            </div>
-            <div class="rij2">
-              <div class="veld"><label>BTW (€)</label><input type="number" id="pfBtw" step="0.01" inputmode="decimal"></div>
-              <div class="veld"><label>Kostensoort</label><select id="pfCategorie"></select></div>
-            </div>
-            <div class="rij2">
-              <div class="veld"><label>Project</label><select id="pfProject"></select></div>
-              <div class="veld"><label>Investering (KIA)</label>
-                <div class="schakel">
-                  <button type="button" id="pfInvNee" class="aan">Nee</button>
-                  <button type="button" id="pfInvJa">Ja</button>
-                </div>
-              </div>
-            </div>
-            <div class="veld"><label>Regels — kies per regel wat ermee moet gebeuren</label>
-              <div id="pfRegels"></div>
-            </div>
-            <button class="knop klein" id="pfVerwerk">Verwerken</button>
-          </div>
-        </div>
-
         <div class="form-card" id="catBlok" style="display:none;margin-bottom:18px">
           <div class="veld"><label>Categorieën — tik op een naam om te hernoemen</label>
             <div class="tbl-wrap"><table><tbody id="catBody"></tbody></table></div>
@@ -742,6 +755,77 @@ nav.onderbalk{display:none}
           </table>
         </div>
         <div class="straks" style="margin-top:18px"><span class="fase">FASE 4</span><p>Hier komt nog bij: inkoopfacturen als PDF uploaden en automatisch inlezen, eigen categorieën beheren en de goedkoopste leverancier per product.</p></div>
+        </div>
+
+        <div class="vpanel" id="vGereedschap">
+          <div class="grid4">
+            <div class="card"><div class="k">Stuks</div><div class="v" id="gkAantal">—</div><div class="m" id="gkAantalSub"></div></div>
+            <div class="card"><div class="k">Aanschafwaarde</div><div class="v" id="gkWaarde">—</div><div class="m">excl. btw</div></div>
+            <div class="card amber"><div class="k">Keuring verloopt</div><div class="v" id="gkKeuring">—</div><div class="m">binnen 60 dagen</div></div>
+            <div class="card"><div class="k">Uitgeleend</div><div class="v" id="gkUit">—</div><div class="m">niet in eigen beheer</div></div>
+          </div>
+
+          <div class="form-card" id="gwForm" style="display:none;margin-bottom:18px">
+            <div class="rij2">
+              <div class="veld"><label>Wat is het *</label><input type="text" id="gwNaam" placeholder="bv. Accuboormachine"></div>
+              <div class="veld"><label>Merk</label><input type="text" id="gwMerk" placeholder="bv. Makita"></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Type / model</label><input type="text" id="gwType" placeholder="bv. DHP484"></div>
+              <div class="veld"><label>Serienummer</label><input type="text" id="gwSerie">
+                <div class="hint">Belangrijk bij diefstal — hiermee kan het terug.</div>
+              </div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Aankoopdatum</label><input type="date" id="gwDatum"></div>
+              <div class="veld"><label>Prijs excl. btw (€)</label><input type="number" id="gwPrijs" step="0.01" min="0" inputmode="decimal"></div>
+            </div>
+            <div class="veld"><label>Leverancier</label><input type="text" id="gwLeverancier"></div>
+            <div class="rij2">
+              <div class="veld"><label>Garantie tot</label><input type="date" id="gwGarantie"></div>
+              <div class="veld"><label>Keuring geldig tot</label><input type="date" id="gwKeuring">
+                <div class="hint">Voor elektrisch handgereedschap en meetapparatuur.</div>
+              </div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Waar ligt het</label><select id="gwLocatie">
+                <option value="bus">In de bus</option>
+                <option value="schuur">Schuur thuis</option>
+                <option value="loods">Loods</option>
+                <option value="klus">Op de klus</option>
+                <option value="anders">Anders</option>
+              </select></div>
+              <div class="veld"><label>Status</label><select id="gwStatus">
+                <option value="in_gebruik">In gebruik</option>
+                <option value="uitgeleend">Uitgeleend</option>
+                <option value="reparatie">In reparatie</option>
+                <option value="kapot">Kapot / afgevoerd</option>
+                <option value="verkocht">Verkocht</option>
+                <option value="gestolen">Gestolen</option>
+              </select></div>
+            </div>
+            <div class="veld" id="gwUitVeld" style="display:none"><label>Uitgeleend aan</label><input type="text" id="gwUitgeleend"></div>
+            <div class="veld"><label>Notitie</label><input type="text" id="gwNotitie"></div>
+            <div style="display:flex;gap:10px">
+              <button class="knop klein" id="gwOpslaan">Opslaan</button>
+              <button class="knop klein stil" id="gwAnnuleer">Annuleren</button>
+              <button class="knop klein gevaar" id="gwVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+            </div>
+          </div>
+
+          <div class="veld" style="max-width:280px"><label>Filter</label><select id="gwFilter">
+            <option value="actief">Alleen in bezit</option>
+            <option value="alles">Alles tonen</option>
+            <option value="keuring">Keuring verlopen of bijna</option>
+          </select></div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Gereedschap</th><th>Merk / type</th><th>Serienr</th><th>Gekocht</th><th class="r">Prijs</th><th>Waar</th><th>Keuring</th></tr></thead>
+              <tbody id="gwBody"></tbody>
+            </table>
+          </div>
+          <div class="hint" style="margin-top:14px">Dit register is voor je verzekering en je keuringen. Fiscaal telt gereedschap onder €450 gewoon als kosten — dat loopt via je inkoopfactuur, niet via deze lijst.</div>
+        </div>
       </div>
       <div class="tab" id="tab-belasting"><h2>Belasting</h2>
         <div class="straks"><span class="fase">FASE 5</span><p>Tabellen met je winst en een schatting van de belasting daarover, per kwartaal en per jaar — met percentages die je zelf kunt aanpassen. En: wat je onderaan de streep naar privé overhoudt.</p></div>
@@ -858,12 +942,23 @@ document.querySelectorAll("[data-tab]").forEach(k =>
 $("meerKnop").addEventListener("click", () => $("meerSheet").classList.toggle("open"));
 
 function kiesSub(subId){
-  document.querySelectorAll(".subtabs button").forEach(b => b.classList.toggle("aan", b.dataset.sub === subId));
+  document.querySelectorAll("[data-sub]").forEach(b => b.classList.toggle("aan", b.dataset.sub === subId));
   document.querySelectorAll(".subform").forEach(f => f.classList.remove("actief"));
   $(subId).classList.add("actief");
 }
-document.querySelectorAll(".subtabs button").forEach(k =>
+document.querySelectorAll("[data-sub]").forEach(k =>
   k.addEventListener("click", () => kiesSub(k.dataset.sub)));
+
+/* subtabs binnen Voorraad: producten / gereedschap */
+function kiesVSub(id){
+  document.querySelectorAll("[data-vsub]").forEach(b => b.classList.toggle("aan", b.dataset.vsub === id));
+  ["vProducten","vGereedschap"].forEach(p => $(p).classList.toggle("actief", p === id));
+  $("vNieuw").style.display = id === "vProducten" ? "" : "none";
+  $("vCatToon").style.display = id === "vProducten" ? "" : "none";
+  $("gwNieuw").style.display = id === "vGereedschap" ? "" : "none";
+}
+document.querySelectorAll("[data-vsub]").forEach(k =>
+  k.addEventListener("click", () => kiesVSub(k.dataset.vsub)));
 
 /* schakelknoppen (werk/kantoor, zakelijk/privé, open/afgerond) */
 function schakel(idAan, idUit){
@@ -976,6 +1071,7 @@ async function toonApp(){
   $("kDatum").value = vandaagISO();
   $("pDatum").value = vandaagISO();
   $("ikDatum").value = vandaagISO();
+  $("gwDatum").value = vandaagISO();
   toonTab("hoofd");
   await laadAlles();
 }
@@ -1000,7 +1096,7 @@ $("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut();
 async function laadAlles(){
   const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const [kl, pr, cat, prod, inst, ur, km, ft, pp] = await Promise.all([
+    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw] = await Promise.all([
       db.from("klanten").select("*").order("naam"),
       db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
       db.from("categorieen").select("*").order("volgorde"),
@@ -1009,7 +1105,8 @@ async function laadAlles(){
       db.from("uren").select("*").order("datum", { ascending:false }).limit(400),
       db.from("km_registratie").select("*").order("datum", { ascending:true }),
       db.from("facturen").select("*").order("datum", { ascending:false }).limit(500),
-      db.from("product_prijzen").select("*").order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false })
+      db.from("product_prijzen").select("*").order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false }),
+      db.from("gereedschap").select("*").order("naam")
     ]);
     const eerste = [kl,pr,cat,prod,inst,ur,km,ft,pp].find(r => r.error);
     if (eerste) throw eerste.error;
@@ -1024,6 +1121,7 @@ async function laadAlles(){
     kmData = km.data || [];
     factData = ft.data || [];
     cache.prijzen = pp.data || [];
+    gwData = gw.data || [];
 
     vulSelects();
     vulVoorraadSelects();
@@ -1034,6 +1132,7 @@ async function laadAlles(){
     if (!$("kPrijs").value) $("kPrijs").value = Number(cache.inst.km_prijs || 0.35).toFixed(2);
     renderKm();
     renderVoorraad();
+    renderGereedschap();
     renderFacturen();
     vulBedrijf();
     renderHoofd();
@@ -2115,13 +2214,19 @@ async function herlaadCategorieen(){
 /* ---- PDF-inlezer ---- */
 let pfParsed = null;
 
-$("vPdfToon").addEventListener("click", () => {
-  const b = $("pdfBlok");
-  b.style.display = b.style.display === "none" ? "block" : "none";
-  $("pdfKeyVeld").style.display = (cache.inst.anthropic_api_key || "").trim() ? "none" : "block";
-  if (!$("stdMarge").value) $("stdMarge").value = cache.inst.standaard_marge_pct || 30;
-});
-$("pdfSluit").addEventListener("click", () => { $("pdfBlok").style.display = "none"; });
+function ikModus(pdf){
+  $("ikModusPdf").classList.toggle("aan", pdf);
+  $("ikModusHand").classList.toggle("aan", !pdf);
+  $("pdfBlok").style.display = pdf ? "block" : "none";
+  $("ikHandBlok").style.display = pdf ? "none" : "block";
+  if (pdf){
+    $("pdfKeyVeld").style.display = (cache.inst.anthropic_api_key || "").trim() ? "none" : "block";
+    if (!$("stdMarge").value) $("stdMarge").value = cache.inst.standaard_marge_pct || 30;
+  }
+}
+$("ikModusPdf").addEventListener("click", () => ikModus(true));
+$("ikModusHand").addEventListener("click", () => ikModus(false));
+$("pdfSluit").addEventListener("click", () => ikModus(false));
 
 $("pdfKeyOpslaan").addEventListener("click", async () => {
   const key = $("pdfKey").value.trim();
@@ -2316,6 +2421,171 @@ $("pfVerwerk").addEventListener("click", async () => {
   await herlaadFacturen();
   await herlaadPrijzen();
 });
+
+/* =====================================================
+   GEREEDSCHAPSREGISTER
+   ===================================================== */
+let gwData = [];
+let bewerkGwId = null;
+
+const GW_LOCATIE = { bus:"In de bus", schuur:"Schuur", loods:"Loods", klus:"Op de klus", anders:"Anders" };
+const GW_STATUS  = { in_gebruik:"In gebruik", uitgeleend:"Uitgeleend", reparatie:"Reparatie",
+                     kapot:"Kapot", verkocht:"Verkocht", gestolen:"Gestolen" };
+const GW_WEG = ["kapot","verkocht","gestolen"];
+
+function dagenTot(iso){
+  if (!iso) return null;
+  const d = new Date(iso + "T00:00:00");
+  const nu = new Date(); nu.setHours(0,0,0,0);
+  return Math.round((d - nu) / 86400000);
+}
+
+$("gwStatus").addEventListener("change", () => {
+  $("gwUitVeld").style.display = $("gwStatus").value === "uitgeleend" ? "block" : "none";
+});
+
+function gwFormLeeg(){
+  bewerkGwId = null;
+  ["gwNaam","gwMerk","gwType","gwSerie","gwPrijs","gwLeverancier",
+   "gwGarantie","gwKeuring","gwNotitie","gwUitgeleend"].forEach(id => $(id).value = "");
+  $("gwDatum").value = vandaagISO();
+  $("gwLocatie").value = "bus";
+  $("gwStatus").value = "in_gebruik";
+  $("gwUitVeld").style.display = "none";
+  $("gwVerwijder").style.display = "none";
+}
+
+$("gwNieuw").addEventListener("click", () => {
+  gwFormLeeg();
+  $("gwForm").style.display = "block";
+  $("gwNaam").focus();
+});
+$("gwAnnuleer").addEventListener("click", () => {
+  $("gwForm").style.display = "none";
+  bewerkGwId = null;
+});
+
+function openGereedschap(id){
+  const g = gwData.find(x => x.id === id);
+  if (!g) return;
+  bewerkGwId = id;
+  $("gwNaam").value = g.naam || "";
+  $("gwMerk").value = g.merk || "";
+  $("gwType").value = g.type_nr || "";
+  $("gwSerie").value = g.serienummer || "";
+  $("gwDatum").value = g.aankoopdatum || "";
+  $("gwPrijs").value = g.prijs_excl || "";
+  $("gwLeverancier").value = g.leverancier || "";
+  $("gwGarantie").value = g.garantie_tot || "";
+  $("gwKeuring").value = g.keuring_tot || "";
+  $("gwLocatie").value = g.locatie || "bus";
+  $("gwStatus").value = g.status || "in_gebruik";
+  $("gwUitgeleend").value = g.uitgeleend_aan || "";
+  $("gwUitVeld").style.display = g.status === "uitgeleend" ? "block" : "none";
+  $("gwNotitie").value = g.notitie || "";
+  $("gwVerwijder").style.display = "inline-block";
+  $("gwForm").style.display = "block";
+  window.scrollTo(0, 0);
+}
+
+$("gwOpslaan").addEventListener("click", async () => {
+  const naam = $("gwNaam").value.trim();
+  if (!naam){ toast("Vul in wat het is"); return; }
+  const prijs = parseFloat($("gwPrijs").value);
+  const rij = {
+    naam, merk: $("gwMerk").value.trim() || null,
+    type_nr: $("gwType").value.trim() || null,
+    serienummer: $("gwSerie").value.trim() || null,
+    aankoopdatum: $("gwDatum").value || null,
+    prijs_excl: isNaN(prijs) ? 0 : r2(prijs),
+    leverancier: $("gwLeverancier").value.trim() || null,
+    garantie_tot: $("gwGarantie").value || null,
+    keuring_tot: $("gwKeuring").value || null,
+    locatie: $("gwLocatie").value,
+    status: $("gwStatus").value,
+    uitgeleend_aan: $("gwStatus").value === "uitgeleend" ? ($("gwUitgeleend").value.trim() || null) : null,
+    notitie: $("gwNotitie").value.trim() || null
+  };
+  $("gwOpslaan").disabled = true;
+  let fout;
+  if (bewerkGwId){
+    ({ error: fout } = await db.from("gereedschap").update(rij).eq("id", bewerkGwId));
+  } else {
+    ({ error: fout } = await db.from("gereedschap").insert(rij));
+  }
+  $("gwOpslaan").disabled = false;
+  if (fout){ console.error(fout); toast("Opslaan mislukt"); return; }
+  $("gwForm").style.display = "none";
+  bewerkGwId = null;
+  toast("Gereedschap opgeslagen");
+  await herlaadGereedschap();
+});
+
+$("gwVerwijder").addEventListener("click", async () => {
+  if (!bewerkGwId) return;
+  if (!confirm("Dit uit je register verwijderen? Bij diefstal of kapot kun je beter de status aanpassen — dan blijft het bewijs staan.")) return;
+  const { error } = await db.from("gereedschap").delete().eq("id", bewerkGwId);
+  if (error){ toast("Verwijderen mislukt"); return; }
+  $("gwForm").style.display = "none";
+  bewerkGwId = null;
+  toast("Verwijderd");
+  await herlaadGereedschap();
+});
+
+$("gwFilter").addEventListener("change", renderGereedschap);
+
+async function herlaadGereedschap(){
+  const { data } = await db.from("gereedschap").select("*").order("naam");
+  gwData = data || [];
+  renderGereedschap();
+}
+
+function renderGereedschap(){
+  const inBezit = gwData.filter(g => !GW_WEG.includes(g.status));
+  const waarde = inBezit.reduce((s,g) => s + Number(g.prijs_excl || 0), 0);
+  const keuringBijna = inBezit.filter(g => {
+    const d = dagenTot(g.keuring_tot);
+    return d !== null && d <= 60;
+  });
+  const uitgeleend = gwData.filter(g => g.status === "uitgeleend");
+
+  $("gkAantal").textContent = inBezit.length;
+  $("gkAantalSub").textContent = gwData.length > inBezit.length
+    ? (gwData.length - inBezit.length) + " afgevoerd" : "in bezit";
+  $("gkWaarde").textContent = eur(waarde);
+  $("gkKeuring").textContent = keuringBijna.length;
+  $("gkUit").textContent = uitgeleend.length;
+
+  const filter = $("gwFilter").value;
+  let lijst = filter === "alles" ? gwData
+    : filter === "keuring" ? keuringBijna
+    : inBezit;
+
+  $("gwBody").innerHTML = !lijst.length
+    ? '<tr><td colspan="7" class="leeg">Nog niets in je register. Voeg je duurste spullen eerst toe — daar gaat het bij een claim om.</td></tr>'
+    : lijst.map(g => {
+      const d = dagenTot(g.keuring_tot);
+      const keuring = !g.keuring_tot ? '<span class="chip grijs">—</span>'
+        : d < 0 ? '<span class="chip rood">VERLOPEN</span>'
+        : d <= 60 ? '<span class="chip amber">' + d + ' dgn</span>'
+        : '<span class="chip groen">' + fmtDatum(g.keuring_tot) + '</span>';
+      const weg = GW_WEG.includes(g.status);
+      return '<tr class="klik" data-gwid="' + g.id + '"' + (weg ? ' style="opacity:.5"' : '') + '>' +
+        '<td class="tekst">' + esc(g.naam) +
+          (weg ? ' <span class="chip grijs">' + esc(GW_STATUS[g.status] || g.status).toUpperCase() + '</span>' : '') +
+          (g.status === "uitgeleend" ? ' <span class="chip amber">UIT</span>' : '') + '</td>' +
+        '<td class="tekst">' + esc([g.merk, g.type_nr].filter(Boolean).join(" ") || "—") + '</td>' +
+        '<td class="tekst">' + esc(g.serienummer || "—") + '</td>' +
+        '<td>' + (g.aankoopdatum ? fmtDatum(g.aankoopdatum) : "—") + '</td>' +
+        '<td class="r">' + eur2(g.prijs_excl || 0) + '</td>' +
+        '<td class="tekst">' + esc(GW_LOCATIE[g.locatie] || g.locatie || "—") + '</td>' +
+        '<td>' + keuring + '</td>' +
+      '</tr>';
+    }).join("");
+
+  document.querySelectorAll("#gwBody [data-gwid]").forEach(r =>
+    r.addEventListener("click", () => openGereedschap(r.dataset.gwid)));
+}
 
 /* =====================================================
    FACTUREN (fase 3)
