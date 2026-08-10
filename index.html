@@ -126,6 +126,7 @@ tbody tr.klik:hover td{background:var(--surface2)}
 .chip.amber{background:var(--amber-bg);color:var(--amber)}
 .chip.grijs{background:var(--surface2);color:var(--ink2)}
 .chip.rood{background:var(--rood-bg,rgba(220,60,60,.14));color:var(--rood)}
+.lees{padding:9px 0;font-size:.9rem;color:var(--ink);border-bottom:1px solid var(--line);min-height:20px}
 .verwijder{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:.95rem;padding:4px 8px;border-radius:5px}
 .verwijder:hover{color:var(--rood);background:var(--rood-bg)}
 .leeg{padding:22px;font-size:.84rem;color:var(--ink3);font-family:'IBM Plex Mono',monospace}
@@ -436,6 +437,7 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Notitie</label><input type="text" id="ikNotities" placeholder="optioneel"></div>
           <button class="knop" id="ikOpslaan">Inkoopfactuur opslaan</button>
+          <button class="knop klein stil" id="ikAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
         </div>
       </div>
       </div>
@@ -621,41 +623,37 @@ nav.onderbalk{display:none}
         </div>
 
         <div class="fpanel" id="fIn">
-          <div style="margin-bottom:14px"><button class="knop klein" id="fiNieuw">+ Inkoopfactuur</button></div>
-          <div class="form-card" id="fiForm" style="display:none;margin-bottom:18px">
+          <div class="form-card" id="fiDetail" style="display:none;margin-bottom:18px;max-width:620px">
             <div class="rij2">
-              <div class="veld"><label>Leverancier</label><input type="text" id="fiLeverancier" placeholder="bv. Technische Unie"></div>
-              <div class="veld"><label>Factuurnummer</label><input type="text" id="fiNummer"></div>
+              <div class="veld"><label>Leverancier</label><div class="lees" id="fdiLeverancier">—</div></div>
+              <div class="veld"><label>Factuurnummer</label><div class="lees" id="fdiNummer">—</div></div>
             </div>
             <div class="rij2">
-              <div class="veld"><label>Datum</label><input type="date" id="fiDatum"></div>
-              <div class="veld"><label>Status</label>
-                <div class="schakel">
-                  <button type="button" id="fiStatusOpen" class="aan">Open</button>
-                  <button type="button" id="fiStatusBetaald">Betaald</button>
-                </div>
+              <div class="veld"><label>Factuurdatum</label><div class="lees" id="fdiDatum">—</div></div>
+              <div class="veld"><label>Vervaldatum</label><div class="lees" id="fdiVerval">—</div></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Bedrag excl.</label><div class="lees" id="fdiExcl">—</div></div>
+              <div class="veld"><label>BTW</label><div class="lees" id="fdiBtw">—</div></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Kostensoort</label><div class="lees" id="fdiCategorie">—</div></div>
+              <div class="veld"><label>Project</label><div class="lees" id="fdiProject">—</div></div>
+            </div>
+            <div class="veld"><label>Notitie</label><div class="lees" id="fdiNotitie">—</div></div>
+            <div class="veld"><label>Betaald?</label>
+              <div class="schakel">
+                <button type="button" id="fdiStatusOpen" class="aan">Nog open</button>
+                <button type="button" id="fdiStatusBetaald">Betaald</button>
               </div>
             </div>
-            <div class="rij2">
-              <div class="veld"><label>Bedrag excl. btw (€)</label><input type="number" id="fiBedrag" step="0.01" min="0" inputmode="decimal"></div>
-              <div class="veld"><label>BTW (€)</label><input type="number" id="fiBtw" step="0.01" min="0" inputmode="decimal"></div>
-            </div>
-            <div class="rij2">
-              <div class="veld"><label>Kostensoort</label><select id="fiCategorie"></select></div>
-              <div class="veld"><label>Investering (KIA)</label>
-                <div class="schakel">
-                  <button type="button" id="fiInvNee" class="aan">Nee</button>
-                  <button type="button" id="fiInvJa">Ja</button>
-                </div>
-              </div>
-            </div>
-            <div class="veld"><label>Notities</label><input type="text" id="fiNotities"></div>
-            <div style="display:flex;gap:10px">
-              <button class="knop klein" id="fiOpslaan">Opslaan</button>
-              <button class="knop klein stil" id="fiAnnuleer">Annuleren</button>
-              <button class="knop klein gevaar" id="fiVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="knop klein stil" id="fdiBewerk">Wijzigen in het invulformulier</button>
+              <button class="knop klein stil" id="fdiSluit">Sluiten</button>
+              <button class="knop klein gevaar" id="fdiVerwijder" style="margin-left:auto">Verwijderen</button>
             </div>
           </div>
+          <div class="hint" style="margin-bottom:14px">Nieuwe inkoopfactuur toevoegen doe je bij <b>Invulformulier → Inkoopfactuur</b>.</div>
           <div class="tbl-wrap"><table>
             <thead><tr><th>Datum</th><th>Leverancier</th><th>Nr</th><th>Kostensoort</th><th>Status</th><th class="r">Excl.</th></tr></thead>
             <tbody id="fiBody"></tbody>
@@ -977,7 +975,9 @@ $("prAfgerond").addEventListener("click", () => { projStatus = "afgerond"; schak
 
 /* ---- inkoopfactuur in het invulformulier ---- */
 let ikInvestering = false, ikStatus = "open";
-let fiInvestering = false, pfInvestering = false;
+let bewerkInkoopId = null;
+let inkoopStatus = "open";
+let pfInvestering = false;
 
 $("ikInvNee").addEventListener("click", () => {
   ikInvestering = false; schakel("ikInvNee","ikInvJa");
@@ -991,8 +991,6 @@ $("ikInvJa").addEventListener("click", () => {
 $("ikStatusOpen").addEventListener("click", () => { ikStatus = "open"; schakel("ikStatusOpen","ikStatusBetaald"); });
 $("ikStatusBetaald").addEventListener("click", () => { ikStatus = "betaald"; schakel("ikStatusBetaald","ikStatusOpen"); });
 
-$("fiInvNee").addEventListener("click", () => { fiInvestering = false; schakel("fiInvNee","fiInvJa"); });
-$("fiInvJa").addEventListener("click", () => { fiInvestering = true; schakel("fiInvJa","fiInvNee"); });
 $("pfInvNee").addEventListener("click", () => { pfInvestering = false; schakel("pfInvNee","pfInvJa"); });
 $("pfInvJa").addEventListener("click", () => { pfInvestering = true; schakel("pfInvJa","pfInvNee"); });
 
@@ -1006,12 +1004,9 @@ $("ikLeverancier").addEventListener("change", () => {
   const eerder = vorigeKostensoort($("ikLeverancier").value);
   if (eerder) $("ikCategorie").value = eerder;
 });
-$("fiLeverancier").addEventListener("change", () => {
-  const eerder = vorigeKostensoort($("fiLeverancier").value);
-  if (eerder) $("fiCategorie").value = eerder;
-});
 
 function ikFormLeeg(){
+  bewerkInkoopId = null;
   ["ikLeverancier","ikNummer","ikVervaldatum","ikBedrag","ikBtw","ikNotities","ikAfschrijf"].forEach(id => $(id).value = "");
   $("ikDatum").value = vandaagISO();
   $("ikCategorie").value = "materiaal";
@@ -1019,7 +1014,35 @@ function ikFormLeeg(){
   ikInvestering = false; schakel("ikInvNee","ikInvJa");
   $("ikAfschrijfVeld").style.display = "none";
   ikStatus = "open"; schakel("ikStatusOpen","ikStatusBetaald");
+  $("ikOpslaan").textContent = "Inkoopfactuur opslaan";
+  $("ikAnnuleer").style.display = "none";
 }
+
+/* bestaande factuur inladen om te wijzigen */
+function ikVulFormulier(f){
+  bewerkInkoopId = f.id;
+  $("ikLeverancier").value = f.leverancier || "";
+  $("ikNummer").value = f.nummer === "-" ? "" : (f.nummer || "");
+  $("ikDatum").value = f.datum || vandaagISO();
+  $("ikVervaldatum").value = f.vervaldatum || "";
+  $("ikBedrag").value = f.bedrag_excl || "";
+  $("ikBtw").value = f.btw_bedrag || "";
+  $("ikCategorie").value = f.categorie || "materiaal";
+  $("ikProject").value = f.project_id || "";
+  $("ikNotities").value = f.notities || "";
+  ikInvestering = !!f.is_investering;
+  schakel(ikInvestering ? "ikInvJa" : "ikInvNee", ikInvestering ? "ikInvNee" : "ikInvJa");
+  $("ikAfschrijfVeld").style.display = ikInvestering ? "block" : "none";
+  $("ikAfschrijf").value = f.afschrijf_jaren || "";
+  ikStatus = f.status === "betaald" ? "betaald" : "open";
+  schakel(ikStatus === "betaald" ? "ikStatusBetaald" : "ikStatusOpen",
+          ikStatus === "betaald" ? "ikStatusOpen" : "ikStatusBetaald");
+  $("ikOpslaan").textContent = "Wijziging opslaan";
+  $("ikAnnuleer").style.display = "block";
+  window.scrollTo(0, 0);
+}
+
+$("ikAnnuleer").addEventListener("click", () => { ikFormLeeg(); toast("Wijziging geannuleerd"); });
 
 $("ikOpslaan").addEventListener("click", async () => {
   const lev = $("ikLeverancier").value.trim();
@@ -1043,11 +1066,17 @@ $("ikOpslaan").addEventListener("click", async () => {
     notities: $("ikNotities").value.trim() || null
   };
   $("ikOpslaan").disabled = true;
-  const { error } = await db.from("facturen").insert(rij);
+  let fout;
+  if (bewerkInkoopId){
+    ({ error: fout } = await db.from("facturen").update(rij).eq("id", bewerkInkoopId));
+  } else {
+    ({ error: fout } = await db.from("facturen").insert(rij));
+  }
   $("ikOpslaan").disabled = false;
-  if (error){ console.error(error); toast("Opslaan mislukt"); return; }
+  if (fout){ console.error(fout); toast("Opslaan mislukt"); return; }
+  const wasWijziging = !!bewerkInkoopId;
   ikFormLeeg();
-  toast("Inkoopfactuur opgeslagen");
+  toast(wasWijziging ? "Wijziging opgeslagen" : "Inkoopfactuur opgeslagen");
   await herlaadFacturen();
 });
 
@@ -1179,7 +1208,7 @@ function vulSelects(){
 
   /* kostensoort-selects */
   const kostOpties = KOSTEN.map(k => '<option value="' + k[0] + '">' + k[1] + '</option>').join("");
-  ["ikCategorie","fiCategorie","pfCategorie"].forEach(id => { $(id).innerHTML = kostOpties; });
+  ["ikCategorie","pfCategorie"].forEach(id => { $(id).innerHTML = kostOpties; });
 
   /* project-selects op de inkoopkant (ook afgeronde projecten,
      want facturen komen vaak pas na afloop binnen) */
@@ -2591,11 +2620,9 @@ function renderGereedschap(){
    FACTUREN (fase 3)
    ===================================================== */
 let bewerkFactuurId = null;
-let bewerkInkoopId = null;
 let huidigeRegels = [];
 let pendingFactuur = null;
 let statusFactuur = "open";
-let inkoopStatus = "open";
 
 const r2 = n => Math.round(n * 100) / 100;
 const btwPct = () => Number(cache.inst.btw_percentage || 21);
@@ -2897,90 +2924,70 @@ function renderFacturen(){
     r.addEventListener("click", () => openInkoop(r.dataset.fiid)));
 }
 
-/* ---- inkoopfacturen ---- */
-function zetInkoopStatus(s){
-  inkoopStatus = s;
-  $("fiStatusOpen").classList.toggle("aan", s === "open");
-  $("fiStatusBetaald").classList.toggle("aan", s === "betaald");
-}
-$("fiStatusOpen").addEventListener("click", () => zetInkoopStatus("open"));
-$("fiStatusBetaald").addEventListener("click", () => zetInkoopStatus("betaald"));
-$("fiBedrag").addEventListener("input", () => {
-  const b = parseFloat($("fiBedrag").value) || 0;
-  $("fiBtw").value = r2(b * btwPct() / 100);
-});
-$("fiNieuw").addEventListener("click", () => {
-  bewerkInkoopId = null;
-  ["fiLeverancier","fiNummer","fiBedrag","fiBtw","fiNotities"].forEach(id => $(id).value = "");
-  $("fiDatum").value = vandaagISO();
-  $("fiCategorie").value = "materiaal";
-  fiInvestering = false; schakel("fiInvNee","fiInvJa");
-  zetInkoopStatus("open");
-  $("fiVerwijder").style.display = "none";
-  $("fiForm").style.display = "block";
-  $("fiLeverancier").focus();
-});
-$("fiAnnuleer").addEventListener("click", () => {
-  $("fiForm").style.display = "none";
-  bewerkInkoopId = null;
-});
+/* ---- inkoopfacturen: hier alleen bekijken.
+     Toevoegen en wijzigen gaat via Invulformulier > Inkoopfactuur ---- */
+let bekijkInkoopId = null;
 
 function openInkoop(id){
   const f = factData.find(x => x.id === id);
   if (!f) return;
-  bewerkInkoopId = id;
-  $("fiLeverancier").value = f.leverancier || "";
-  $("fiNummer").value = f.nummer || "";
-  $("fiDatum").value = f.datum || "";
-  $("fiBedrag").value = f.bedrag_excl || "";
-  $("fiBtw").value = f.btw_bedrag || "";
-  $("fiNotities").value = f.notities || "";
-  $("fiCategorie").value = f.categorie || "materiaal";
-  fiInvestering = !!f.is_investering;
-  schakel(fiInvestering ? "fiInvJa" : "fiInvNee", fiInvestering ? "fiInvNee" : "fiInvJa");
+  bekijkInkoopId = id;
+  $("fdiLeverancier").textContent = f.leverancier || "\u2014";
+  $("fdiNummer").textContent = f.nummer || "\u2014";
+  $("fdiDatum").textContent = f.datum ? fmtDatum(f.datum) : "\u2014";
+  $("fdiVerval").textContent = f.vervaldatum ? fmtDatum(f.vervaldatum) : "\u2014";
+  $("fdiExcl").textContent = eur2(f.bedrag_excl || 0);
+  $("fdiBtw").textContent = eur2(f.btw_bedrag || 0);
+  $("fdiCategorie").textContent = kostenNaam(f.categorie) + (f.is_investering ? "  (investering / KIA)" : "");
+  $("fdiProject").textContent = projectNaam(f.project_id) || "\u2014";
+  $("fdiNotitie").textContent = f.notities || "\u2014";
   zetInkoopStatus(f.status === "betaald" ? "betaald" : "open");
-  $("fiVerwijder").style.display = "inline-block";
-  $("fiForm").style.display = "block";
+  $("fiDetail").style.display = "block";
   window.scrollTo(0, 0);
 }
 
-$("fiOpslaan").addEventListener("click", async () => {
-  const bedrag = parseFloat($("fiBedrag").value);
-  if (!(bedrag >= 0)) { toast("Vul een bedrag in"); return; }
-  const btw = parseFloat($("fiBtw").value) || 0;
-  const rij = {
-    type: "inkoop",
-    leverancier: $("fiLeverancier").value.trim() || null,
-    nummer: $("fiNummer").value.trim() || "-",
-    datum: $("fiDatum").value || vandaagISO(),
-    status: inkoopStatus,
-    bedrag_excl: r2(bedrag), btw_bedrag: r2(btw), bedrag_incl: r2(bedrag + btw),
-    categorie: $("fiCategorie").value || "overig",
-    is_investering: fiInvestering,
-    notities: $("fiNotities").value.trim() || null
-  };
-  $("fiOpslaan").disabled = true;
-  let fout;
-  if (bewerkInkoopId){
-    ({ error: fout } = await db.from("facturen").update(rij).eq("id", bewerkInkoopId));
-  } else {
-    ({ error: fout } = await db.from("facturen").insert(rij));
-  }
-  $("fiOpslaan").disabled = false;
-  if (fout){ console.error(fout); toast("Opslaan mislukt"); return; }
-  $("fiForm").style.display = "none";
-  bewerkInkoopId = null;
-  toast("Inkoopfactuur opgeslagen");
+function zetInkoopStatus(s){
+  inkoopStatus = s;
+  $("fdiStatusOpen").classList.toggle("aan", s === "open");
+  $("fdiStatusBetaald").classList.toggle("aan", s === "betaald");
+}
+
+/* betaald-status is het enige dat je hier direct omzet */
+async function bewaarInkoopStatus(s){
+  if (!bekijkInkoopId) return;
+  zetInkoopStatus(s);
+  const { error } = await db.from("facturen").update({ status: s }).eq("id", bekijkInkoopId);
+  if (error){ toast("Bijwerken mislukt"); return; }
+  toast(s === "betaald" ? "Gemarkeerd als betaald" : "Weer op open gezet");
   await herlaadFacturen();
+}
+$("fdiStatusOpen").addEventListener("click", () => bewaarInkoopStatus("open"));
+$("fdiStatusBetaald").addEventListener("click", () => bewaarInkoopStatus("betaald"));
+
+$("fdiSluit").addEventListener("click", () => {
+  $("fiDetail").style.display = "none";
+  bekijkInkoopId = null;
 });
 
-$("fiVerwijder").addEventListener("click", async () => {
-  if (!bewerkInkoopId) return;
+/* wijzigen gebeurt in hetzelfde formulier waar je hem hebt ingevoerd */
+$("fdiBewerk").addEventListener("click", () => {
+  const f = factData.find(x => x.id === bekijkInkoopId);
+  if (!f) return;
+  $("fiDetail").style.display = "none";
+  bekijkInkoopId = null;
+  toonTab("invullen");
+  kiesSub("sub-inkoop");
+  ikModus(false);
+  ikVulFormulier(f);
+});
+
+$("fdiVerwijder").addEventListener("click", async () => {
+  if (!bekijkInkoopId) return;
   if (!confirm("Deze inkoopfactuur verwijderen?")) return;
-  const { error } = await db.from("facturen").delete().eq("id", bewerkInkoopId);
+  const { error } = await db.from("facturen").delete().eq("id", bekijkInkoopId);
   if (error){ toast("Verwijderen mislukt"); return; }
-  $("fiForm").style.display = "none";
-  bewerkInkoopId = null;
+  $("fiDetail").style.display = "none";
+  bekijkInkoopId = null;
   toast("Inkoopfactuur verwijderd");
   await herlaadFacturen();
 });
