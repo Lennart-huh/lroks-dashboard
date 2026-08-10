@@ -261,6 +261,7 @@ nav.onderbalk{display:none}
           <button data-sub="sub-uren" class="aan">Uren</button>
           <button data-sub="sub-km">Kilometers</button>
           <button data-sub="sub-product">Product gebruikt</button>
+          <button data-sub="sub-inkoop">Inkoopfactuur</button>
         </div>
 
         <!-- UREN -->
@@ -340,6 +341,50 @@ nav.onderbalk{display:none}
             </div>
             <button class="knop klein stil" id="npOpslaan">Product toevoegen</button>
           </div>
+        </div>
+
+        <!-- INKOOPFACTUUR -->
+        <div class="subform form-card" id="sub-inkoop">
+          <div class="rij2">
+            <div class="veld"><label>Leverancier</label><input type="text" id="ikLeverancier" list="ikLevLijst" placeholder="bv. Technische Unie">
+              <datalist id="ikLevLijst"></datalist>
+            </div>
+            <div class="veld"><label>Factuurnummer</label><input type="text" id="ikNummer"></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Factuurdatum</label><input type="date" id="ikDatum"></div>
+            <div class="veld"><label>Vervaldatum</label><input type="date" id="ikVervaldatum"></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Bedrag excl. btw (€)</label><input type="number" id="ikBedrag" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld"><label>BTW (€)</label><input type="number" id="ikBtw" step="0.01" min="0" inputmode="decimal">
+              <div class="hint">Vult zichzelf op <span id="ikBtwPct">21</span>%. Bij verlegde btw op 0 zetten.</div>
+            </div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Kostensoort</label><select id="ikCategorie"></select></div>
+            <div class="veld"><label>Project</label><select id="ikProject"></select></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Investering (bedrijfsmiddel)</label>
+              <div class="schakel">
+                <button type="button" id="ikInvNee" class="aan">Nee</button>
+                <button type="button" id="ikInvJa">Ja</button>
+              </div>
+              <div class="hint">Ja bij iets boven €450 dat meerdere jaren meegaat. Telt mee voor de KIA.</div>
+            </div>
+            <div class="veld" id="ikAfschrijfVeld" style="display:none"><label>Afschrijven over (jaren)</label>
+              <input type="number" id="ikAfschrijf" step="1" min="1" inputmode="numeric" placeholder="bv. 5"></div>
+          </div>
+          <div class="veld"><label>Betaald?</label>
+            <div class="schakel">
+              <button type="button" id="ikStatusOpen" class="aan">Nog open</button>
+              <button type="button" id="ikStatusBetaald">Betaald</button>
+            </div>
+          </div>
+          <div class="veld"><label>Notitie</label><input type="text" id="ikNotities" placeholder="optioneel"></div>
+          <button class="knop" id="ikOpslaan">Inkoopfactuur opslaan</button>
+          <div class="hint" style="margin-top:12px">Regels met producten erin? Gebruik dan de PDF-lezer bij Voorraad — die vult je voorraad meteen mee.</div>
         </div>
       </div>
 
@@ -543,6 +588,15 @@ nav.onderbalk{display:none}
               <div class="veld"><label>Bedrag excl. btw (€)</label><input type="number" id="fiBedrag" step="0.01" min="0" inputmode="decimal"></div>
               <div class="veld"><label>BTW (€)</label><input type="number" id="fiBtw" step="0.01" min="0" inputmode="decimal"></div>
             </div>
+            <div class="rij2">
+              <div class="veld"><label>Kostensoort</label><select id="fiCategorie"></select></div>
+              <div class="veld"><label>Investering (KIA)</label>
+                <div class="schakel">
+                  <button type="button" id="fiInvNee" class="aan">Nee</button>
+                  <button type="button" id="fiInvJa">Ja</button>
+                </div>
+              </div>
+            </div>
             <div class="veld"><label>Notities</label><input type="text" id="fiNotities"></div>
             <div style="display:flex;gap:10px">
               <button class="knop klein" id="fiOpslaan">Opslaan</button>
@@ -551,7 +605,7 @@ nav.onderbalk{display:none}
             </div>
           </div>
           <div class="tbl-wrap"><table>
-            <thead><tr><th>Datum</th><th>Leverancier</th><th>Nr</th><th>Status</th><th class="r">Excl.</th></tr></thead>
+            <thead><tr><th>Datum</th><th>Leverancier</th><th>Nr</th><th>Kostensoort</th><th>Status</th><th class="r">Excl.</th></tr></thead>
             <tbody id="fiBody"></tbody>
           </table></div>
         </div>
@@ -649,7 +703,19 @@ nav.onderbalk{display:none}
               <div class="veld"><label>Datum</label><input type="date" id="pfDatum"></div>
               <div class="veld"><label>Bedrag excl. (€)</label><input type="number" id="pfBedrag" step="0.01" inputmode="decimal"></div>
             </div>
-            <div class="veld"><label>BTW (€)</label><input type="number" id="pfBtw" step="0.01" inputmode="decimal"></div>
+            <div class="rij2">
+              <div class="veld"><label>BTW (€)</label><input type="number" id="pfBtw" step="0.01" inputmode="decimal"></div>
+              <div class="veld"><label>Kostensoort</label><select id="pfCategorie"></select></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Project</label><select id="pfProject"></select></div>
+              <div class="veld"><label>Investering (KIA)</label>
+                <div class="schakel">
+                  <button type="button" id="pfInvNee" class="aan">Nee</button>
+                  <button type="button" id="pfInvJa">Ja</button>
+                </div>
+              </div>
+            </div>
             <div class="veld"><label>Regels — kies per regel wat ermee moet gebeuren</label>
               <div id="pfRegels"></div>
             </div>
@@ -739,6 +805,21 @@ function toast(msg){
   t._timer = setTimeout(() => t.classList.remove("zichtbaar"), 2200);
 }
 
+/* kostensoorten voor inkoopfacturen — vast, want hier hangen
+   straks je winst/verlies-rubrieken aan */
+const KOSTEN = [
+  ["materiaal","Materiaal"],
+  ["gereedschap","Gereedschap"],
+  ["vervoer","Vervoer / brandstof"],
+  ["werkkleding","Werkkleding / PBM"],
+  ["abonnementen","Abonnementen / software"],
+  ["verzekeringen","Verzekeringen"],
+  ["opleiding","Opleiding / certificering"],
+  ["kantoor","Kantoor / administratie"],
+  ["overig","Overig"]
+];
+const kostenNaam = c => (KOSTEN.find(k => k[0] === c) || [null, c || "—"])[1];
+
 /* centrale gegevens */
 const cache = { klanten:[], projecten:[], categorieen:[], producten:[], inst:{} };
 let urenData = [];
@@ -799,6 +880,82 @@ let projStatus = "open";
 $("prOpen").addEventListener("click", () => { projStatus = "open"; schakel("prOpen","prAfgerond"); });
 $("prAfgerond").addEventListener("click", () => { projStatus = "afgerond"; schakel("prAfgerond","prOpen"); });
 
+/* ---- inkoopfactuur in het invulformulier ---- */
+let ikInvestering = false, ikStatus = "open";
+let fiInvestering = false, pfInvestering = false;
+
+$("ikInvNee").addEventListener("click", () => {
+  ikInvestering = false; schakel("ikInvNee","ikInvJa");
+  $("ikAfschrijfVeld").style.display = "none";
+});
+$("ikInvJa").addEventListener("click", () => {
+  ikInvestering = true; schakel("ikInvJa","ikInvNee");
+  $("ikAfschrijfVeld").style.display = "block";
+  if (!$("ikAfschrijf").value) $("ikAfschrijf").value = 5;
+});
+$("ikStatusOpen").addEventListener("click", () => { ikStatus = "open"; schakel("ikStatusOpen","ikStatusBetaald"); });
+$("ikStatusBetaald").addEventListener("click", () => { ikStatus = "betaald"; schakel("ikStatusBetaald","ikStatusOpen"); });
+
+$("fiInvNee").addEventListener("click", () => { fiInvestering = false; schakel("fiInvNee","fiInvJa"); });
+$("fiInvJa").addEventListener("click", () => { fiInvestering = true; schakel("fiInvJa","fiInvNee"); });
+$("pfInvNee").addEventListener("click", () => { pfInvestering = false; schakel("pfInvNee","pfInvJa"); });
+$("pfInvJa").addEventListener("click", () => { pfInvestering = true; schakel("pfInvJa","pfInvNee"); });
+
+/* btw automatisch uitrekenen */
+$("ikBedrag").addEventListener("input", () => {
+  const b = parseFloat($("ikBedrag").value) || 0;
+  $("ikBtw").value = r2(b * btwPct() / 100);
+});
+/* leverancier herkennen: kostensoort van vorige keer voorstellen */
+$("ikLeverancier").addEventListener("change", () => {
+  const eerder = vorigeKostensoort($("ikLeverancier").value);
+  if (eerder) $("ikCategorie").value = eerder;
+});
+$("fiLeverancier").addEventListener("change", () => {
+  const eerder = vorigeKostensoort($("fiLeverancier").value);
+  if (eerder) $("fiCategorie").value = eerder;
+});
+
+function ikFormLeeg(){
+  ["ikLeverancier","ikNummer","ikVervaldatum","ikBedrag","ikBtw","ikNotities","ikAfschrijf"].forEach(id => $(id).value = "");
+  $("ikDatum").value = vandaagISO();
+  $("ikCategorie").value = "materiaal";
+  $("ikProject").value = "";
+  ikInvestering = false; schakel("ikInvNee","ikInvJa");
+  $("ikAfschrijfVeld").style.display = "none";
+  ikStatus = "open"; schakel("ikStatusOpen","ikStatusBetaald");
+}
+
+$("ikOpslaan").addEventListener("click", async () => {
+  const lev = $("ikLeverancier").value.trim();
+  if (!lev){ toast("Vul een leverancier in"); return; }
+  const bedrag = parseFloat($("ikBedrag").value);
+  if (!(bedrag >= 0)){ toast("Vul een bedrag in"); return; }
+  const btw = parseFloat($("ikBtw").value) || 0;
+  const afschrijf = parseInt($("ikAfschrijf").value, 10);
+  const rij = {
+    type: "inkoop",
+    leverancier: lev,
+    nummer: $("ikNummer").value.trim() || "-",
+    datum: $("ikDatum").value || vandaagISO(),
+    vervaldatum: $("ikVervaldatum").value || null,
+    status: ikStatus,
+    bedrag_excl: r2(bedrag), btw_bedrag: r2(btw), bedrag_incl: r2(bedrag + btw),
+    categorie: $("ikCategorie").value || "overig",
+    project_id: $("ikProject").value || null,
+    is_investering: ikInvestering,
+    afschrijf_jaren: ikInvestering && afschrijf > 0 ? afschrijf : null,
+    notities: $("ikNotities").value.trim() || null
+  };
+  $("ikOpslaan").disabled = true;
+  const { error } = await db.from("facturen").insert(rij);
+  $("ikOpslaan").disabled = false;
+  if (error){ console.error(error); toast("Opslaan mislukt"); return; }
+  ikFormLeeg();
+  toast("Inkoopfactuur opgeslagen");
+  await herlaadFacturen();
+});
+
 /* =====================================================
    LOGIN / SESSIE
    ===================================================== */
@@ -818,6 +975,7 @@ async function toonApp(){
   $("uDatum").value = vandaagISO();
   $("kDatum").value = vandaagISO();
   $("pDatum").value = vandaagISO();
+  $("ikDatum").value = vandaagISO();
   toonTab("hoofd");
   await laadAlles();
 }
@@ -920,7 +1078,33 @@ function vulSelects(){
   $("npCategorie").innerHTML = '<option value="">— geen —</option>' +
     cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
 
+  /* kostensoort-selects */
+  const kostOpties = KOSTEN.map(k => '<option value="' + k[0] + '">' + k[1] + '</option>').join("");
+  ["ikCategorie","fiCategorie","pfCategorie"].forEach(id => { $(id).innerHTML = kostOpties; });
+
+  /* project-selects op de inkoopkant (ook afgeronde projecten,
+     want facturen komen vaak pas na afloop binnen) */
+  const alleP = '<option value="">— geen project —</option>' +
+    cache.projecten.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
+  $("ikProject").innerHTML = alleP;
+  $("pfProject").innerHTML = alleP;
+
+  /* leveranciers die je al eens gebruikt hebt, voor de autocomplete */
+  const levs = [...new Set(factData.filter(f => f.type === "inkoop" && f.leverancier)
+    .map(f => f.leverancier))].sort();
+  $("ikLevLijst").innerHTML = levs.map(l => '<option value="' + esc(l) + '">').join("");
+
   bijwerkKmHint();
+}
+
+/* welke kostensoort gebruikte je de vorige keer bij deze leverancier */
+function vorigeKostensoort(lev){
+  if (!lev) return null;
+  const l = String(lev).toLowerCase().trim();
+  const eerder = factData
+    .filter(f => f.type === "inkoop" && f.categorie && String(f.leverancier || "").toLowerCase().trim() === l)
+    .sort((a,b) => String(b.datum).localeCompare(String(a.datum)))[0];
+  return eerder ? eerder.categorie : null;
 }
 
 /* project kiezen vult klant automatisch in (urenformulier) */
@@ -1987,7 +2171,11 @@ $("pdfLees").addEventListener("click", async () => {
         model: "claude-sonnet-4-6",
         max_tokens: 3000,
         messages: [{ role: "user", content: [ blok, { type: "text", text:
-          'Lees deze inkoopfactuur van een elektrotechnische groothandel. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","bedrag_excl":0,"btw_bedrag":0,"regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0}]} Alle bedragen excl. btw met een punt als decimaalteken. prijs_per_stuk is de stukprijs, niet het regeltotaal. Neem ook verzendkosten en statiegeld op als regel.' } ] }]
+          'Lees deze inkoopfactuur van een leverancier van een elektrotechnisch installatiebedrijf. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","vervaldatum":"JJJJ-MM-DD of null","bedrag_excl":0,"btw_bedrag":0,"categorie":"","is_investering":false,"regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0}]} ' +
+          'Alle bedragen excl. btw met een punt als decimaalteken. prijs_per_stuk is de stukprijs, niet het regeltotaal. Neem ook verzendkosten en statiegeld op als regel. ' +
+          'Bij verlegde btw: btw_bedrag 0. ' +
+          'Kies categorie uit exact deze lijst: ' + KOSTEN.map(k => k[0]).join(", ") + '. ' +
+          'Zet is_investering op true als het om een los bedrijfsmiddel boven 450 euro gaat dat meerdere jaren meegaat, zoals een machine, meetapparatuur of duur gereedschap. Bij normaal installatiemateriaal is het false.' } ] }]
       })
     });
     const data = await antwoord.json();
@@ -2000,6 +2188,14 @@ $("pdfLees").addEventListener("click", async () => {
     $("pfDatum").value = pfParsed.datum || vandaagISO();
     $("pfBedrag").value = pfParsed.bedrag_excl || "";
     $("pfBtw").value = pfParsed.btw_bedrag || r2((pfParsed.bedrag_excl || 0) * btwPct() / 100);
+    /* kostensoort: wat je vorige keer bij deze leverancier koos wint,
+       anders het voorstel van de AI, anders materiaal */
+    const eerder = vorigeKostensoort(pfParsed.leverancier);
+    const voorstel = KOSTEN.some(k => k[0] === pfParsed.categorie) ? pfParsed.categorie : null;
+    $("pfCategorie").value = eerder || voorstel || "materiaal";
+    $("pfProject").value = "";
+    pfInvestering = !!pfParsed.is_investering;
+    schakel(pfInvestering ? "pfInvJa" : "pfInvNee", pfInvestering ? "pfInvNee" : "pfInvJa");
     toonPfRegels(pfParsed.regels || []);
     $("pdfResultaat").style.display = "block";
     status.textContent = "Gelukt — controleer hieronder en klik op Verwerken.";
@@ -2054,14 +2250,18 @@ $("pfVerwerk").addEventListener("click", async () => {
   const status = $("pdfStatus");
   status.textContent = "Bezig met verwerken…";
 
-  const { error: fFout } = await db.from("facturen").insert({
+  const { data: nieuweFactuur, error: fFout } = await db.from("facturen").insert({
     type: "inkoop", leverancier: lev,
     nummer: $("pfNummer").value.trim() || "-",
     datum, status: "open",
     bedrag_excl: r2(bedrag), btw_bedrag: r2(btw), bedrag_incl: r2(bedrag + btw),
+    categorie: $("pfCategorie").value || "materiaal",
+    project_id: $("pfProject").value || null,
+    is_investering: pfInvestering,
     notities: "Automatisch ingelezen uit PDF"
-  });
+  }).select().single();
   if (fFout){ $("pfVerwerk").disabled = false; status.textContent = "Inkoopfactuur opslaan mislukt."; return; }
+  const factuurId = nieuweFactuur ? nieuweFactuur.id : null;
 
   let verwerkt = 0, nieuw = 0;
   const regels = [...document.querySelectorAll("#pfRegels .pf-regel")];
@@ -2101,7 +2301,7 @@ $("pfVerwerk").addEventListener("click", async () => {
       if (updates.voorraad !== undefined) prod.voorraad = updates.voorraad;
     }
     await db.from("product_prijzen").insert({
-      product_id: productId, leverancier: lev, prijs, datum
+      product_id: productId, leverancier: lev, prijs, datum, factuur_id: factuurId
     });
     verwerkt++;
   }
@@ -2376,6 +2576,9 @@ async function herlaadFacturen(){
   factData = data || [];
   renderFacturen();
   renderHoofd();
+  const levs = [...new Set(factData.filter(f => f.type === "inkoop" && f.leverancier)
+    .map(f => f.leverancier))].sort();
+  $("ikLevLijst").innerHTML = levs.map(l => '<option value="' + esc(l) + '">').join("");
 }
 
 function renderFacturen(){
@@ -2409,12 +2612,14 @@ function renderFacturen(){
 
   const inl = factData.filter(f => f.type === "inkoop");
   $("fiBody").innerHTML = !inl.length
-    ? '<tr><td colspan="5" class="leeg">Nog geen inkoopfacturen.</td></tr>'
+    ? '<tr><td colspan="6" class="leeg">Nog geen inkoopfacturen.</td></tr>'
     : inl.slice(0, 80).map(f =>
       '<tr class="klik" data-fiid="' + f.id + '">' +
         '<td>' + fmtDatum(f.datum) + '</td>' +
         '<td class="tekst">' + esc(f.leverancier || "—") + '</td>' +
         '<td>' + esc(f.nummer || "") + '</td>' +
+        '<td class="tekst">' + esc(kostenNaam(f.categorie)) +
+          (f.is_investering ? ' <span class="chip">KIA</span>' : '') + '</td>' +
         '<td>' + statusChip(f.status) + '</td>' +
         '<td class="r">' + eur2(f.bedrag_excl || 0) + '</td>' +
       '</tr>').join("");
@@ -2438,6 +2643,8 @@ $("fiNieuw").addEventListener("click", () => {
   bewerkInkoopId = null;
   ["fiLeverancier","fiNummer","fiBedrag","fiBtw","fiNotities"].forEach(id => $(id).value = "");
   $("fiDatum").value = vandaagISO();
+  $("fiCategorie").value = "materiaal";
+  fiInvestering = false; schakel("fiInvNee","fiInvJa");
   zetInkoopStatus("open");
   $("fiVerwijder").style.display = "none";
   $("fiForm").style.display = "block";
@@ -2458,6 +2665,9 @@ function openInkoop(id){
   $("fiBedrag").value = f.bedrag_excl || "";
   $("fiBtw").value = f.btw_bedrag || "";
   $("fiNotities").value = f.notities || "";
+  $("fiCategorie").value = f.categorie || "materiaal";
+  fiInvestering = !!f.is_investering;
+  schakel(fiInvestering ? "fiInvJa" : "fiInvNee", fiInvestering ? "fiInvNee" : "fiInvJa");
   zetInkoopStatus(f.status === "betaald" ? "betaald" : "open");
   $("fiVerwijder").style.display = "inline-block";
   $("fiForm").style.display = "block";
@@ -2475,6 +2685,8 @@ $("fiOpslaan").addEventListener("click", async () => {
     datum: $("fiDatum").value || vandaagISO(),
     status: inkoopStatus,
     bedrag_excl: r2(bedrag), btw_bedrag: r2(btw), bedrag_incl: r2(bedrag + btw),
+    categorie: $("fiCategorie").value || "overig",
+    is_investering: fiInvestering,
     notities: $("fiNotities").value.trim() || null
   };
   $("fiOpslaan").disabled = true;
