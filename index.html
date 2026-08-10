@@ -66,7 +66,10 @@ button{font-family:inherit}
 .schakel button.aan{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 .hint{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--ink3);margin-top:6px}
 .hint b{color:var(--ink);font-weight:600}
-.form-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;max-width:560px}
+.form-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;max-width:560px;position:relative}
+.form-card.heeft-sluit{padding-top:52px}
+.knop.sluitX{position:absolute;top:10px;right:10px;width:38px;height:38px;padding:0;
+  text-align:center;line-height:36px;font-size:1.35rem;font-weight:400;border-radius:9px;z-index:3}
 .link-knop{background:none;border:none;color:var(--ink2);font-size:.78rem;text-decoration:underline;cursor:pointer;padding:0;margin-top:2px}
 
 /* ---------- app-layout ---------- */
@@ -289,7 +292,7 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Omschrijving</label><input type="text" id="uOmschrijving" placeholder="wat heb je gedaan"></div>
           <button class="knop" id="uOpslaan">Uren opslaan</button>
-          <button class="knop klein stil" id="uAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
+          <button class="knop klein stil" id="uAnnuleer" style="display:none">Wijzigen annuleren</button>
         </div>
 
         <!-- KM -->
@@ -314,7 +317,7 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Vergoeding per km (€)</label><input type="number" id="kPrijs" step="0.01" min="0" inputmode="decimal" placeholder="0,35"></div>
           </div>
           <button class="knop" id="kOpslaan">KM-stand opslaan</button>
-          <button class="knop klein stil" id="kAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
+          <button class="knop klein stil" id="kAnnuleer" style="display:none">Wijzigen annuleren</button>
         </div>
 
         <!-- PRODUCT -->
@@ -326,7 +329,7 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Datum</label><input type="date" id="pDatum"></div>
           <button class="knop" id="pOpslaan">Gebruik opslaan</button>
-          <button class="knop klein stil" id="pAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
+          <button class="knop klein stil" id="pAnnuleer" style="display:none">Wijzigen annuleren</button>
           <button class="knop klein stil" id="pNieuwToon" style="margin-top:12px">+ Nieuw product toevoegen</button>
           <div id="pNieuwBlok" style="display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
             <div class="rij2">
@@ -437,7 +440,7 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Notitie</label><input type="text" id="ikNotities" placeholder="optioneel"></div>
           <button class="knop" id="ikOpslaan">Inkoopfactuur opslaan</button>
-          <button class="knop klein stil" id="ikAnnuleer" style="display:none;margin-top:10px">Wijzigen annuleren</button>
+          <button class="knop klein stil" id="ikAnnuleer" style="display:none">Wijzigen annuleren</button>
         </div>
       </div>
       </div>
@@ -921,6 +924,37 @@ let factData = [];
   };
   zet();
   $("themaKnop").addEventListener("click", () => { donker = !donker; zet(); });
+})();
+
+/* =====================================================
+   SLUITKNOPPEN RECHTSBOVEN
+   Elke annuleer- of sluitknop verhuist naar de rechterbovenhoek
+   van zijn formulier. Het blijft dezelfde knop met hetzelfde id,
+   dus alle bestaande logica werkt gewoon door.
+   ===================================================== */
+(function(){
+  const SLUITERS = ["uAnnuleer","kAnnuleer","pAnnuleer","ikAnnuleer","klAnnuleer",
+                    "prAnnuleer","fdAnnuleer","fdiSluit","vAnnuleer","catSluit",
+                    "gwAnnuleer","pdfSluit"];
+  SLUITERS.forEach(id => {
+    const knop = document.getElementById(id);
+    if (!knop) return;
+    const kaart = knop.closest(".form-card");
+    if (!kaart) return;
+    const titel = knop.textContent.trim();
+    knop.textContent = "\u00d7";
+    knop.title = titel;
+    knop.setAttribute("aria-label", titel);
+    knop.classList.add("sluitX");
+    knop.style.marginTop = "";
+    kaart.insertBefore(knop, kaart.firstChild);
+
+    /* de extra ruimte bovenin alleen reserveren zolang het kruisje
+       er ook echt staat, anders houd je een gat in elk formulier */
+    const sync = () => kaart.classList.toggle("heeft-sluit", knop.style.display !== "none");
+    new MutationObserver(sync).observe(knop, { attributes:true, attributeFilter:["style"] });
+    sync();
+  });
 })();
 
 /* =====================================================
