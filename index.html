@@ -749,9 +749,14 @@ nav.onderbalk{display:none}
         </div>
 
         <div class="veld" style="max-width:280px"><label>Filter op categorie</label><select id="vFilter"></select></div>
+        <div id="vSelBalk" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:11px 14px;margin-bottom:12px">
+          <span id="vSelAantal" style="font-size:.85rem"></span>
+          <button class="knop klein gevaar" id="vSelVerwijder" style="margin-left:auto">Verwijderen</button>
+          <button class="knop klein stil" id="vSelWis">Selectie wissen</button>
+        </div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>Product</th><th>Categorie</th><th class="r">Voorraad</th><th class="r">Inkoop</th><th class="r">Verkoop</th><th class="r">Marge</th><th>Goedkoopst</th></tr></thead>
+            <thead><tr><th style="width:34px"><input type="checkbox" id="vAlles" title="Alles selecteren"></th><th>Product</th><th>Categorie</th><th class="r">Voorraad</th><th class="r">Inkoop</th><th class="r">Verkoop</th><th class="r">Marge</th><th>Goedkoopst</th></tr></thead>
             <tbody id="vBody"></tbody>
           </table>
         </div>
@@ -2124,13 +2129,16 @@ function renderVoorraad(){
   const lijst = cache.producten.filter(p => !filter || p.categorie_id === filter);
   const body = $("vBody");
   if (!lijst.length){
-    body.innerHTML = '<tr><td colspan="7" class="leeg">Nog geen producten' + (filter ? " in deze categorie" : "") + ' — voeg je eerste product toe.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="leeg">Nog geen producten' + (filter ? " in deze categorie" : "") + ' — voeg je eerste product toe.</td></tr>';
+    $("vSelBalk").style.display = "none";
+    $("vAlles").checked = false;
     return;
   }
   body.innerHTML = lijst.map(p => {
     const marge = Number(p.verkoopprijs || 0) - Number(p.inkoopprijs || 0);
     const g = goedkoopsteVoor(p.id);
     return '<tr class="klik" data-vid="' + p.id + '">' +
+      '<td style="width:34px" data-geenklik="1"><input type="checkbox" class="vSel" data-sel="' + p.id + '"></td>' +
       '<td class="tekst">' + esc(p.naam) + '</td>' +
       '<td class="tekst">' + esc(catNaam(p.categorie_id) || "—") + '</td>' +
       '<td class="r">' + (p.op_voorraad === false ? '<span class="chip grijs">DOORLOOP</span>' : Number(p.voorraad).toLocaleString("nl-NL") + ' ' + esc(p.eenheid || "")) + '</td>' +
@@ -2140,6 +2148,14 @@ function renderVoorraad(){
       '<td class="tekst">' + (g ? esc(g.leverancier) + ' · ' + eur2(g.prijs) : "—") + '</td>' +
     '</tr>';
   }).join("");
+
+  body.querySelectorAll(".vSel").forEach(c =>
+    c.addEventListener("change", telSelectie));
+  body.querySelectorAll("[data-geenklik]").forEach(td =>
+    td.addEventListener("click", e => e.stopPropagation()));
+  $("vAlles").checked = false;
+  telSelectie();
+
   body.querySelectorAll("[data-vid]").forEach(r => r.addEventListener("click", () => {
     const p = cache.producten.find(x => x.id === r.dataset.vid);
     if (!p) return;
@@ -2162,6 +2178,50 @@ function renderVoorraad(){
     window.scrollTo(0, 0);
   }));
 }
+
+/* ---- meerdere producten tegelijk verwijderen ---- */
+function geselecteerdeProducten(){
+  return [...document.querySelectorAll("#vBody .vSel:checked")].map(c => c.dataset.sel);
+}
+function telSelectie(){
+  const n = geselecteerdeProducten().length;
+  $("vSelBalk").style.display = n ? "flex" : "none";
+  $("vSelAantal").textContent = n === 1 ? "1 product geselecteerd" : n + " producten geselecteerd";
+}
+$("vAlles").addEventListener("change", () => {
+  const aan = $("vAlles").checked;
+  document.querySelectorAll("#vBody .vSel").forEach(c => { c.checked = aan; });
+  telSelectie();
+});
+$("vSelWis").addEventListener("click", () => {
+  document.querySelectorAll("#vBody .vSel").forEach(c => { c.checked = false; });
+  $("vAlles").checked = false;
+  telSelectie();
+});
+
+$("vSelVerwijder").addEventListener("click", async () => {
+  const ids = geselecteerdeProducten();
+  if (!ids.length) return;
+  const namen = ids.map(id => {
+    const p = cache.producten.find(x => x.id === id);
+    return p ? p.naam : "?";
+  });
+  const lijstje = namen.slice(0, 8).join("\n• ") + (namen.length > 8 ? "\n• … en nog " + (namen.length - 8) : "");
+  if (!confirm("Deze " + ids.length + " producten verwijderen?\n\n• " + lijstje +
+               "\n\nLet op: dit kan niet ongedaan gemaakt worden.")) return;
+
+  $("vSelVerwijder").disabled = true;
+  const { error } = await db.from("producten").delete().in("id", ids);
+  $("vSelVerwijder").disabled = false;
+  if (error){
+    console.error(error);
+    toast("Verwijderen mislukt — zitten deze producten nog op een factuur?");
+    return;
+  }
+  $("vAlles").checked = false;
+  toast(ids.length + " product(en) verwijderd");
+  await herlaadProducten();
+});
 
 /* =====================================================
    LEVERANCIERSPRIJZEN, CATEGORIEËN & PDF-INLEZER (fase 4)
@@ -2382,10 +2442,16 @@ function matchProduct(oms){
 }
 
 function toonPfRegels(regels){
+  const catOpties = '<option value="">— geen categorie —</option>' +
+    cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
+
   $("pfRegels").innerHTML = regels.map((r, i) => {
     const match = matchProduct(r.omschrijving);
     const opties = cache.producten.map(p =>
       '<option value="' + p.id + '"' + (match && match.id === p.id ? ' selected' : '') + '>' + esc(p.naam) + '</option>').join("");
+    /* bestaat het product al, dan zijn categorie voorselecteren */
+    const gekozenCat = match && match.categorie_id ? match.categorie_id : "";
+    const catMetSel = catOpties.replace('value="' + gekozenCat + '"', 'value="' + gekozenCat + '" selected');
     return '<div class="pf-regel" data-i="' + i + '" style="border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px">' +
       '<div class="rij2">' +
         '<div class="veld"><label>Omschrijving</label><input type="text" class="pfr-naam" value="' + esc(r.omschrijving || "") + '"></div>' +
@@ -2399,8 +2465,19 @@ function toonPfRegels(regels){
         '<div class="veld"><label>Aantal</label><input type="number" class="pfr-aantal" step="0.5" value="' + (r.aantal || 1) + '"></div>' +
         '<div class="veld"><label>Prijs p/st excl. (€)</label><input type="number" class="pfr-prijs" step="0.01" value="' + (r.prijs_per_stuk || 0) + '"></div>' +
       '</div>' +
+      '<div class="veld"><label>Categorie</label><select class="pfr-cat">' + catMetSel + '</select></div>' +
     '</div>';
   }).join("");
+
+  /* overslaan gekozen? dan de rest van de regel dimmen */
+  $("pfRegels").querySelectorAll(".pfr-select").forEach(sel => {
+    const dim = () => {
+      const uit = sel.value === "_skip";
+      sel.closest(".pf-regel").style.opacity = uit ? ".45" : "1";
+    };
+    sel.addEventListener("change", dim);
+    dim();
+  });
 }
 
 $("pfVerwerk").addEventListener("click", async () => {
@@ -2438,11 +2515,13 @@ $("pfVerwerk").addEventListener("click", async () => {
     const naam = el.querySelector(".pfr-naam").value.trim();
     const aantal = parseFloat(el.querySelector(".pfr-aantal").value) || 0;
     const prijs = r2(parseFloat(el.querySelector(".pfr-prijs").value) || 0);
+    const catId = el.querySelector(".pfr-cat").value || null;
     let productId = keuze;
     if (keuze === "_nieuw"){
       if (!naam) continue;
       const { data: np, error: npF } = await db.from("producten").insert({
         naam: naam.slice(0, 120), inkoopprijs: prijs,
+        categorie_id: catId,
         marge_pct: stdMarge > 0 ? stdMarge : null,
         verkoopprijs: stdMarge > 0 ? r2(prijs * (1 + stdMarge / 100)) : 0,
         op_voorraad: true, voorraad: 0, leverancier: lev
@@ -2460,10 +2539,12 @@ $("pfVerwerk").addEventListener("click", async () => {
     const prod = cache.producten.find(p => p.id === productId);
     if (prod){
       const updates = { inkoopprijs: prijs };
+      if (catId && catId !== prod.categorie_id) updates.categorie_id = catId;
       if (prod.marge_pct != null) updates.verkoopprijs = r2(prijs * (1 + Number(prod.marge_pct) / 100));
       if (prod.op_voorraad !== false && aantal > 0) updates.voorraad = Number(prod.voorraad || 0) + aantal;
       await db.from("producten").update(updates).eq("id", productId);
       prod.inkoopprijs = prijs;
+      if (updates.categorie_id !== undefined) prod.categorie_id = updates.categorie_id;
       if (updates.verkoopprijs !== undefined) prod.verkoopprijs = updates.verkoopprijs;
       if (updates.voorraad !== undefined) prod.voorraad = updates.voorraad;
     }
