@@ -751,7 +751,8 @@ nav.onderbalk{display:none}
         <div class="veld" style="max-width:280px"><label>Filter op categorie</label><select id="vFilter"></select></div>
         <div id="vSelBalk" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:11px 14px;margin-bottom:12px">
           <span id="vSelAantal" style="font-size:.85rem"></span>
-          <button class="knop klein gevaar" id="vSelVerwijder" style="margin-left:auto">Verwijderen</button>
+          <button class="knop klein" id="vSelNaarGw" style="margin-left:auto">→ Naar gereedschap</button>
+          <button class="knop klein gevaar" id="vSelVerwijder">Verwijderen</button>
           <button class="knop klein stil" id="vSelWis">Selectie wissen</button>
         </div>
         <div class="tbl-wrap">
@@ -2221,6 +2222,75 @@ $("vSelVerwijder").addEventListener("click", async () => {
   $("vAlles").checked = false;
   toast(ids.length + " product(en) verwijderd");
   await herlaadProducten();
+});
+
+/* ---- geselecteerde producten omzetten naar gereedschap ---- */
+$("vSelNaarGw").addEventListener("click", async () => {
+  const ids = geselecteerdeProducten();
+  if (!ids.length) return;
+  const prods = ids.map(id => cache.producten.find(p => p.id === id)).filter(Boolean);
+  if (!prods.length) return;
+
+  const namen = prods.map(p => p.naam);
+  const lijstje = namen.slice(0, 8).join("\n• ") + (namen.length > 8 ? "\n• … en nog " + (namen.length - 8) : "");
+  if (!confirm("Deze " + prods.length + " item(s) verplaatsen naar Gereedschap?\n\n• " + lijstje +
+               "\n\nNaam, inkoopprijs en leverancier gaan mee. Daarna verdwijnen ze uit Producten.")) return;
+
+  /* meerdere stuks op voorraad? dan kun je er losse regels van maken,
+     handig omdat elk stuk zijn eigen serienummer en keuring heeft */
+  const meerdere = prods.filter(p => p.op_voorraad !== false && Number(p.voorraad || 0) > 1);
+  let apart = false;
+  if (meerdere.length){
+    apart = confirm(meerdere.length + " item(s) hebben meer dan 1 op voorraad.\n\n" +
+                    "OK = voor elk stuk een aparte regel (elk stuk krijgt zijn eigen serienummer en keuring)\n" +
+                    "Annuleren = één regel per item");
+  }
+
+  const rijen = [];
+  prods.forEach(p => {
+    const aantal = (apart && p.op_voorraad !== false) ? Math.max(1, Math.round(Number(p.voorraad || 1))) : 1;
+    for (let i = 0; i < aantal; i++){
+      rijen.push({
+        naam: aantal > 1 ? p.naam + " (" + (i + 1) + "/" + aantal + ")" : p.naam,
+        merk: null,
+        type_nr: null,
+        serienummer: null,
+        aankoopdatum: null,
+        prijs_excl: r2(Number(p.inkoopprijs || 0)),
+        leverancier: p.leverancier || null,
+        garantie_tot: null,
+        keuring_tot: null,
+        locatie: "bus",
+        status: "in_gebruik",
+        uitgeleend_aan: null,
+        notitie: "Overgezet vanuit Voorraad op " + vandaagISO()
+      });
+    }
+  });
+
+  $("vSelNaarGw").disabled = true;
+  const { error: fout } = await db.from("gereedschap").insert(rijen);
+  if (fout){
+    console.error(fout);
+    $("vSelNaarGw").disabled = false;
+    toast("Verplaatsen mislukt — er is niets gewijzigd");
+    return;
+  }
+
+  const { error: wegFout } = await db.from("producten").delete().in("id", ids);
+  $("vSelNaarGw").disabled = false;
+
+  $("vAlles").checked = false;
+  await herlaadProducten();
+  await herlaadGereedschap();
+  kiesVSub("vGereedschap");
+
+  if (wegFout){
+    console.error(wegFout);
+    toast(rijen.length + " toegevoegd aan gereedschap, maar ze staan nog bij producten — daar hangt nog gebruik of een factuur aan");
+  } else {
+    toast(rijen.length + " regel(s) verplaatst naar gereedschap");
+  }
 });
 
 /* =====================================================
