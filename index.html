@@ -1467,13 +1467,31 @@ function renderUren(){
 /* =====================================================
    KILOMETERS
    ===================================================== */
-function laatsteStandVoor(datumISO){
-  const eerder = kmData.filter(k => k.datum < datumISO);
+/* Alle standen op chronologische volgorde: op datum, en binnen dezelfde dag
+   op invoervolgorde (aangemaakt_op als die kolom bestaat, anders oplopende stand). */
+function kmChronologisch(){
+  return kmData.slice().sort((a,b) => {
+    if (a.datum !== b.datum) return a.datum < b.datum ? -1 : 1;
+    if (a.aangemaakt_op && b.aangemaakt_op && a.aangemaakt_op !== b.aangemaakt_op)
+      return a.aangemaakt_op < b.aangemaakt_op ? -1 : 1;
+    return Number(a.km_stand || 0) - Number(b.km_stand || 0);
+  });
+}
+/* De laatst ingevoerde stand vóór deze regel — dat mag ook een stand van
+   dezelfde dag zijn, niet per se die van een eerdere dag. */
+function laatsteStandVoor(datumISO, negeerId){
+  const lijst = kmChronologisch();
+  const zelf = negeerId ? lijst.find(k => k.id === negeerId) : null;
+  if (zelf && zelf.datum === datumISO){
+    const i = lijst.indexOf(zelf);
+    return i > 0 ? lijst[i-1] : null;
+  }
+  const eerder = lijst.filter(k => k.datum <= datumISO && k.id !== negeerId);
   return eerder.length ? eerder[eerder.length - 1] : null;
 }
 function bijwerkKmHint(){
   const datum = $("kDatum").value || vandaagISO();
-  const vorige = laatsteStandVoor(datum);
+  const vorige = laatsteStandVoor(datum, bewerkKmId);
   const stand = parseInt($("kStand").value, 10);
   let tekst = vorige
     ? "Vorige stand: <b>" + vorige.km_stand.toLocaleString("nl-NL") + "</b> (" + fmtDatum(vorige.datum) + ")"
@@ -1481,7 +1499,7 @@ function bijwerkKmHint(){
   if (vorige && stand > vorige.km_stand){
     const diff = stand - vorige.km_stand;
     const prijs = parseFloat($("kPrijs").value) || Number(cache.inst.km_prijs || 0);
-    tekst += " · vandaag gereden: <b>" + diff.toLocaleString("nl-NL") + " km</b>" +
+    tekst += " · gereden sinds die stand: <b>" + diff.toLocaleString("nl-NL") + " km</b>" +
       (kmZakelijk ? " = <b>" + eur2(diff * prijs) + "</b>" : "");
   }
   $("kVorige").innerHTML = tekst;
@@ -1511,14 +1529,11 @@ $("kOpslaan").addEventListener("click", async () => {
   const datum = $("kDatum").value;
   const stand = parseInt($("kStand").value, 10);
   if (!datum || !(stand >= 0)) { toast("Vul een datum en km-stand in"); return; }
-  const vorige = laatsteStandVoor(datum);
+  const vorige = laatsteStandVoor(datum, bewerkKmId);
   if (vorige && stand < vorige.km_stand){
     if (!confirm("Deze stand (" + stand.toLocaleString("nl-NL") + ") is lager dan de vorige (" +
       vorige.km_stand.toLocaleString("nl-NL") + "). Toch opslaan?")) return;
   }
-  const dubbel = kmData.find(k => k.datum === datum && k.id !== bewerkKmId);
-  if (bewerkKmId && dubbel){ toast("Er staat al een andere stand op die datum"); return; }
-  if (!bewerkKmId && dubbel && !confirm("Er staat al een stand voor deze dag. Overschrijven?")) return;
 
   const rij = {
     datum, km_stand: stand,
@@ -1530,9 +1545,8 @@ $("kOpslaan").addEventListener("click", async () => {
   };
   $("kOpslaan").disabled = true;
   let fout;
-  const doelId = bewerkKmId || (dubbel ? dubbel.id : null);
-  if (doelId){
-    ({ error: fout } = await db.from("km_registratie").update(rij).eq("id", doelId));
+  if (bewerkKmId){
+    ({ error: fout } = await db.from("km_registratie").update(rij).eq("id", bewerkKmId));
   } else {
     ({ error: fout } = await db.from("km_registratie").insert(rij));
   }
@@ -1574,11 +1588,12 @@ async function herlaadKm(){
   renderKm(); renderHoofd(); checkHerinnering(); bijwerkKmHint();
 }
 
-/* per regel: gereden = stand - vorige stand */
+/* per regel: gereden = stand - de vorige ingevoerde stand */
 function kmRegels(){
-  return kmData.map((k, i) => {
-    const gereden = i > 0 ? Math.max(0, k.km_stand - kmData[i-1].km_stand) : 0;
-    return { ...k, gereden };
+  const lijst = kmChronologisch();
+  return lijst.map((k, i) => {
+    const gereden = i > 0 ? Math.max(0, k.km_stand - lijst[i-1].km_stand) : 0;
+    return { ...k, gereden, eersteOoit: i === 0 };
   });
 }
 function kmJaarTotaal(jaar){
@@ -1610,7 +1625,7 @@ function renderKm(){
     return;
   }
   body.innerHTML = regels.slice().reverse().slice(0, 60).map((r, idx) => {
-    const eersteOoit = r.datum === kmData[0].datum;
+    const eersteOoit = r.eersteOoit;
     const waar = [r.omschrijving, projectNaam(r.project_id), klantNaam(r.klant_id)].filter(Boolean).join(" · ");
     return '<tr' + (r.gefactureerd ? '' : ' class="klik" data-kedit="' + r.id + '"') + '>' +
       '<td>' + fmtDatum(r.datum) + '</td>' +
