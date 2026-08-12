@@ -2566,8 +2566,9 @@ $("pdfLees").addEventListener("click", async () => {
         "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 3000,
+        model: "claude-opus-5",
+        max_tokens: 32000,
+        output_config: { effort: "max" },
         messages: [{ role: "user", content: [ blok, { type: "text", text:
           'Lees deze inkoopfactuur van een leverancier van een elektrotechnisch installatiebedrijf. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","vervaldatum":"JJJJ-MM-DD of null","bedrag_excl":0,"btw_bedrag":0,"categorie":"","is_investering":false,"regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0}]} ' +
           'Alle bedragen excl. btw met een punt als decimaalteken. prijs_per_stuk is de stukprijs, niet het regeltotaal. Neem ook verzendkosten en statiegeld op als regel. ' +
