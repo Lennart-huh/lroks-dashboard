@@ -357,11 +357,6 @@ nav.onderbalk{display:none}
             <button type="button" id="ikModusHand">Zelf invullen</button>
           </div>
 <div class="form-card" id="pdfBlok" style="display:none;margin-bottom:18px">
-          <div class="veld" id="pdfKeyVeld" style="display:none"><label>Anthropic API-sleutel (eenmalig)</label>
-            <input type="password" id="pdfKey" placeholder="sk-ant-...">
-            <div class="hint">Nodig om PDF's te laten uitlezen. Wordt in je database bewaard, achter je login. Aanmaken kan op console.anthropic.com.</div>
-            <button class="knop klein stil" id="pdfKeyOpslaan" style="margin-top:10px">Sleutel opslaan</button>
-          </div>
           <div class="veld"><label>Inkoopfactuur (PDF of foto)</label>
             <input type="file" id="pdfBestand" accept="application/pdf,image/jpeg,image/png"></div>
           <div class="veld" style="max-width:260px"><label>Standaard marge % (nieuwe producten)</label>
@@ -2512,26 +2507,11 @@ function ikModus(pdf){
   $("ikModusHand").classList.toggle("aan", !pdf);
   $("pdfBlok").style.display = pdf ? "block" : "none";
   $("ikHandBlok").style.display = pdf ? "none" : "block";
-  if (pdf){
-    $("pdfKeyVeld").style.display = (cache.inst.anthropic_api_key || "").trim() ? "none" : "block";
-    if (!$("stdMarge").value) $("stdMarge").value = cache.inst.standaard_marge_pct || 30;
-  }
+  if (pdf && !$("stdMarge").value) $("stdMarge").value = cache.inst.standaard_marge_pct || 30;
 }
 $("ikModusPdf").addEventListener("click", () => ikModus(true));
 $("ikModusHand").addEventListener("click", () => ikModus(false));
 $("pdfSluit").addEventListener("click", () => ikModus(false));
-
-$("pdfKeyOpslaan").addEventListener("click", async () => {
-  const key = $("pdfKey").value.trim();
-  if (!key) { toast("Plak eerst je sleutel"); return; }
-  const { error } = await db.from("instellingen").upsert(
-    { sleutel: "anthropic_api_key", waarde: key }, { onConflict: "sleutel" });
-  if (error){ console.error(error); toast("Opslaan mislukt"); return; }
-  cache.inst.anthropic_api_key = key;
-  $("pdfKey").value = "";
-  $("pdfKeyVeld").style.display = "none";
-  toast("Sleutel opgeslagen");
-});
 
 function bestandNaarBase64(file){
   return new Promise((res, rej) => {
@@ -2543,8 +2523,10 @@ function bestandNaarBase64(file){
 }
 
 $("pdfLees").addEventListener("click", async () => {
-  const key = (cache.inst.anthropic_api_key || "").trim();
-  if (!key){ $("pdfKeyVeld").style.display = "block"; toast("Vul eerst je API-sleutel in"); return; }
+  /* De API-sleutel woont op de server, in de edge function. Hier gaat alleen
+     je eigen login mee, zodat de functie weet dat jij het bent. */
+  const { data: { session } } = await db.auth.getSession();
+  if (!session){ toast("Je sessie is verlopen — log opnieuw in"); return; }
   const file = $("pdfBestand").files[0];
   if (!file){ toast("Kies eerst een bestand"); return; }
   const status = $("pdfStatus");
@@ -2557,13 +2539,11 @@ $("pdfLees").addEventListener("click", async () => {
     const blok = isPdf
       ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }
       : { type: "image", source: { type: "base64", media_type: file.type, data: b64 } };
-    const antwoord = await fetch("https://api.anthropic.com/v1/messages", {
+    const antwoord = await fetch(SUPABASE_URL + "/functions/v1/anthropic-proxy", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
+        "authorization": "Bearer " + session.access_token
       },
       body: JSON.stringify({
         model: "claude-opus-5",
