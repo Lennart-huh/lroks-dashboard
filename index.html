@@ -1549,9 +1549,28 @@ $("kOpslaan").addEventListener("click", async () => {
     ({ error: fout } = await db.from("km_registratie").update(rij).eq("id", bewerkKmId));
   } else {
     ({ error: fout } = await db.from("km_registratie").insert(rij));
+    /* 23505 = de database laat maar één stand per datum toe. Dan terugvallen op
+       het oude gedrag: de bestaande stand van die dag bijwerken. */
+    if (fout && fout.code === "23505"){
+      const bestaand = kmData.find(k => k.datum === datum);
+      if (bestaand && confirm("Je database laat maar één stand per dag toe en er staat al een " +
+        "stand voor " + fmtDatum(datum) + " (" + bestaand.km_stand.toLocaleString("nl-NL") +
+        "). Die overschrijven met " + stand.toLocaleString("nl-NL") + "?")){
+        ({ error: fout } = await db.from("km_registratie").update(rij).eq("id", bestaand.id));
+      } else if (!bestaand){
+        fout = { message: "er staat al een stand op deze datum" };
+      } else {
+        $("kOpslaan").disabled = false;
+        return;
+      }
+    }
   }
   $("kOpslaan").disabled = false;
-  if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
+  if (fout) {
+    console.error(fout);
+    toast("Opslaan mislukt: " + (fout.message || fout.code || "onbekende fout"));
+    return;
+  }
   toast(bewerkKmId ? "KM-regel gewijzigd" : "KM-stand opgeslagen");
   stopKmBewerken();
   await herlaadKm();
