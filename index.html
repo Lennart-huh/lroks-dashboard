@@ -570,8 +570,34 @@ nav.onderbalk{display:none}
       </div>
 
       <!-- ========== PLACEHOLDERS ========== -->
-      <div class="tab" id="tab-omzet"><h2>Omzet / winst</h2>
-        <div class="straks"><span class="fase">FASE 5</span><p>Hier komen je omzet en winst: winst uit uren en winst uit de marge op je spullen, bij elkaar opgeteld. Met doelen die je zelf kunt aanpassen.</p></div>
+      <div class="tab" id="tab-omzet">
+        <div class="tab-kop"><h2>Omzet / winst</h2>
+          <select id="owJaar" style="width:auto;padding:8px 12px"></select>
+        </div>
+        <div class="grid4">
+          <div class="card"><div class="k">Omzet</div><div class="v" id="owOmzet">—</div><div class="m" id="owOmzetSub">excl. btw</div></div>
+          <div class="card"><div class="k">Kosten</div><div class="v" id="owKosten">—</div><div class="m" id="owKostenSub">excl. btw</div></div>
+          <div class="card groen"><div class="k">Winst</div><div class="v" id="owWinst">—</div><div class="m" id="owWinstSub"></div></div>
+          <div class="card"><div class="k">Winstdoel</div><div class="v" id="owDoel">—</div><div class="m" id="owDoelSub">nog niet ingesteld</div></div>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:20px">
+          <table>
+            <thead><tr><th>Periode</th><th class="r">Omzet</th><th class="r">Kosten</th><th class="r">Winst</th><th class="r">Marge</th></tr></thead>
+            <tbody id="owKwartaalBody"></tbody>
+          </table>
+        </div>
+        <h3 style="font-size:.95rem;margin:0 0 10px">Waar je winst vandaan komt</h3>
+        <div class="tbl-wrap" style="margin-bottom:20px">
+          <table>
+            <thead><tr><th>Bron</th><th class="r">Omzet</th><th class="r">Kostprijs</th><th class="r">Winst</th><th class="r">Marge</th></tr></thead>
+            <tbody id="owBronBody"></tbody>
+          </table>
+        </div>
+        <div class="form-card">
+          <div class="veld"><label>Omzetdoel per jaar (€)</label><input type="number" id="owDoelOmzet" min="0" step="100" inputmode="decimal" placeholder="bv. 80000"></div>
+          <div class="veld"><label>Winstdoel per jaar (€)</label><input type="number" id="owDoelWinst" min="0" step="100" inputmode="decimal" placeholder="bv. 45000"></div>
+          <button class="knop" id="owDoelenOpslaan">Doelen opslaan</button>
+        </div>
       </div>
       <div class="tab" id="tab-facturen">
         <h2>Facturen</h2>
@@ -833,11 +859,47 @@ nav.onderbalk{display:none}
           <div class="hint" style="margin-top:14px">Dit register is voor je verzekering en je keuringen. Fiscaal telt gereedschap onder €450 gewoon als kosten — dat loopt via je inkoopfactuur, niet via deze lijst.</div>
         </div>
       </div>
-      <div class="tab" id="tab-belasting"><h2>Belasting</h2>
-        <div class="straks"><span class="fase">FASE 5</span><p>Tabellen met je winst en een schatting van de belasting daarover, per kwartaal en per jaar — met percentages die je zelf kunt aanpassen. En: wat je onderaan de streep naar privé overhoudt.</p></div>
+      <div class="tab" id="tab-belasting">
+        <div class="tab-kop"><h2>Belasting</h2>
+          <select id="bwJaar" style="width:auto;padding:8px 12px"></select>
+        </div>
+        <div class="grid4">
+          <div class="card"><div class="k">Winst</div><div class="v" id="bwWinst">—</div><div class="m">excl. btw</div></div>
+          <div class="card amber"><div class="k">Belasting</div><div class="v" id="bwBelasting">—</div><div class="m" id="bwPctSub">schatting</div></div>
+          <div class="card groen"><div class="k">Naar privé</div><div class="v" id="bwNetto">—</div><div class="m">na belasting</div></div>
+          <div class="card"><div class="k">Opzij zetten</div><div class="v" id="bwOpzij">—</div><div class="m">per maand</div></div>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:20px">
+          <table>
+            <thead><tr><th>Periode</th><th class="r">Winst</th><th class="r">Belasting</th><th class="r">Naar privé</th></tr></thead>
+            <tbody id="bwKwartaalBody"></tbody>
+          </table>
+        </div>
+        <div class="form-card">
+          <div class="veld"><label>Belastingpercentage over je winst (%)</label>
+            <input type="number" id="bwPct" min="0" max="100" step="0.5" inputmode="decimal">
+            <div class="hint">Een grove schatting van inkomstenbelasting plus premies. Aftrekposten zoals de zelfstandigenaftrek en de MKB-winstvrijstelling zitten hier niet in — vraag je boekhouder om een percentage dat bij jou past.</div>
+          </div>
+          <button class="knop" id="bwOpslaan">Percentage opslaan</button>
+        </div>
       </div>
-      <div class="tab" id="tab-btw"><h2>BTW</h2>
-        <div class="straks"><span class="fase">FASE 5</span><p>BTW berekend uit je inkomende en uitgaande facturen, in een net overzicht per kwartaal. Met bank-import via CSV om betalingen te koppelen.</p></div>
+      <div class="tab" id="tab-btw">
+        <div class="tab-kop"><h2>BTW</h2>
+          <select id="btJaar" style="width:auto;padding:8px 12px"></select>
+        </div>
+        <div class="grid4">
+          <div class="card"><div class="k">Btw ontvangen</div><div class="v" id="btOnt">—</div><div class="m">uitgaande facturen</div></div>
+          <div class="card"><div class="k">Voorbelasting</div><div class="v" id="btVoor">—</div><div class="m">inkomende facturen</div></div>
+          <div class="card amber"><div class="k">Saldo dit jaar</div><div class="v" id="btSaldo">—</div><div class="m" id="btSaldoSub"></div></div>
+          <div class="card"><div class="k">Lopend kwartaal</div><div class="v" id="btKwartaal">—</div><div class="m" id="btKwartaalSub"></div></div>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:20px">
+          <table>
+            <thead><tr><th>Periode</th><th class="r">Btw uitgaand</th><th class="r">Voorbelasting</th><th class="r">Af te dragen</th><th></th></tr></thead>
+            <tbody id="btKwartaalBody"></tbody>
+          </table>
+        </div>
+        <div class="straks"><p>Dit rekent met de datum van je facturen, niet met wanneer er betaald is. Een bankkoppeling om betalingen automatisch te koppelen komt later.</p></div>
       </div>
     </main>
   </div>
@@ -1164,7 +1226,7 @@ $("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut();
 async function laadAlles(){
   const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw] = await Promise.all([
+    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm] = await Promise.all([
       db.from("klanten").select("*").order("naam"),
       db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
       db.from("categorieen").select("*").order("volgorde"),
@@ -1174,7 +1236,9 @@ async function laadAlles(){
       db.from("km_registratie").select("*").order("datum", { ascending:true }),
       db.from("facturen").select("*").order("datum", { ascending:false }).limit(500),
       db.from("product_prijzen").select("*").order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false }),
-      db.from("gereedschap").select("*").order("naam")
+      db.from("gereedschap").select("*").order("naam"),
+      db.from("factuur_regels").select("*"),
+      db.from("voorraad_mutaties").select("*")
     ]);
     const eerste = [kl,pr,cat,prod,inst,ur,km,ft,pp].find(r => r.error);
     if (eerste) throw eerste.error;
@@ -1190,6 +1254,8 @@ async function laadAlles(){
     factData = ft.data || [];
     cache.prijzen = pp.data || [];
     gwData = gw.data || [];
+    cache.regels = fr.data || [];
+    cache.mutaties = vm.data || [];
 
     vulSelects();
     vulVoorraadSelects();
@@ -1204,6 +1270,7 @@ async function laadAlles(){
     renderFacturen();
     vulBedrijf();
     renderHoofd();
+    renderFinancieel();
     checkHerinnering();
 
     dbStatus.textContent = "Database verbonden";
@@ -3086,11 +3153,17 @@ async function maakFactuurAan(){
 }
 
 async function herlaadFacturen(){
-  const { data } = await db.from("facturen").select("*")
-    .order("datum", { ascending:false }).limit(500);
+  const [{ data }, fr, vm] = await Promise.all([
+    db.from("facturen").select("*").order("datum", { ascending:false }).limit(500),
+    db.from("factuur_regels").select("*"),
+    db.from("voorraad_mutaties").select("*")
+  ]);
   factData = data || [];
+  cache.regels = fr.data || [];
+  cache.mutaties = vm.data || [];
   renderFacturen();
   renderHoofd();
+  renderFinancieel();
   const levs = [...new Set(factData.filter(f => f.type === "inkoop" && f.leverancier)
     .map(f => f.leverancier))].sort();
   $("ikLevLijst").innerHTML = levs.map(l => '<option value="' + esc(l) + '">').join("");
@@ -3208,6 +3281,191 @@ $("fdiVerwijder").addEventListener("click", async () => {
   bekijkInkoopId = null;
   toast("Inkoopfactuur verwijderd");
   await herlaadFacturen();
+});
+
+/* =====================================================
+   OMZET / WINST, BELASTING, BTW
+   ===================================================== */
+const KWARTAAL_NAMEN = ["K1 · jan-mrt", "K2 · apr-jun", "K3 · jul-sep", "K4 · okt-dec"];
+const kwartaalVan = d => Math.floor(new Date(d).getMonth() / 3);
+const somArr = a => a.reduce((s, n) => s + n, 0);
+
+function financieleJaren(){
+  const jaren = new Set(factData.map(f => new Date(f.datum).getFullYear()));
+  jaren.add(new Date().getFullYear());
+  return [...jaren].sort((a, b) => b - a);
+}
+function vulJaarKeuze(id){
+  const sel = $(id);
+  const huidig = sel.value;
+  sel.innerHTML = financieleJaren().map(j => '<option value="' + j + '">' + j + '</option>').join("");
+  sel.value = ([...sel.options].some(o => o.value === huidig)) ? huidig : String(new Date().getFullYear());
+  return Number(sel.value);
+}
+
+/* Omzet, kosten en btw per kwartaal. Een investering wordt over haar
+   afschrijfjaren uitgesmeerd — de btw erop telt wél in het kwartaal
+   van aanschaf, want die vraag je in één keer terug. */
+function financieelJaar(jaar){
+  const omzet = [0,0,0,0], kosten = [0,0,0,0], btwUit = [0,0,0,0], btwIn = [0,0,0,0];
+  factData.forEach(f => {
+    const fJaar = new Date(f.datum).getFullYear();
+    const k = kwartaalVan(f.datum);
+    const excl = Number(f.bedrag_excl || 0), btw = Number(f.btw_bedrag || 0);
+    if (f.type === "verkoop"){
+      if (fJaar !== jaar) return;
+      omzet[k] += excl;
+      btwUit[k] += btw;
+    } else if (f.type === "inkoop"){
+      if (fJaar === jaar) btwIn[k] += btw;
+      const jr = Number(f.afschrijf_jaren || 0);
+      if (f.is_investering && jr > 0){
+        if (jaar >= fJaar && jaar < fJaar + jr){
+          const perKwartaal = excl / jr / 4;
+          for (let i = 0; i < 4; i++) kosten[i] += perKwartaal;
+        }
+      } else if (fJaar === jaar){
+        kosten[k] += excl;
+      }
+    }
+  });
+  return { omzet, kosten, btwUit, btwIn };
+}
+
+/* Uitsplitsing van je gefactureerde regels naar waar de winst vandaan komt */
+function winstBronnen(jaar){
+  const facturen = new Set(factData
+    .filter(f => f.type === "verkoop" && new Date(f.datum).getFullYear() === jaar)
+    .map(f => f.id));
+  const bron = {
+    uren:      { naam: "Uren",           omzet: 0, kost: 0 },
+    materiaal: { naam: "Materiaal",      omzet: 0, kost: 0 },
+    km:        { naam: "Kilometers",     omzet: 0, kost: 0 },
+    overig:    { naam: "Overige regels", omzet: 0, kost: 0 }
+  };
+  (cache.regels || []).filter(r => facturen.has(r.factuur_id)).forEach(r => {
+    const bedrag = Number(r.aantal || 0) * Number(r.prijs || 0);
+    if (r.uren_id) bron.uren.omzet += bedrag;
+    else if (r.km_id) bron.km.omzet += bedrag;
+    else if (r.mutatie_id){
+      bron.materiaal.omzet += bedrag;
+      const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
+      const p = m && cache.producten.find(x => x.id === m.product_id);
+      if (p) bron.materiaal.kost += Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0);
+    }
+    else bron.overig.omzet += bedrag;
+  });
+  return bron;
+}
+
+function renderOmzet(){
+  const jaar = vulJaarKeuze("owJaar");
+  const f = financieelJaar(jaar);
+  const omzetJ = somArr(f.omzet), kostenJ = somArr(f.kosten), winstJ = omzetJ - kostenJ;
+  const doelOmzet = Number(cache.inst.doel_omzet || 0), doelWinst = Number(cache.inst.doel_winst || 0);
+
+  $("owOmzet").textContent = eur(omzetJ);
+  $("owKosten").textContent = eur(kostenJ);
+  $("owWinst").textContent = eur(winstJ);
+  $("owWinstSub").textContent = omzetJ > 0 ? Math.round(winstJ / omzetJ * 100) + "% van je omzet" : "";
+  $("owOmzetSub").textContent = doelOmzet > 0
+    ? Math.round(omzetJ / doelOmzet * 100) + "% van je omzetdoel" : "excl. btw";
+  if (doelWinst > 0){
+    $("owDoel").textContent = Math.round(winstJ / doelWinst * 100) + "%";
+    $("owDoelSub").textContent = eur(winstJ) + " van " + eur(doelWinst);
+  } else {
+    $("owDoel").textContent = "—";
+    $("owDoelSub").textContent = "nog niet ingesteld";
+  }
+  if (document.activeElement !== $("owDoelOmzet")) $("owDoelOmzet").value = doelOmzet || "";
+  if (document.activeElement !== $("owDoelWinst")) $("owDoelWinst").value = doelWinst || "";
+
+  const rij = (naam, o, k, extra) => {
+    const w = o - k;
+    return '<tr' + (extra || '') + '><td>' + naam + '</td>' +
+      '<td class="r">' + eur2(o) + '</td><td class="r">' + eur2(k) + '</td>' +
+      '<td class="r">' + eur2(w) + '</td>' +
+      '<td class="r">' + (o > 0 ? Math.round(w / o * 100) + "%" : "—") + '</td></tr>';
+  };
+  $("owKwartaalBody").innerHTML =
+    KWARTAAL_NAMEN.map((n, i) => rij(n, f.omzet[i], f.kosten[i])).join("") +
+    rij("<b>Heel " + jaar + "</b>", omzetJ, kostenJ, ' style="border-top:2px solid var(--line)"');
+
+  const rijen = Object.values(winstBronnen(jaar)).filter(b => b.omzet || b.kost);
+  $("owBronBody").innerHTML = rijen.length
+    ? rijen.map(b => rij(b.naam, b.omzet, b.kost)).join("")
+    : '<tr><td colspan="5" class="leeg">Nog geen gefactureerde regels in ' + jaar + '.</td></tr>';
+}
+
+function renderBelasting(){
+  const jaar = vulJaarKeuze("bwJaar");
+  const f = financieelJaar(jaar);
+  const pct = Number(cache.inst.belasting_percentage || 35);
+  if (document.activeElement !== $("bwPct")) $("bwPct").value = pct;
+  const bel = w => Math.max(0, w) * pct / 100;
+  const winstJ = somArr(f.omzet) - somArr(f.kosten);
+
+  $("bwWinst").textContent = eur(winstJ);
+  $("bwBelasting").textContent = eur(bel(winstJ));
+  $("bwPctSub").textContent = pct + "% van je winst";
+  $("bwNetto").textContent = eur(winstJ - bel(winstJ));
+  $("bwOpzij").textContent = eur(bel(winstJ) / 12);
+
+  const rij = (naam, w, extra) =>
+    '<tr' + (extra || '') + '><td>' + naam + '</td><td class="r">' + eur2(w) + '</td>' +
+    '<td class="r">' + eur2(bel(w)) + '</td><td class="r">' + eur2(w - bel(w)) + '</td></tr>';
+  $("bwKwartaalBody").innerHTML =
+    KWARTAAL_NAMEN.map((n, i) => rij(n, f.omzet[i] - f.kosten[i])).join("") +
+    rij("<b>Heel " + jaar + "</b>", winstJ, ' style="border-top:2px solid var(--line)"');
+}
+
+function renderBtw(){
+  const jaar = vulJaarKeuze("btJaar");
+  const f = financieelJaar(jaar);
+  const uitJ = somArr(f.btwUit), inJ = somArr(f.btwIn);
+  const nu = new Date(), kNu = kwartaalVan(nu), ditJaar = jaar === nu.getFullYear();
+
+  $("btOnt").textContent = eur2(uitJ);
+  $("btVoor").textContent = eur2(inJ);
+  $("btSaldo").textContent = eur2(Math.abs(uitJ - inJ));
+  $("btSaldoSub").textContent = (uitJ - inJ) >= 0 ? "af te dragen" : "terug te vragen";
+  $("btKwartaal").textContent = ditJaar ? eur2(f.btwUit[kNu] - f.btwIn[kNu]) : "—";
+  $("btKwartaalSub").textContent = ditJaar ? "K" + (kNu + 1) + " " + jaar : jaar + " is afgerond";
+
+  const rij = (naam, u, v, chip, extra) =>
+    '<tr' + (extra || '') + '><td>' + naam + '</td><td class="r">' + eur2(u) + '</td>' +
+    '<td class="r">' + eur2(v) + '</td><td class="r">' + eur2(u - v) + '</td>' +
+    '<td class="r">' + (chip || '') + '</td></tr>';
+  $("btKwartaalBody").innerHTML =
+    KWARTAAL_NAMEN.map((n, i) => {
+      const chip = ditJaar && i === kNu ? '<span class="chip amber">LOOPT</span>'
+        : (jaar < nu.getFullYear() || (ditJaar && i < kNu)) ? '<span class="chip grijs">AFGEROND</span>' : '';
+      return rij(n, f.btwUit[i], f.btwIn[i], chip);
+    }).join("") +
+    rij("<b>Heel " + jaar + "</b>", uitJ, inJ, '', ' style="border-top:2px solid var(--line)"');
+}
+
+function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); }
+["owJaar","bwJaar","btJaar"].forEach(id => $(id).addEventListener("change", renderFinancieel));
+
+async function bewaarInstellingen(rows, knopId, melding, na){
+  $(knopId).disabled = true;
+  const { error } = await db.from("instellingen").upsert(rows, { onConflict: "sleutel" });
+  $(knopId).disabled = false;
+  if (error){ console.error(error); toast("Opslaan mislukt: " + (error.message || "onbekende fout")); return; }
+  rows.forEach(r => cache.inst[r.sleutel] = r.waarde);
+  toast(melding);
+  na();
+}
+$("owDoelenOpslaan").addEventListener("click", () => bewaarInstellingen([
+  { sleutel: "doel_omzet", waarde: String(parseFloat($("owDoelOmzet").value) || 0) },
+  { sleutel: "doel_winst", waarde: String(parseFloat($("owDoelWinst").value) || 0) }
+], "owDoelenOpslaan", "Doelen opgeslagen", renderOmzet));
+$("bwOpslaan").addEventListener("click", () => {
+  const pct = parseFloat($("bwPct").value);
+  if (!(pct >= 0 && pct <= 100)) { toast("Vul een percentage tussen 0 en 100 in"); return; }
+  bewaarInstellingen([{ sleutel: "belasting_percentage", waarde: String(pct) }],
+    "bwOpslaan", "Percentage opgeslagen", renderBelasting);
 });
 
 /* ---- bedrijfsgegevens ---- */
