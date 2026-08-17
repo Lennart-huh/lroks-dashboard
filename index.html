@@ -723,10 +723,21 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Categorie</label><select id="vCategorie"></select></div>
           </div>
           <div class="rij2">
-            <div class="veld"><label>Inkoopprijs (excl.)</label><input type="number" id="vInkoop" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld"><label>Inkoopprijs per eenheid (excl.)</label><input type="number" id="vInkoop" step="0.0001" min="0" inputmode="decimal"></div>
             <div class="veld"><label>Marge %</label><input type="number" id="vMarge" step="1" inputmode="decimal" placeholder="bv. 30"></div>
           </div>
-          <div class="veld"><label>Verkoopprijs (excl.)</label><input type="number" id="vVerkoop" step="0.01" min="0" inputmode="decimal">
+          <div class="veld" style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:13px">
+            <label>Rekenhulp — kocht je per rol of doos?</label>
+            <div class="rij2">
+              <div class="veld" style="margin-bottom:0"><label>Prijs hele verpakking (€)</label>
+                <input type="number" id="vVerpPrijs" step="0.01" min="0" inputmode="decimal" placeholder="bv. 39,37"></div>
+              <div class="veld" style="margin-bottom:0"><label>Aantal in de verpakking</label>
+                <input type="number" id="vVerpAantal" step="1" min="1" inputmode="decimal" placeholder="bv. 100"></div>
+            </div>
+            <div class="hint" id="vVerpHint" style="margin-top:8px">Vul in wat je voor de hele rol of doos betaalde en hoeveel erin zit — dan zet ik de prijs per eenheid hierboven.</div>
+            <button type="button" class="knop klein stil" id="vVerpReken" style="margin-top:8px">Prijs per eenheid overnemen</button>
+          </div>
+          <div class="veld"><label>Verkoopprijs per eenheid (excl.)</label><input type="number" id="vVerkoop" step="0.0001" min="0" inputmode="decimal">
             <div class="hint">Marge % ingevuld? Dan rekent de app de verkoopprijs zelf uit — ook als de inkoopprijs later verandert. Leeg laten = verkoopprijs zelf bepalen.</div>
           </div>
           <div class="veld"><label>Soort product</label>
@@ -933,6 +944,14 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 const eur = n => "€ " + Math.round(n).toLocaleString("nl-NL");
 const eur2 = n => "€ " + Number(n).toLocaleString("nl-NL", {minimumFractionDigits:2, maximumFractionDigits:2});
+/* stukprijzen onder een euro (draad per meter, kleingoed) met vier decimalen,
+   anders lees je € 0,39 waar € 0,3937 staat */
+const eurP = n => {
+  const v = Number(n) || 0;
+  return (v > 0 && v < 1)
+    ? "€ " + v.toLocaleString("nl-NL", {minimumFractionDigits:4, maximumFractionDigits:4})
+    : eur2(v);
+};
 const MAANDEN = ["JAN","FEB","MRT","APR","MEI","JUN","JUL","AUG","SEP","OKT","NOV","DEC"];
 const esc = t => String(t ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 function vandaagISO(){
@@ -2167,10 +2186,35 @@ $("vNieuw").addEventListener("click", () => {
   $("vVoorraadVeld").style.display = "block";
   $("vPrijzenBlok").style.display = "none";
   $("vVerwijder").style.display = "none";
+  $("vVerpPrijs").value = ""; $("vVerpAantal").value = ""; bijwerkVerpHint();
   $("vForm").style.display = "block";
   $("vNaam").focus();
 });
 $("vAnnuleer").addEventListener("click", () => { $("vForm").style.display = "none"; });
+
+/* ---- rekenhulp: verpakkingsprijs naar prijs per eenheid ---- */
+const r4 = n => Math.round(n * 10000) / 10000;
+function verpakkingPerEenheid(){
+  const prijs = parseFloat($("vVerpPrijs").value);
+  const aantal = parseFloat($("vVerpAantal").value);
+  return (prijs > 0 && aantal > 0) ? r4(prijs / aantal) : null;
+}
+function bijwerkVerpHint(){
+  const per = verpakkingPerEenheid();
+  const eenheid = $("vEenheid").value.trim() || "stuk";
+  $("vVerpHint").textContent = per === null
+    ? "Vul in wat je voor de hele rol of doos betaalde en hoeveel erin zit — dan zet ik de prijs per eenheid hierboven."
+    : "Dat is € " + per.toLocaleString("nl-NL", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) + " per " + eenheid + ".";
+}
+["vVerpPrijs","vVerpAantal","vEenheid"].forEach(id => $(id).addEventListener("input", bijwerkVerpHint));
+$("vVerpReken").addEventListener("click", () => {
+  const per = verpakkingPerEenheid();
+  if (per === null){ toast("Vul eerst de verpakkingsprijs en het aantal in"); return; }
+  $("vInkoop").value = per;
+  $("vVerpPrijs").value = ""; $("vVerpAantal").value = "";
+  bijwerkVerpHint();
+  toast("Prijs per eenheid overgenomen");
+});
 
 $("vOpslaan").addEventListener("click", async () => {
   const naam = $("vNaam").value.trim();
@@ -2182,7 +2226,7 @@ $("vOpslaan").addEventListener("click", async () => {
     categorie_id: $("vCategorie").value || null,
     inkoopprijs: inkoopV,
     marge_pct: isNaN(margeV) ? null : margeV,
-    verkoopprijs: isNaN(margeV) ? (parseFloat($("vVerkoop").value) || 0) : r2(inkoopV * (1 + margeV / 100)),
+    verkoopprijs: isNaN(margeV) ? (parseFloat($("vVerkoop").value) || 0) : r4(inkoopV * (1 + margeV / 100)),
     op_voorraad: prodOpVoorraad,
     voorraad: prodOpVoorraad ? (parseFloat($("vVoorraad").value) || 0) : 0,
     eenheid: $("vEenheid").value.trim() || "stuks",
@@ -2239,10 +2283,10 @@ function renderVoorraad(){
       '<td class="tekst">' + esc(p.naam) + '</td>' +
       '<td class="tekst">' + esc(catNaam(p.categorie_id) || "—") + '</td>' +
       '<td class="r">' + (p.op_voorraad === false ? '<span class="chip grijs">DOORLOOP</span>' : Number(p.voorraad).toLocaleString("nl-NL") + ' ' + esc(p.eenheid || "")) + '</td>' +
-      '<td class="r">' + eur2(p.inkoopprijs || 0) + '</td>' +
-      '<td class="r">' + eur2(p.verkoopprijs || 0) + '</td>' +
-      '<td class="r" style="color:' + (marge > 0 ? "var(--groen)" : "var(--ink3)") + '">' + eur2(marge) + '</td>' +
-      '<td class="tekst">' + (g ? esc(g.leverancier) + ' · ' + eur2(g.prijs) : "—") + '</td>' +
+      '<td class="r">' + eurP(p.inkoopprijs || 0) + '</td>' +
+      '<td class="r">' + eurP(p.verkoopprijs || 0) + '</td>' +
+      '<td class="r" style="color:' + (marge > 0 ? "var(--groen)" : "var(--ink3)") + '">' + eurP(marge) + '</td>' +
+      '<td class="tekst">' + (g ? esc(g.leverancier) + ' · ' + eurP(g.prijs) : "—") + '</td>' +
     '</tr>';
   }).join("");
 
@@ -2271,6 +2315,7 @@ function renderVoorraad(){
     $("vVerwijder").style.display = "inline-block";
     $("vPrijzenBlok").style.display = "block";
     renderVPrijzen(p.id);
+    $("vVerpPrijs").value = ""; $("vVerpAantal").value = ""; bijwerkVerpHint();
     $("vForm").style.display = "block";
     window.scrollTo(0, 0);
   }));
