@@ -13,6 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root{
   --bg:#F4F5F3; --surface:#FFFFFF; --surface2:#EDEFEC;
@@ -151,33 +153,6 @@ tbody tr.klik:hover td{background:var(--surface2)}
 .fpanel.actief{display:block}
 .vpanel{display:none}
 .vpanel.actief{display:block}
-
-/* ---------- printbare factuur ---------- */
-#printvel{display:none}
-@page{margin:0}
-@media print{
-  #app,#loginScherm,#toast{display:none!important}
-  body{background:#fff}
-  #printvel{display:block;color:#000;font-family:'Archivo',sans-serif;padding:12mm 10mm;font-size:12px}
-  #printvel .pkop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px}
-  #printvel .plogo{height:100px;width:auto;display:block}
-  #printvel .pnaam{font-size:18px;font-weight:700;letter-spacing:.04em}
-  #printvel .pklein{font-size:10.5px;color:#333;line-height:1.5;margin-top:4px}
-  #printvel h1{font-size:15px;letter-spacing:.12em;margin:18px 0 14px}
-  #printvel .pinfo{display:flex;justify-content:space-between;margin-bottom:18px;line-height:1.5}
-  #printvel .ptab{width:100%;border-collapse:collapse;margin-bottom:14px}
-  #printvel .ptab th{text-align:left;border-bottom:1.5px solid #000;padding:6px;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
-  #printvel .ptab td{border-bottom:1px solid #ccc;padding:7px 6px;font-family:'IBM Plex Mono',monospace;font-size:11px}
-  #printvel .ptab td:nth-child(2){font-family:'Archivo',sans-serif}
-  #printvel .pr{text-align:right}
-  #printvel .ptot{margin-left:auto;width:230px;line-height:1.9}
-  #printvel .ptot div{display:flex;justify-content:space-between}
-  #printvel .pgroot{font-size:14px;border-top:1.5px solid #000;padding-top:4px;margin-top:4px}
-  #printvel .pbetaal{display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px}
-  #printvel .pbetaal .pklein{max-width:340px;margin-top:0}
-  #printvel .pqr{width:88px;height:88px;flex:none}
-  #printvel .pqrbij{font-size:9px;color:#666;text-align:center;margin-top:3px}
-}
 
 /* ---------- mobiel ---------- */
 nav.onderbalk{display:none}
@@ -656,7 +631,7 @@ nav.onderbalk{display:none}
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <button class="knop klein" id="fdOpslaan">Opslaan</button>
-              <button class="knop klein stil" id="fdPrint">Bekijk / print</button>
+              <button class="knop klein stil" id="fdPrint">PDF downloaden</button>
               <button class="knop klein stil" id="fdAnnuleer">Sluiten</button>
               <button class="knop klein gevaar" id="fdVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
             </div>
@@ -957,8 +932,6 @@ nav.onderbalk{display:none}
 
   <div id="toast"></div>
 </div>
-
-<div id="printvel"></div>
 
 <script>
 /* =====================================================
@@ -3713,57 +3686,111 @@ $("bgOpslaan").addEventListener("click", async () => {
   toast("Bedrijfsgegevens opgeslagen");
 });
 
-/* ---- printen ---- */
-$("fdPrint").addEventListener("click", async () => {
+/* ---- PDF genereren ----
+   Een echt PDF-bestand (jsPDF + autoTable), geen window.print() meer: op
+   iPhone plakt Safari's AirPrint altijd een voettekst met de pagina-URL en
+   datum over een geprinte webpagina, en dat is met geen enkele CSS te
+   onderdrukken. Een losstaand PDF-bestand krijgt die voettekst niet, op
+   geen enkel toestel — dus die klus doen we nu zelf. */
+function genereerFactuurPdf(f, k, I, regels){
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+  const L = 15, R = 195;
+  let y = 18;
+
+  try {
+    const logoW = 22, logoH = logoW * 628 / 700;
+    doc.addImage(LOGO_DATA_URI, "PNG", L, y, logoW, logoH);
+  } catch (e) { console.error("Logo tekenen mislukt", e); }
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+  doc.text(I.bedrijf_naam || "LRoks Elektrotechniek", R, y + 3, { align: "right" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+  let ry = y + 9;
+  [
+    I.bedrijf_adres,
+    I.bedrijf_postcode_plaats,
+    [I.bedrijf_email, I.bedrijf_telefoon].filter(Boolean).join(" · "),
+    "KVK " + (I.bedrijf_kvk || "-"),
+    "BTW " + (I.bedrijf_btw || "-"),
+    "IBAN " + (I.bedrijf_iban || "-")
+  ].filter(Boolean).forEach(regel => { doc.text(regel, R, ry, { align: "right" }); ry += 4.5; });
+
+  y = Math.max(y + 30, ry) + 8;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+  doc.text("FACTUUR " + (f.nummer || ""), L, y);
+  y += 10;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold"); doc.text("Aan", L, y);
+  doc.setFont("helvetica", "normal");
+  let ky = y + 4.5;
+  [
+    k ? k.naam : "—",
+    k && k.adres ? k.adres : "",
+    k ? [k.postcode, k.plaats].filter(Boolean).join(" ") : ""
+  ].filter(Boolean).forEach(regel => { doc.text(regel, L, ky); ky += 4.5; });
+  doc.text("Factuurdatum: " + fmtDatum(f.datum), R, y, { align: "right" });
+  doc.text("Vervaldatum: " + (f.vervaldatum ? fmtDatum(f.vervaldatum) : "-"), R, y + 4.5, { align: "right" });
+
+  y = Math.max(ky, y + 9) + 6;
+  doc.autoTable({
+    startY: y,
+    margin: { left: L, right: 210 - R },
+    theme: "plain",
+    styles: { font: "helvetica", fontSize: 9, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: { bottom: 0.2 } },
+    headStyles: { fontStyle: "bold", fontSize: 8, textColor: 20, lineColor: [0, 0, 0], lineWidth: { bottom: 0.5 } },
+    columnStyles: {
+      0: { cellWidth: 20 }, 2: { cellWidth: 22, halign: "right" },
+      3: { cellWidth: 28, halign: "right" }, 4: { cellWidth: 26, halign: "right" }
+    },
+    head: [["Datum", "Omschrijving", "Aantal", "Prijs EX.", "Bedrag EX."]],
+    body: regels.map(r => [
+      r.datum ? fmtDatum(r.datum) : "—", r.omschrijving, fmtAantal(r),
+      fmtPrijsPerEenheid(r), eur2(Number(r.aantal) * Number(r.prijs))
+    ])
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+  if (y > 255) { doc.addPage(); y = 20; }
+  const totX = R - 60;
+  doc.setFontSize(9);
+  doc.text("Subtotaal ex. BTW", totX, y); doc.text(eur2(f.bedrag_excl || 0), R, y, { align: "right" });
+  y += 5;
+  doc.text("BTW " + btwPct() + "%", totX, y); doc.text(eur2(f.btw_bedrag || 0), R, y, { align: "right" });
+  y += 3;
+  doc.setLineWidth(0.4); doc.line(totX, y, R, y);
+  y += 4;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text("Totaal", totX, y); doc.text(eur2(f.bedrag_incl || 0), R, y, { align: "right" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+
+  y += 14;
+  if (y > 270) { doc.addPage(); y = 20; }
+  const betaalTekst = "Graag betalen voor de vervaldatum op " + (I.bedrijf_iban || "ons rekeningnummer") +
+    " onder vermelding van factuurnummer " + (f.nummer || "") + ".";
+  doc.text(doc.splitTextToSize(betaalTekst, fdQrDataUri ? 110 : 170), L, y);
+
+  if (fdQrDataUri){
+    try {
+      const qrSize = 28;
+      doc.addImage(fdQrDataUri, "PNG", R - qrSize, y - 4, qrSize, qrSize);
+      doc.setFontSize(7.5);
+      doc.text("Scan om te betalen", R - qrSize / 2, y - 4 + qrSize + 3, { align: "center" });
+    } catch (e) { console.error("QR tekenen mislukt", e); }
+  }
+
+  return doc;
+}
+
+$("fdPrint").addEventListener("click", () => {
   if (!bewerkFactuurId) return;
   const f = factData.find(x => x.id === bewerkFactuurId);
   if (!f) return;
   const k = cache.klanten.find(x => x.id === f.klant_id);
-  const I = cache.inst;
-  const regelsHtml = huidigeRegels.map(r =>
-    '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") + '</td>' +
-    '<td>' + esc(r.omschrijving) + '</td>' +
-    '<td class="pr">' + esc(fmtAantal(r)) + '</td>' +
-    '<td class="pr">' + esc(fmtPrijsPerEenheid(r)) + '</td>' +
-    '<td class="pr">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
-
-  // betaal-QR is een Rabo-betaalverzoek dat je zelf per factuur uploadt (zie fdQrBestand);
-  // fdQrDataUri is de actuele staat in het formulier (ook als je nog niet op Opslaan klikte)
-  const qrImg = fdQrDataUri
-    ? '<div><img class="pqr" src="' + fdQrDataUri + '"><div class="pqrbij">Scan om te betalen</div></div>'
-    : "";
-
-  $("printvel").innerHTML =
-    '<div class="pkop"><img class="plogo" src="' + LOGO_DATA_URI + '" alt="">' +
-    '<div style="text-align:right">' +
-    '<div class="pnaam">' + esc(I.bedrijf_naam || "LRoks Elektrotechniek") + '</div>' +
-    '<div class="pklein">' + esc(I.bedrijf_adres || "") + '<br>' + esc(I.bedrijf_postcode_plaats || "") + '<br>' +
-    [I.bedrijf_email, I.bedrijf_telefoon].filter(Boolean).map(esc).join(" · ") +
-    '<br>KVK ' + esc(I.bedrijf_kvk || "-") +
-    '<br>BTW ' + esc(I.bedrijf_btw || "-") +
-    '<br>IBAN ' + esc(I.bedrijf_iban || "-") + '</div></div></div>' +
-    '<h1>FACTUUR ' + esc(f.nummer || "") + '</h1>' +
-    '<div class="pinfo"><div><b>Aan</b><br>' + esc(k ? k.naam : "—") + '<br>' +
-    esc(k && k.adres ? k.adres : "") + '<br>' +
-    esc(k ? [k.postcode, k.plaats].filter(Boolean).join(" ") : "") + '</div>' +
-    '<div style="text-align:right">Factuurdatum: ' + fmtDatum(f.datum) +
-    '<br>Vervaldatum: ' + (f.vervaldatum ? fmtDatum(f.vervaldatum) : "-") + '</div></div>' +
-    '<table class="ptab"><thead><tr><th>Datum</th><th>Omschrijving</th><th class="pr">Aantal</th><th class="pr">Prijs EX.</th><th class="pr">Bedrag EX.</th></tr></thead>' +
-    '<tbody>' + regelsHtml + '</tbody></table>' +
-    '<div class="ptot"><div>Subtotaal ex. BTW <b>' + eur2(f.bedrag_excl || 0) + '</b></div>' +
-    '<div>BTW ' + btwPct() + '% <b>' + eur2(f.btw_bedrag || 0) + '</b></div>' +
-    '<div class="pgroot">Totaal <b>' + eur2(f.bedrag_incl || 0) + '</b></div></div>' +
-    '<div class="pbetaal"><p class="pklein">Graag betalen voor de vervaldatum op ' + esc(I.bedrijf_iban || "ons rekeningnummer") +
-    ' onder vermelding van factuurnummer ' + esc(f.nummer || "") + '.</p>' + qrImg + '</div>';
-
-  // logo en QR-code zijn data-URI's die de browser nog moet decoderen; zonder
-  // hierop te wachten wordt window.print() soms al aangeroepen terwijl de
-  // afbeeldingen nog leeg zijn, dan komen ze blanco op de factuur te staan
-  const printImgs = Array.from($("printvel").querySelectorAll("img"));
-  await Promise.all(printImgs.map(img =>
-    img.decode ? img.decode().catch(() => {}) : new Promise(res => { img.onload = img.onerror = res; })));
-
-  window.print();
+  try {
+    const doc = genereerFactuurPdf(f, k, cache.inst, huidigeRegels);
+    doc.save("Factuur-" + (f.nummer || "concept") + ".pdf");
+  } catch (e) { console.error(e); toast("PDF maken mislukt"); }
 });
 
 /* elke minuut checken of de halfvijf-herinnering moet verschijnen */
