@@ -1893,10 +1893,24 @@ $("pOpslaan").addEventListener("click", async () => {
       }
     }
   } else {
-    ({ error: fout } = await db.from("voorraad_mutaties").insert({
-      product_id: productId, aantal: -aantal, type: "gebruik",
-      project_id: projectId, datum
-    }));
+    // staat dit product al als (nog niet gefactureerde) regel bij dit project? dan optellen
+    // in plaats van een nieuwe regel, zodat je niet hetzelfde product meerdere keren in de lijst krijgt
+    const { data: bestaandLijst, error: eZoek } = await db.from("voorraad_mutaties")
+      .select("id, aantal").eq("project_id", projectId).eq("product_id", productId)
+      .eq("type", "gebruik").eq("gefactureerd", false)
+      .order("aangemaakt_op", { ascending: true }).limit(1);
+    const bestaand = bestaandLijst && bestaandLijst[0];
+    if (eZoek) fout = eZoek;
+    else if (bestaand){
+      ({ error: fout } = await db.from("voorraad_mutaties").update({
+        aantal: Number(bestaand.aantal) - aantal, datum
+      }).eq("id", bestaand.id));
+    } else {
+      ({ error: fout } = await db.from("voorraad_mutaties").insert({
+        product_id: productId, aantal: -aantal, type: "gebruik",
+        project_id: projectId, datum
+      }));
+    }
     if (!fout){
       const prod = cache.producten.find(p => p.id === productId);
       if (prod && prod.op_voorraad !== false){
