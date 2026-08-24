@@ -3699,10 +3699,10 @@ $("fdPrint").addEventListener("click", async () => {
     '<td class="pr">' + eur2(r.prijs) + '</td>' +
     '<td class="pr">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
 
-  // betaal-QR is een Rabo-betaalverzoek dat je zelf per factuur uploadt (zie fdQrBestand),
-  // niet automatisch gegenereerd — die staat er alleen op als je 'm hebt geüpload
-  const qrImg = f.betaal_qr
-    ? '<div><img class="pqr" src="' + f.betaal_qr + '"><div class="pqrbij">Scan om te betalen</div></div>'
+  // betaal-QR is een Rabo-betaalverzoek dat je zelf per factuur uploadt (zie fdQrBestand);
+  // fdQrDataUri is de actuele staat in het formulier (ook als je nog niet op Opslaan klikte)
+  const qrImg = fdQrDataUri
+    ? '<div><img class="pqr" src="' + fdQrDataUri + '"><div class="pqrbij">Scan om te betalen</div></div>'
     : "";
 
   $("printvel").innerHTML =
