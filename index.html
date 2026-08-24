@@ -767,6 +767,20 @@ nav.onderbalk{display:none}
             </div>
             <button class="knop klein stil" id="vpToevoegen">Prijs toevoegen</button>
           </div>
+          <div class="veld" id="vOnderdelenBlok" style="display:none"><label>Samengesteld uit</label>
+            <div class="tbl-wrap"><table>
+              <thead><tr><th>Onderdeel</th><th class="r">Aantal per eenheid</th><th></th></tr></thead>
+              <tbody id="vOnderdelenBody"></tbody>
+            </table></div>
+            <div class="rij2" style="margin-top:10px">
+              <div class="veld"><label>Onderdeel</label><select id="voOnderdeel"></select></div>
+              <div class="veld"><label>Aantal per eenheid</label><input type="number" id="voFactor" step="0.01" min="0" value="1" inputmode="decimal"></div>
+            </div>
+            <button type="button" class="knop klein stil" id="voToevoegen">Onderdeel toevoegen</button>
+            <div class="hint" style="margin-top:8px">Bv. "3x2,5mm VD draad" bestaat uit 1x 2,5mm blauw, 1x 2,5mm bruin en 1x
+              2,5mm geel/groen. Gebruik je dit product bij een project, dan gaat de voorraad van deze onderdelen mee
+              omlaag — dit product zelf hoeft dan geen eigen voorraad bij te houden.</div>
+          </div>
           <div style="display:flex;gap:10px">
             <button class="knop klein" id="vOpslaan">Opslaan</button>
             <button class="knop klein stil" id="vAnnuleer">Annuleren</button>
@@ -996,7 +1010,7 @@ const KOSTEN = [
 const kostenNaam = c => (KOSTEN.find(k => k[0] === c) || [null, c || "—"])[1];
 
 /* centrale gegevens */
-const cache = { klanten:[], projecten:[], categorieen:[], producten:[], inst:{} };
+const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], inst:{} };
 let urenData = [];
 let kmData = [];
 let factData = [];
@@ -1249,7 +1263,7 @@ $("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut();
 async function laadAlles(){
   const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm] = await Promise.all([
+    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm, po] = await Promise.all([
       db.from("klanten").select("*").order("naam"),
       db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
       db.from("categorieen").select("*").order("volgorde"),
@@ -1261,7 +1275,8 @@ async function laadAlles(){
       db.from("product_prijzen").select("*").order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false }),
       db.from("gereedschap").select("*").order("naam"),
       db.from("factuur_regels").select("*"),
-      db.from("voorraad_mutaties").select("*")
+      db.from("voorraad_mutaties").select("*"),
+      db.from("product_onderdelen").select("*")
     ]);
     const eerste = [kl,pr,cat,prod,inst,ur,km,ft,pp].find(r => r.error);
     if (eerste) throw eerste.error;
@@ -1270,6 +1285,7 @@ async function laadAlles(){
     cache.projecten = pr.data || [];
     cache.categorieen = cat.data || [];
     cache.producten = prod.data || [];
+    cache.onderdelen = po.data || [];
     cache.inst = {};
     (inst.data || []).forEach(r => cache.inst[r.sleutel] = r.waarde);
     urenData = ur.data || [];
@@ -1874,20 +1890,9 @@ $("pOpslaan").addEventListener("click", async () => {
       product_id: productId, aantal: -aantal, project_id: projectId, datum
     }).eq("id", bewerkGebruikRow.id));
     if (!fout){
-      // oude afboeking terugdraaien
-      const oud = cache.producten.find(p => p.id === bewerkGebruikRow.product_id);
-      if (oud && oud.op_voorraad !== false){
-        const terug = Number(oud.voorraad || 0) - Number(bewerkGebruikRow.aantal);
-        const { error: eT } = await db.from("producten").update({ voorraad: terug }).eq("id", oud.id);
-        if (!eT) oud.voorraad = terug;
-      }
-      // nieuwe afboeking doorvoeren
-      const nw = cache.producten.find(p => p.id === productId);
-      if (nw && nw.op_voorraad !== false){
-        const af = Number(nw.voorraad || 0) - aantal;
-        const { error: eN } = await db.from("producten").update({ voorraad: af }).eq("id", nw.id);
-        if (!eN) nw.voorraad = af;
-      }
+      // oude afboeking (en die van eventuele onderdelen) terugdraaien, nieuwe doorvoeren
+      await boekVoorraadTerug(bewerkGebruikRow.product_id, Math.abs(Number(bewerkGebruikRow.aantal)));
+      await boekVoorraadAf(productId, aantal);
     }
   } else {
     // staat dit product al als (nog niet gefactureerde) regel bij dit project op dezelfde datum?
@@ -1908,14 +1913,7 @@ $("pOpslaan").addEventListener("click", async () => {
         project_id: projectId, datum
       }));
     }
-    if (!fout){
-      const prod = cache.producten.find(p => p.id === productId);
-      if (prod && prod.op_voorraad !== false){
-        const nieuw = Number(prod.voorraad || 0) - aantal;
-        const { error: e2 } = await db.from("producten").update({ voorraad: nieuw }).eq("id", productId);
-        if (!e2) prod.voorraad = nieuw;
-      }
-    }
+    if (!fout) await boekVoorraadAf(productId, aantal);
   }
   $("pOpslaan").disabled = false;
   if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
@@ -2057,13 +2055,8 @@ async function laadProjectGebruik(projectId){
     if (!confirm("Deze productregel verwijderen?")) return;
     const { error: delFout } = await db.from("voorraad_mutaties").delete().eq("id", g.id);
     if (delFout){ toast("Verwijderen mislukt"); return; }
-    const prod = cache.producten.find(p => p.id === g.product_id);
-    if (prod && prod.op_voorraad !== false){
-      const nieuw = Number(prod.voorraad || 0) - Number(g.aantal); // gebruik is negatief, dus dit boekt terug
-      const { error: e2 } = await db.from("producten").update({ voorraad: nieuw }).eq("id", prod.id);
-      if (!e2) prod.voorraad = nieuw;
-      renderVoorraad();
-    }
+    await boekVoorraadTerug(g.product_id, Math.abs(Number(g.aantal))); // gebruik is negatief, dus dit boekt terug
+    renderVoorraad();
     toast("Regel verwijderd");
     laadProjectGebruik(projectId);
   }));
@@ -2248,6 +2241,7 @@ $("vNieuw").addEventListener("click", () => {
   prodOpVoorraad = true; schakel("vSoortVoorraad","vSoortDoorloop");
   $("vVoorraadVeld").style.display = "block";
   $("vPrijzenBlok").style.display = "none";
+  $("vOnderdelenBlok").style.display = "none";
   $("vVerwijder").style.display = "none";
   $("vVerpPrijs").value = ""; $("vVerpAantal").value = ""; $("vVerpNaam").value = "";
   $("vVolledigeNaam").value = ""; bijwerkVerpHint();
@@ -2404,6 +2398,8 @@ function renderVoorraad(){
     $("vVerwijder").style.display = "inline-block";
     $("vPrijzenBlok").style.display = "block";
     renderVPrijzen(p.id);
+    $("vOnderdelenBlok").style.display = "block";
+    renderVOnderdelen(p.id);
     $("vVerpPrijs").value = "";
     $("vVerpAantal").value = p.verpakking_aantal ?? "";
     $("vVerpNaam").value = p.verpakking_naam || "";
@@ -2583,6 +2579,74 @@ $("vpToevoegen").addEventListener("click", async () => {
   toast("Prijs toegevoegd");
   herlaadPrijzen();
 });
+
+/* ---- samengestelde producten ----
+   Een product als "3x2,5mm VD draad" heeft geen eigen voorraad, maar bestaat
+   uit losse kleurdraden die dat wel hebben. Bij gebruik van het samengestelde
+   product boekt boekVoorraadAf() de voorraad van de onderdelen af i.p.v. van
+   het product zelf (zie functie verderop). */
+function onderdelenVan(productId){
+  return cache.onderdelen.filter(r => r.product_id === productId);
+}
+async function herlaadOnderdelen(){
+  const { data } = await db.from("product_onderdelen").select("*");
+  cache.onderdelen = data || [];
+  if (bewerkProductId && $("vForm").style.display !== "none") renderVOnderdelen(bewerkProductId);
+}
+function renderVOnderdelen(pid){
+  const body = $("vOnderdelenBody");
+  const lijst = onderdelenVan(pid);
+  body.innerHTML = !lijst.length
+    ? '<tr><td colspan="3" class="leeg">Geen onderdelen — dit product boekt zijn eigen voorraad af.</td></tr>'
+    : lijst.map(r => {
+        const comp = cache.producten.find(p => p.id === r.component_id);
+        return '<tr><td class="tekst">' + esc(comp ? comp.naam : "—") + '</td>' +
+          '<td class="r">' + Number(r.factor).toLocaleString("nl-NL") + '</td>' +
+          '<td class="r"><button class="verwijder" data-vo="' + r.id + '">✕</button></td></tr>';
+      }).join("");
+  body.querySelectorAll("[data-vo]").forEach(k => k.addEventListener("click", async () => {
+    if (!confirm("Dit onderdeel loskoppelen?")) return;
+    await db.from("product_onderdelen").delete().eq("id", k.dataset.vo);
+    toast("Onderdeel verwijderd");
+    herlaadOnderdelen();
+  }));
+  $("voOnderdeel").innerHTML = cache.producten.filter(p => p.id !== pid)
+    .map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
+}
+$("voToevoegen").addEventListener("click", async () => {
+  if (!bewerkProductId) return;
+  const componentId = $("voOnderdeel").value;
+  const factor = parseFloat($("voFactor").value);
+  if (!componentId || !(factor > 0)) { toast("Kies een onderdeel en een aantal groter dan 0"); return; }
+  const { error } = await db.from("product_onderdelen").upsert({
+    product_id: bewerkProductId, component_id: componentId, factor: r2(factor)
+  }, { onConflict: "product_id,component_id" });
+  if (error){ console.error(error); toast("Toevoegen mislukt"); return; }
+  toast("Onderdeel toegevoegd");
+  herlaadOnderdelen();
+});
+
+/* boekt `aantal` af van de eigen voorraad van het product (als die apart
+   bijgehouden wordt) én van elk onderdeel waar het uit is samengesteld
+   (aantal x factor). Negatieve aantal boekt terug — zo hergebruiken we deze
+   functie ook om een bewerkte of verwijderde gebruikregel terug te draaien. */
+async function boekVoorraadAf(productId, aantal){
+  const prod = cache.producten.find(p => p.id === productId);
+  if (prod && prod.op_voorraad !== false){
+    const nieuw = Number(prod.voorraad || 0) - aantal;
+    const { error } = await db.from("producten").update({ voorraad: nieuw }).eq("id", productId);
+    if (!error) prod.voorraad = nieuw;
+  }
+  for (const o of onderdelenVan(productId)){
+    const comp = cache.producten.find(p => p.id === o.component_id);
+    if (comp && comp.op_voorraad !== false){
+      const nieuw = Number(comp.voorraad || 0) - aantal * Number(o.factor || 1);
+      const { error } = await db.from("producten").update({ voorraad: nieuw }).eq("id", comp.id);
+      if (!error) comp.voorraad = nieuw;
+    }
+  }
+}
+const boekVoorraadTerug = (productId, aantal) => boekVoorraadAf(productId, -aantal);
 
 /* ---- categoriebeheer ---- */
 $("vCatToon").addEventListener("click", () => {
