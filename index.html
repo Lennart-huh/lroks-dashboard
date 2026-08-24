@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <style>
 :root{
   --bg:#F4F5F3; --surface:#FFFFFF; --surface2:#EDEFEC;
@@ -3634,7 +3634,7 @@ function epcQrPayload(f, I){
 }
 
 /* ---- printen ---- */
-$("fdPrint").addEventListener("click", async () => {
+$("fdPrint").addEventListener("click", () => {
   if (!bewerkFactuurId) return;
   const f = factData.find(x => x.id === bewerkFactuurId);
   if (!f) return;
@@ -3648,9 +3648,12 @@ $("fdPrint").addEventListener("click", async () => {
 
   let qrImg = "";
   const payload = epcQrPayload(f, I);
-  if (payload && window.QRCode){
+  if (payload && window.qrcode){
     try {
-      const qrDataUrl = await QRCode.toDataURL(payload, { margin: 1, width: 220 });
+      const qr = qrcode(0, "M");
+      qr.addData(payload);
+      qr.make();
+      const qrDataUrl = qr.createDataURL(6);
       qrImg = '<div><img class="pqr" src="' + qrDataUrl + '"><div class="pqrbij">Scan om te betalen</div></div>';
     } catch (e) { console.error("QR-code genereren mislukt", e); }
   }
