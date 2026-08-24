@@ -735,7 +735,7 @@ nav.onderbalk{display:none}
             <div class="hint" id="vVerpHint" style="margin-top:8px">Het aantal per verpakking blijft bewaard, zodat je in het overzicht ziet hoeveel rollen of doosjes je hebt. Vul je er de verpakkingsprijs bij in, dan reken ik de prijs per eenheid uit.</div>
             <button type="button" class="knop klein stil" id="vVerpReken" style="margin-top:8px">Prijs per eenheid overnemen</button>
           </div>
-          <div class="veld"><label>Verkoopprijs per eenheid (excl.)</label><input type="number" id="vVerkoop" step="0.0001" min="0" inputmode="decimal">
+          <div class="veld"><label>Verkoopprijs per eenheid (excl.)</label><input type="number" id="vVerkoop" step="0.01" min="0" inputmode="decimal">
             <div class="hint">Marge % ingevuld? Dan rekent de app de verkoopprijs zelf uit — ook als de inkoopprijs later verandert. Leeg laten = verkoopprijs zelf bepalen.</div>
           </div>
           <div class="veld"><label>Soort product</label>
@@ -2308,7 +2308,7 @@ $("vOpslaan").addEventListener("click", async () => {
     categorie_id: $("vCategorie").value || null,
     inkoopprijs: inkoopV,
     marge_pct: isNaN(margeV) ? null : margeV,
-    verkoopprijs: isNaN(margeV) ? (parseFloat($("vVerkoop").value) || 0) : r4(inkoopV * (1 + margeV / 100)),
+    verkoopprijs: isNaN(margeV) ? r2(parseFloat($("vVerkoop").value) || 0) : r2(inkoopV * (1 + margeV / 100)),
     op_voorraad: prodOpVoorraad,
     voorraad: prodOpVoorraad ? (parseFloat($("vVoorraad").value) || 0) : 0,
     eenheid: $("vEenheid").value.trim() || "stuks",
