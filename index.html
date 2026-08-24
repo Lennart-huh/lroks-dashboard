@@ -3634,7 +3634,7 @@ function epcQrPayload(f, I){
 }
 
 /* ---- printen ---- */
-$("fdPrint").addEventListener("click", () => {
+$("fdPrint").addEventListener("click", async () => {
   if (!bewerkFactuurId) return;
   const f = factData.find(x => x.id === bewerkFactuurId);
   if (!f) return;
@@ -3678,6 +3678,14 @@ $("fdPrint").addEventListener("click", () => {
     '<div class="pgroot">Totaal <b>' + eur2(f.bedrag_incl || 0) + '</b></div></div>' +
     '<div class="pbetaal"><p class="pklein">Graag betalen voor de vervaldatum op ' + esc(I.bedrijf_iban || "ons rekeningnummer") +
     ' onder vermelding van factuurnummer ' + esc(f.nummer || "") + '.</p>' + qrImg + '</div>';
+
+  // logo en QR-code zijn data-URI's die de browser nog moet decoderen; zonder
+  // hierop te wachten wordt window.print() soms al aangeroepen terwijl de
+  // afbeeldingen nog leeg zijn, dan komen ze blanco op de factuur te staan
+  const printImgs = Array.from($("printvel").querySelectorAll("img"));
+  await Promise.all(printImgs.map(img =>
+    img.decode ? img.decode().catch(() => {}) : new Promise(res => { img.onload = img.onerror = res; })));
+
   window.print();
 });
 
