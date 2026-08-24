@@ -694,8 +694,11 @@ nav.onderbalk{display:none}
             </div>
             <div class="veld"><label>IBAN</label><input type="text" id="bgIban"></div>
             <div class="rij2">
-              <div class="veld"><label>E-mail</label><input type="text" id="bgEmail"></div>
+              <div class="veld"><label>Info-e-mail</label><input type="text" id="bgEmail"></div>
               <div class="veld"><label>Telefoon</label><input type="text" id="bgTelefoon"></div>
+            </div>
+            <div class="veld"><label>E-mail voor facturen</label><input type="text" id="bgEmailFacturen">
+              <div class="hint">Dit adres komt op de factuur zelf te staan — de info-e-mail hierboven niet.</div>
             </div>
             <button class="knop klein" id="bgOpslaan">Opslaan</button>
           </div>
@@ -3671,7 +3674,8 @@ const BG_VELDEN = [
   ["bgNaam","bedrijf_naam"],["bgAdres","bedrijf_adres"],
   ["bgPostcodePlaats","bedrijf_postcode_plaats"],["bgKvk","bedrijf_kvk"],
   ["bgBtw","bedrijf_btw"],["bgIban","bedrijf_iban"],
-  ["bgEmail","bedrijf_email"],["bgTelefoon","bedrijf_telefoon"]
+  ["bgEmail","bedrijf_email"],["bgTelefoon","bedrijf_telefoon"],
+  ["bgEmailFacturen","bedrijf_email_facturen"]
 ];
 function vulBedrijf(){
   BG_VELDEN.forEach(([id, key]) => { $(id).value = cache.inst[key] || ""; });
@@ -3709,7 +3713,7 @@ function genereerFactuurPdf(f, k, I, regels){
   [
     I.bedrijf_adres,
     I.bedrijf_postcode_plaats,
-    [I.bedrijf_email, I.bedrijf_telefoon].filter(Boolean).join(" · "),
+    [(I.bedrijf_email_facturen || I.bedrijf_email), I.bedrijf_telefoon].filter(Boolean).join(" · "),
     "KVK " + (I.bedrijf_kvk || "-"),
     "BTW " + (I.bedrijf_btw || "-"),
     "IBAN " + (I.bedrijf_iban || "-")
