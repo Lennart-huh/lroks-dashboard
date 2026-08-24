@@ -3330,7 +3330,8 @@ async function maakFactuurAan(){
     vervaldatum: $("fdVervaldatum").value || null,
     status: statusFactuur,
     bedrag_excl: tot.excl, btw_bedrag: tot.btw, bedrag_incl: tot.incl,
-    notities: $("fdNotities").value.trim() || null
+    notities: $("fdNotities").value.trim() || null,
+    betaal_qr: fdQrDataUri || null
   };
   $("fdOpslaan").disabled = true;
   const { data: nieuw, error } = await db.from("facturen").insert(rij).select().single();
