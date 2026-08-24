@@ -167,7 +167,7 @@ tbody tr.klik:hover td{background:var(--surface2)}
   #printvel .ptab{width:100%;border-collapse:collapse;margin-bottom:14px}
   #printvel .ptab th{text-align:left;border-bottom:1.5px solid #000;padding:6px;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
   #printvel .ptab td{border-bottom:1px solid #ccc;padding:7px 6px;font-family:'IBM Plex Mono',monospace;font-size:11px}
-  #printvel .ptab td:first-child{font-family:'Archivo',sans-serif}
+  #printvel .ptab td:nth-child(2){font-family:'Archivo',sans-serif}
   #printvel .pr{text-align:right}
   #printvel .ptot{margin-left:auto;width:230px;line-height:1.9}
   #printvel .ptot div{display:flex;justify-content:space-between}
@@ -638,7 +638,7 @@ nav.onderbalk{display:none}
             </div>
             <div class="veld"><label>Regels</label>
               <div class="tbl-wrap"><table>
-                <thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Bedrag</th></tr></thead>
+                <thead><tr><th>Datum</th><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Bedrag</th></tr></thead>
                 <tbody id="fdRegelsBody"></tbody>
               </table></div>
               <div class="hint" style="margin-top:8px">Excl: <b id="fdExcl">—</b> · BTW: <b id="fdBtw">—</b> · Incl: <b id="fdIncl">—</b></div>
@@ -3154,10 +3154,11 @@ function vulFdKlanten(){
 function toonFdRegels(regels){
   const body = $("fdRegelsBody");
   if (!regels.length){
-    body.innerHTML = '<tr><td colspan="4" class="leeg">Geen regels.</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" class="leeg">Geen regels.</td></tr>';
   } else {
     body.innerHTML = regels.map(r =>
-      '<tr><td class="tekst">' + esc(r.omschrijving) + '</td>' +
+      '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") + '</td>' +
+      '<td class="tekst">' + esc(r.omschrijving) + '</td>' +
       '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
       '<td class="r">' + eur2(r.prijs) + '</td>' +
       '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
@@ -3270,7 +3271,8 @@ async function startFacturering(projectId){
   uren.forEach(u => {
     if (!u.tarief) zonderTarief++;
     regels.push({
-      omschrijving: "Arbeid " + fmtDatum(u.datum) + (u.omschrijving ? " — " + u.omschrijving : ""),
+      omschrijving: "Arbeid" + (u.omschrijving ? " — " + u.omschrijving : ""),
+      datum: u.datum,
       aantal: Number(u.aantal), prijs: Number(u.tarief || 0),
       uren_id: u.id, mutatie_id: null, km_id: null
     });
@@ -3278,7 +3280,8 @@ async function startFacturering(projectId){
   gebruik.forEach(g => {
     const prod = cache.producten.find(p => p.id === g.product_id);
     regels.push({
-      omschrijving: (prod ? prod.naam : "Product") + " " + fmtDatum(g.datum),
+      omschrijving: prod ? prod.naam : "Product",
+      datum: g.datum,
       aantal: Math.abs(Number(g.aantal)),
       prijs: Number(prod ? (prod.verkoopprijs || 0) : 0),
       uren_id: null, mutatie_id: g.id, km_id: null
@@ -3286,7 +3289,8 @@ async function startFacturering(projectId){
   });
   kmVoor.forEach(r => {
     regels.push({
-      omschrijving: "Kilometers " + fmtDatum(r.datum) + (r.omschrijving ? " — " + r.omschrijving : ""),
+      omschrijving: "Kilometers" + (r.omschrijving ? " — " + r.omschrijving : ""),
+      datum: r.datum,
       aantal: r.gereden,
       prijs: Number(r.km_prijs ?? (cache.inst.km_prijs || 0)),
       uren_id: null, mutatie_id: null, km_id: r.id
@@ -3342,7 +3346,7 @@ async function maakFactuurAan(){
     return;
   }
   const regels = pendingFactuur.regels.map(r => ({
-    factuur_id: nieuw.id, omschrijving: r.omschrijving,
+    factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null,
     aantal: r.aantal, prijs: r.prijs,
     uren_id: r.uren_id, mutatie_id: r.mutatie_id, km_id: r.km_id || null
   }));
@@ -3712,7 +3716,8 @@ $("fdPrint").addEventListener("click", async () => {
   const k = cache.klanten.find(x => x.id === f.klant_id);
   const I = cache.inst;
   const regelsHtml = huidigeRegels.map(r =>
-    '<tr><td>' + esc(r.omschrijving) + '</td>' +
+    '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") + '</td>' +
+    '<td>' + esc(r.omschrijving) + '</td>' +
     '<td class="pr">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
     '<td class="pr">' + eur2(r.prijs) + '</td>' +
     '<td class="pr">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
@@ -3738,7 +3743,7 @@ $("fdPrint").addEventListener("click", async () => {
     esc(k ? [k.postcode, k.plaats].filter(Boolean).join(" ") : "") + '</div>' +
     '<div style="text-align:right">Factuurdatum: ' + fmtDatum(f.datum) +
     '<br>Vervaldatum: ' + (f.vervaldatum ? fmtDatum(f.vervaldatum) : "-") + '</div></div>' +
-    '<table class="ptab"><thead><tr><th>Omschrijving</th><th class="pr">Aantal</th><th class="pr">Prijs</th><th class="pr">Bedrag</th></tr></thead>' +
+    '<table class="ptab"><thead><tr><th>Datum</th><th>Omschrijving</th><th class="pr">Aantal</th><th class="pr">Prijs</th><th class="pr">Bedrag</th></tr></thead>' +
     '<tbody>' + regelsHtml + '</tbody></table>' +
     '<div class="ptot"><div>Subtotaal <b>' + eur2(f.bedrag_excl || 0) + '</b></div>' +
     '<div>BTW ' + btwPct() + '% <b>' + eur2(f.btw_bedrag || 0) + '</b></div>' +
