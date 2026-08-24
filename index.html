@@ -3083,6 +3083,21 @@ function zetFdQrPreview(dataUri){
     $("fdQrWissen").style.display = "none";
   }
 }
+// slaat de betaal-QR direct op zodra je 'm kiest/verwijdert, zonder dat je
+// apart op "Wijzigingen opslaan" hoeft te klikken. Bij een nog niet aangemaakte
+// (nieuwe) factuur kan dat niet — daar blijft de QR lokaal staan tot je 'm
+// aanmaakt, en pakt de gewone Opslaan-knop 'm dan alsnog niet mee (hoeft ook
+// niet, want maakFactuurAan slaat de regels pas na aanmaken op). Mislukt het
+// opslaan, dan blijft fdQrGewijzigd true zodat een latere Opslaan het herprobeert.
+async function slaFdQrOp(){
+  if (!bewerkFactuurId) return;
+  const { error } = await db.from("facturen").update({ betaal_qr: fdQrDataUri }).eq("id", bewerkFactuurId);
+  if (error){ console.error(error); toast("QR opslaan mislukt"); return; }
+  fdQrGewijzigd = false;
+  const f = factData.find(x => x.id === bewerkFactuurId);
+  if (f) f.betaal_qr = fdQrDataUri;
+  toast(fdQrDataUri ? "Betaal-QR opgeslagen" : "Betaal-QR verwijderd");
+}
 $("fdQrKiezen").addEventListener("click", () => $("fdQrBestand").click());
 $("fdQrBestand").addEventListener("change", async () => {
   const file = $("fdQrBestand").files[0];
@@ -3092,12 +3107,14 @@ $("fdQrBestand").addEventListener("change", async () => {
     fdQrDataUri = await leesQrAlsDataUri(file);
     fdQrGewijzigd = true;
     zetFdQrPreview(fdQrDataUri);
+    await slaFdQrOp();
   } catch (e) { console.error(e); toast("Afbeelding inlezen mislukt"); }
 });
-$("fdQrWissen").addEventListener("click", () => {
+$("fdQrWissen").addEventListener("click", async () => {
   fdQrDataUri = null;
   fdQrGewijzigd = true;
   zetFdQrPreview(null);
+  await slaFdQrOp();
 });
 
 const r2 = n => Math.round(n * 100) / 100;
