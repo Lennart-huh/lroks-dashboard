@@ -13,7 +13,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <style>
 :root{
   --bg:#F4F5F3; --surface:#FFFFFF; --surface2:#EDEFEC;
@@ -645,6 +644,15 @@ nav.onderbalk{display:none}
               <div class="hint" style="margin-top:8px">Excl: <b id="fdExcl">—</b> · BTW: <b id="fdBtw">—</b> · Incl: <b id="fdIncl">—</b></div>
             </div>
             <div class="veld"><label>Notities</label><input type="text" id="fdNotities"></div>
+            <div class="veld"><label>Betaal-QR (Rabo betaalverzoek)</label>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <img id="fdQrPreview" style="display:none;width:56px;height:56px;border:1px solid var(--line);border-radius:6px;object-fit:contain;background:#fff">
+                <input type="file" accept="image/*" id="fdQrBestand" style="display:none">
+                <button type="button" class="knop klein stil" id="fdQrKiezen">QR uploaden</button>
+                <button type="button" class="knop klein stil" id="fdQrWissen" style="display:none">QR verwijderen</button>
+              </div>
+              <div class="hint">Maak per factuur een zakelijk betaalverzoek in de Rabo-app (bedrag + factuurnummer als omschrijving), sla de QR-code op als afbeelding en upload 'm hier. Zonder upload staat er geen betaal-QR op de factuur.</div>
+            </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <button class="knop klein" id="fdOpslaan">Opslaan</button>
               <button class="knop klein stil" id="fdPrint">Bekijk / print</button>
@@ -3038,6 +3046,59 @@ let bewerkFactuurId = null;
 let huidigeRegels = [];
 let pendingFactuur = null;
 let statusFactuur = "open";
+let fdQrDataUri = null;
+let fdQrGewijzigd = false;
+
+/* Rabo betaalverzoek-QR die je per factuur zelf aanmaakt en hier uploadt:
+   verkleind naar max 300px zodat het niet nodeloos veel ruimte inneemt. */
+function leesQrAlsDataUri(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Kan de afbeelding niet lezen"));
+      img.onload = () => {
+        const max = 300;
+        const schaal = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * schaal), h = Math.round(img.height * schaal);
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function zetFdQrPreview(dataUri){
+  if (dataUri){
+    $("fdQrPreview").src = dataUri;
+    $("fdQrPreview").style.display = "inline-block";
+    $("fdQrWissen").style.display = "inline-block";
+  } else {
+    $("fdQrPreview").removeAttribute("src");
+    $("fdQrPreview").style.display = "none";
+    $("fdQrWissen").style.display = "none";
+  }
+}
+$("fdQrKiezen").addEventListener("click", () => $("fdQrBestand").click());
+$("fdQrBestand").addEventListener("change", async () => {
+  const file = $("fdQrBestand").files[0];
+  $("fdQrBestand").value = "";
+  if (!file) return;
+  try {
+    fdQrDataUri = await leesQrAlsDataUri(file);
+    fdQrGewijzigd = true;
+    zetFdQrPreview(fdQrDataUri);
+  } catch (e) { console.error(e); toast("Afbeelding inlezen mislukt"); }
+});
+$("fdQrWissen").addEventListener("click", () => {
+  fdQrDataUri = null;
+  fdQrGewijzigd = true;
+  zetFdQrPreview(null);
+});
 
 const r2 = n => Math.round(n * 100) / 100;
 const btwPct = () => Number(cache.inst.btw_percentage || 21);
@@ -3111,6 +3172,9 @@ async function openFactuur(id){
   $("fdDatum").value = f.datum || "";
   $("fdVervaldatum").value = f.vervaldatum || "";
   $("fdNotities").value = f.notities || "";
+  fdQrDataUri = f.betaal_qr || null;
+  fdQrGewijzigd = false;
+  zetFdQrPreview(fdQrDataUri);
   zetFactuurStatus(f.status || "open");
   $("fdOpslaan").textContent = "Wijzigingen opslaan";
   $("fdVerwijder").style.display = "inline-block";
@@ -3133,6 +3197,7 @@ $("fdOpslaan").addEventListener("click", async () => {
     status: statusFactuur,
     notities: $("fdNotities").value.trim() || null
   };
+  if (fdQrGewijzigd) rij.betaal_qr = fdQrDataUri;
   $("fdOpslaan").disabled = true;
   const { error } = await db.from("facturen").update(rij).eq("id", bewerkFactuurId);
   $("fdOpslaan").disabled = false;
@@ -3222,6 +3287,9 @@ async function startFacturering(projectId){
   $("fdVervaldatum").value = verval.getFullYear() + "-" +
     String(verval.getMonth()+1).padStart(2,"0") + "-" + String(verval.getDate()).padStart(2,"0");
   $("fdNotities").value = project ? project.naam : "";
+  fdQrDataUri = null;
+  fdQrGewijzigd = false;
+  zetFdQrPreview(null);
   zetFactuurStatus("open");
   $("fdOpslaan").textContent = "Factuur aanmaken";
   $("fdVerwijder").style.display = "none";
@@ -3618,21 +3686,6 @@ $("bgOpslaan").addEventListener("click", async () => {
   toast("Bedrijfsgegevens opgeslagen");
 });
 
-/* ---- SEPA scan-to-pay QR (EPC069-12 / "Girocode") ----
-   Standaardformaat dat Nederlandse en Europese bank-apps kunnen scannen om een
-   overschrijving automatisch in te vullen: IBAN, naam, bedrag en omschrijving.
-   Geen betaalprovider of account nodig — puur de gegevens die al op de factuur staan. */
-function epcQrPayload(f, I){
-  const iban = String(I.bedrijf_iban || "").replace(/\s+/g, "").toUpperCase();
-  if (!iban) return null;
-  const naam = String(I.bedrijf_naam || "LRoks Elektrotechniek").slice(0, 70);
-  const bedrag = Number(f.bedrag_incl || 0).toFixed(2);
-  const omschrijving = ("Factuur " + (f.nummer || "")).slice(0, 140);
-  // volgorde is vast: service tag, versie, tekenset, SCT, BIC (leeg mag), naam,
-  // IBAN, bedrag, doel (leeg), gestructureerde omschrijving (leeg), vrije omschrijving
-  return ["BCD", "002", "1", "SCT", "", naam, iban, "EUR" + bedrag, "", "", omschrijving].join("\n");
-}
-
 /* ---- printen ---- */
 $("fdPrint").addEventListener("click", async () => {
   if (!bewerkFactuurId) return;
@@ -3646,17 +3699,11 @@ $("fdPrint").addEventListener("click", async () => {
     '<td class="pr">' + eur2(r.prijs) + '</td>' +
     '<td class="pr">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
 
-  let qrImg = "";
-  const payload = epcQrPayload(f, I);
-  if (payload && window.qrcode){
-    try {
-      const qr = qrcode(0, "M");
-      qr.addData(payload);
-      qr.make();
-      const qrDataUrl = qr.createDataURL(6);
-      qrImg = '<div><img class="pqr" src="' + qrDataUrl + '"><div class="pqrbij">Scan om te betalen</div></div>';
-    } catch (e) { console.error("QR-code genereren mislukt", e); }
-  }
+  // betaal-QR is een Rabo-betaalverzoek dat je zelf per factuur uploadt (zie fdQrBestand),
+  // niet automatisch gegenereerd — die staat er alleen op als je 'm hebt geüpload
+  const qrImg = f.betaal_qr
+    ? '<div><img class="pqr" src="' + f.betaal_qr + '"><div class="pqrbij">Scan om te betalen</div></div>'
+    : "";
 
   $("printvel").innerHTML =
     '<div class="pkop"><img class="plogo" src="' + LOGO_DATA_URI + '" alt="">' +
