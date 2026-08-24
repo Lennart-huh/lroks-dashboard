@@ -154,10 +154,11 @@ tbody tr.klik:hover td{background:var(--surface2)}
 
 /* ---------- printbare factuur ---------- */
 #printvel{display:none}
+@page{margin:0}
 @media print{
   #app,#loginScherm,#toast{display:none!important}
   body{background:#fff}
-  #printvel{display:block;color:#000;font-family:'Archivo',sans-serif;padding:6mm;font-size:12px}
+  #printvel{display:block;color:#000;font-family:'Archivo',sans-serif;padding:12mm 10mm;font-size:12px}
   #printvel .pkop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px}
   #printvel .plogo{height:100px;width:auto;display:block}
   #printvel .pnaam{font-size:18px;font-weight:700;letter-spacing:.04em}
