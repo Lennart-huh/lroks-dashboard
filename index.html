@@ -1893,17 +1893,17 @@ $("pOpslaan").addEventListener("click", async () => {
       }
     }
   } else {
-    // staat dit product al als (nog niet gefactureerde) regel bij dit project? dan optellen
-    // in plaats van een nieuwe regel, zodat je niet hetzelfde product meerdere keren in de lijst krijgt
+    // staat dit product al als (nog niet gefactureerde) regel bij dit project op dezelfde datum?
+    // dan optellen in plaats van een nieuwe regel; op een andere datum blijft het een aparte regel
     const { data: bestaandLijst, error: eZoek } = await db.from("voorraad_mutaties")
       .select("id, aantal").eq("project_id", projectId).eq("product_id", productId)
-      .eq("type", "gebruik").eq("gefactureerd", false)
+      .eq("type", "gebruik").eq("gefactureerd", false).eq("datum", datum)
       .order("aangemaakt_op", { ascending: true }).limit(1);
     const bestaand = bestaandLijst && bestaandLijst[0];
     if (eZoek) fout = eZoek;
     else if (bestaand){
       ({ error: fout } = await db.from("voorraad_mutaties").update({
-        aantal: Number(bestaand.aantal) - aantal, datum
+        aantal: Number(bestaand.aantal) - aantal
       }).eq("id", bestaand.id));
     } else {
       ({ error: fout } = await db.from("voorraad_mutaties").insert({
