@@ -991,6 +991,10 @@ function fmtDatum(iso){
   const [j,m,d] = iso.split("-");
   return d + "-" + m + "-" + j.slice(2);
 }
+// "2 meter" i.p.v. kaal "2"; en "€ 0,36 / meter" i.p.v. kaal "€ 0,36" —
+// alleen als de regel een eenheid heeft (arbeid=uur, kilometers=km, product=eigen eenheid)
+const fmtAantal = r => Number(r.aantal).toLocaleString("nl-NL") + (r.eenheid ? " " + r.eenheid : "");
+const fmtPrijsPerEenheid = r => eur2(r.prijs) + (r.eenheid ? " / " + r.eenheid : "");
 function toast(msg){
   const t = $("toast");
   t.textContent = msg;
@@ -3159,8 +3163,8 @@ function toonFdRegels(regels){
     body.innerHTML = regels.map(r =>
       '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") + '</td>' +
       '<td class="tekst">' + esc(r.omschrijving) + '</td>' +
-      '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
-      '<td class="r">' + eur2(r.prijs) + '</td>' +
+      '<td class="r">' + esc(fmtAantal(r)) + '</td>' +
+      '<td class="r">' + esc(fmtPrijsPerEenheid(r)) + '</td>' +
       '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
   }
   const excl = regels.reduce((s,r) => s + Number(r.aantal) * Number(r.prijs), 0);
@@ -3272,7 +3276,7 @@ async function startFacturering(projectId){
     if (!u.tarief) zonderTarief++;
     regels.push({
       omschrijving: "Arbeid" + (u.omschrijving ? " — " + u.omschrijving : ""),
-      datum: u.datum,
+      datum: u.datum, eenheid: "uur",
       aantal: Number(u.aantal), prijs: Number(u.tarief || 0),
       uren_id: u.id, mutatie_id: null, km_id: null
     });
@@ -3281,7 +3285,7 @@ async function startFacturering(projectId){
     const prod = cache.producten.find(p => p.id === g.product_id);
     regels.push({
       omschrijving: prod ? prod.naam : "Product",
-      datum: g.datum,
+      datum: g.datum, eenheid: (prod && prod.eenheid) || "",
       aantal: Math.abs(Number(g.aantal)),
       prijs: Number(prod ? (prod.verkoopprijs || 0) : 0),
       uren_id: null, mutatie_id: g.id, km_id: null
@@ -3290,7 +3294,7 @@ async function startFacturering(projectId){
   kmVoor.forEach(r => {
     regels.push({
       omschrijving: "Kilometers" + (r.omschrijving ? " — " + r.omschrijving : ""),
-      datum: r.datum,
+      datum: r.datum, eenheid: "km",
       aantal: r.gereden,
       prijs: Number(r.km_prijs ?? (cache.inst.km_prijs || 0)),
       uren_id: null, mutatie_id: null, km_id: r.id
@@ -3346,7 +3350,7 @@ async function maakFactuurAan(){
     return;
   }
   const regels = pendingFactuur.regels.map(r => ({
-    factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null,
+    factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
     aantal: r.aantal, prijs: r.prijs,
     uren_id: r.uren_id, mutatie_id: r.mutatie_id, km_id: r.km_id || null
   }));
@@ -3718,8 +3722,8 @@ $("fdPrint").addEventListener("click", async () => {
   const regelsHtml = huidigeRegels.map(r =>
     '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") + '</td>' +
     '<td>' + esc(r.omschrijving) + '</td>' +
-    '<td class="pr">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
-    '<td class="pr">' + eur2(r.prijs) + '</td>' +
+    '<td class="pr">' + esc(fmtAantal(r)) + '</td>' +
+    '<td class="pr">' + esc(fmtPrijsPerEenheid(r)) + '</td>' +
     '<td class="pr">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
 
   // betaal-QR is een Rabo-betaalverzoek dat je zelf per factuur uploadt (zie fdQrBestand);
