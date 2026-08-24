@@ -3664,7 +3664,8 @@ $("fdPrint").addEventListener("click", async () => {
     '<div class="pnaam">' + esc(I.bedrijf_naam || "LRoks Elektrotechniek") + '</div>' +
     '<div class="pklein">' + esc(I.bedrijf_adres || "") + '<br>' + esc(I.bedrijf_postcode_plaats || "") + '<br>' +
     [I.bedrijf_email, I.bedrijf_telefoon].filter(Boolean).map(esc).join(" · ") +
-    '<br>KVK ' + esc(I.bedrijf_kvk || "-") + ' · BTW ' + esc(I.bedrijf_btw || "-") +
+    '<br>KVK ' + esc(I.bedrijf_kvk || "-") +
+    '<br>BTW ' + esc(I.bedrijf_btw || "-") +
     '<br>IBAN ' + esc(I.bedrijf_iban || "-") + '</div></div></div>' +
     '<h1>FACTUUR ' + esc(f.nummer || "") + '</h1>' +
     '<div class="pinfo"><div><b>Aan</b><br>' + esc(k ? k.naam : "—") + '<br>' +
