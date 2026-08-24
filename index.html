@@ -324,7 +324,13 @@ nav.onderbalk{display:none}
         <div class="subform form-card" id="sub-product">
           <div class="veld"><label>Project</label><select id="pProject"></select></div>
           <div class="rij2">
-            <div class="veld"><label>Product</label><select id="pProduct"></select></div>
+            <div class="veld"><label>Zoek product</label>
+              <input type="search" id="pZoek" placeholder="naam, omschrijving of artikelnummer" autocomplete="off"></div>
+            <div class="veld"><label>Categorie</label><select id="pZoekCategorie"></select></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Product</label><select id="pProduct"></select>
+              <div class="hint" id="pZoekHint"></div></div>
             <div class="veld"><label>Aantal</label><input type="number" id="pAantal" step="0.5" min="0" inputmode="decimal" placeholder="bv. 4"></div>
           </div>
           <div class="veld"><label>Datum</label><input type="date" id="pDatum"></div>
@@ -727,14 +733,16 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Marge %</label><input type="number" id="vMarge" step="1" inputmode="decimal" placeholder="bv. 30"></div>
           </div>
           <div class="veld" style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:13px">
-            <label>Rekenhulp — kocht je per rol of doos?</label>
+            <label>Koop je per rol of doos?</label>
             <div class="rij2">
-              <div class="veld" style="margin-bottom:0"><label>Prijs hele verpakking (€)</label>
-                <input type="number" id="vVerpPrijs" step="0.01" min="0" inputmode="decimal" placeholder="bv. 39,37"></div>
-              <div class="veld" style="margin-bottom:0"><label>Aantal in de verpakking</label>
-                <input type="number" id="vVerpAantal" step="1" min="1" inputmode="decimal" placeholder="bv. 100"></div>
+              <div class="veld" style="margin-bottom:0"><label>Aantal per verpakking</label>
+                <input type="number" id="vVerpAantal" step="1" min="0" inputmode="decimal" placeholder="bv. 100"></div>
+              <div class="veld" style="margin-bottom:0"><label>Verpakking heet</label>
+                <input type="text" id="vVerpNaam" placeholder="rol / doos / doosje"></div>
             </div>
-            <div class="hint" id="vVerpHint" style="margin-top:8px">Vul in wat je voor de hele rol of doos betaalde en hoeveel erin zit — dan zet ik de prijs per eenheid hierboven.</div>
+            <div class="veld" style="margin-top:12px;margin-bottom:0"><label>Prijs hele verpakking (€)</label>
+              <input type="number" id="vVerpPrijs" step="0.01" min="0" inputmode="decimal" placeholder="bv. 39,37"></div>
+            <div class="hint" id="vVerpHint" style="margin-top:8px">Het aantal per verpakking blijft bewaard, zodat je in het overzicht ziet hoeveel rollen of doosjes je hebt. Vul je er de verpakkingsprijs bij in, dan reken ik de prijs per eenheid uit.</div>
             <button type="button" class="knop klein stil" id="vVerpReken" style="margin-top:8px">Prijs per eenheid overnemen</button>
           </div>
           <div class="veld"><label>Verkoopprijs per eenheid (excl.)</label><input type="number" id="vVerkoop" step="0.0001" min="0" inputmode="decimal">
@@ -751,6 +759,10 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Eenheid</label><input type="text" id="vEenheid" placeholder="stuks / meter / doos"></div>
           </div>
           <div class="veld"><label>Leverancier</label><input type="text" id="vLeverancier"></div>
+          <div class="veld"><label>Volledige naam</label>
+            <textarea id="vVolledigeNaam" rows="2" placeholder="bv. PIPELIFE sok installatiebuis 16mm PVC - crème (1196900952)"></textarea>
+            <div class="hint">De hele omschrijving zoals je leverancier hem noemt, met artikelnummer. Houd de naam hierboven kort — dat is wat je in keuzelijsten ziet staan als je een product aanvinkt.</div>
+          </div>
           <div class="veld" id="vPrijzenBlok" style="display:none"><label>Prijzen per leverancier</label>
             <div class="tbl-wrap"><table>
               <thead><tr><th>Leverancier</th><th class="r">Prijs</th><th>Datum</th><th></th></tr></thead>
@@ -1320,8 +1332,9 @@ function vulSelects(){
   $("pProject").innerHTML = '<option value="">— kies project —</option>' +
     open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
 
-  $("pProduct").innerHTML = '<option value="">— kies product —</option>' +
-    cache.producten.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
+  $("pZoekCategorie").innerHTML = '<option value="">Alle categorieën</option>' +
+    cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
+  vulProductKeuze();
 
   $("npCategorie").innerHTML = '<option value="">— geen —</option>' +
     cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
@@ -1801,6 +1814,9 @@ function startGebruikBewerken(g){
       '<option value="' + p.id + '">' + esc(p.naam) + ' (afgerond)</option>');
   }
   $("pProject").value = g.project_id || "";
+  /* filters leegmaken, anders valt het product dat je bewerkt buiten de lijst */
+  $("pZoek").value = ""; $("pZoekCategorie").value = "";
+  vulProductKeuze();
   $("pProduct").value = g.product_id || "";
   $("pAantal").value = Math.abs(Number(g.aantal));
   $("pDatum").value = g.datum;
@@ -1809,6 +1825,42 @@ function startGebruikBewerken(g){
   toonTab("invullen");
   kiesSub("sub-product");
 }
+
+/* Productkeuze met zoekbalk: filtert op naam, volledige naam, eenheid en
+   categorie, zodat je niet de hele lijst langs hoeft. De gekozen regel blijft
+   staan zolang hij binnen het filter valt. */
+function vulProductKeuze(){
+  const term = $("pZoek").value.trim().toLowerCase();
+  const cat = $("pZoekCategorie").value;
+  const huidig = $("pProduct").value;
+
+  const past = p => {
+    if (cat && p.categorie_id !== cat) return false;
+    if (!term) return true;
+    const hooi = [p.naam, p.volledige_naam, p.eenheid, catNaam(p.categorie_id)]
+      .filter(Boolean).join(" ").toLowerCase();
+    return term.split(/\s+/).every(woord => hooi.includes(woord));
+  };
+  const lijst = cache.producten.filter(past);
+
+  const label = p => {
+    const extra = (p.volledige_naam || "").trim();
+    if (!extra || extra.toLowerCase() === p.naam.toLowerCase()) return p.naam;
+    return p.naam + " — " + (extra.length > 70 ? extra.slice(0, 69) + "…" : extra);
+  };
+  $("pProduct").innerHTML = '<option value="">— kies product —</option>' +
+    lijst.map(p => '<option value="' + p.id + '">' + esc(label(p)) + '</option>').join("");
+
+  /* keuze terugzetten als hij er nog tussen staat */
+  if (huidig && lijst.some(p => p.id === huidig)) $("pProduct").value = huidig;
+
+  const totaal = cache.producten.length;
+  $("pZoekHint").textContent = (term || cat)
+    ? lijst.length + " van " + totaal + " producten" + (lijst.length ? "" : " — niets gevonden, pas je zoekterm aan")
+    : totaal + " producten";
+}
+["pZoek","pZoekCategorie"].forEach(id => $(id).addEventListener("input", vulProductKeuze));
+$("pZoekCategorie").addEventListener("change", vulProductKeuze);
 
 $("pOpslaan").addEventListener("click", async () => {
   const projectId = $("pProject").value;
@@ -2186,11 +2238,25 @@ $("vNieuw").addEventListener("click", () => {
   $("vVoorraadVeld").style.display = "block";
   $("vPrijzenBlok").style.display = "none";
   $("vVerwijder").style.display = "none";
-  $("vVerpPrijs").value = ""; $("vVerpAantal").value = ""; bijwerkVerpHint();
+  $("vVerpPrijs").value = ""; $("vVerpAantal").value = ""; $("vVerpNaam").value = "";
+  $("vVolledigeNaam").value = ""; bijwerkVerpHint();
   $("vForm").style.display = "block";
   $("vNaam").focus();
 });
 $("vAnnuleer").addEventListener("click", () => { $("vForm").style.display = "none"; });
+
+/* Hoeveel verpakkingen je voorraad is, als je dat hebt vastgelegd:
+   400 stuks bij 200 per doosje wordt "2 doosjes van 200". */
+function verpakkingTekst(p){
+  const per = Number(p.verpakking_aantal || 0);
+  if (!(per > 0)) return "";
+  const stuks = Number(p.voorraad || 0);
+  const aantal = stuks / per;
+  const heel = Math.abs(aantal - Math.round(aantal)) < 0.005;
+  const getoond = heel ? Math.round(aantal) : Math.round(aantal * 10) / 10;
+  return '<div class="m" style="margin-top:3px">' + getoond.toLocaleString("nl-NL") + ' ' +
+    esc(p.verpakking_naam || "verpakking") + ' van ' + per.toLocaleString("nl-NL") + '</div>';
+}
 
 /* ---- rekenhulp: verpakkingsprijs naar prijs per eenheid ---- */
 const r4 = n => Math.round(n * 10000) / 10000;
@@ -2200,18 +2266,26 @@ function verpakkingPerEenheid(){
   return (prijs > 0 && aantal > 0) ? r4(prijs / aantal) : null;
 }
 function bijwerkVerpHint(){
+  const aantal = parseFloat($("vVerpAantal").value);
+  const eenheid = $("vEenheid").value.trim() || "stuks";
+  const verp = $("vVerpNaam").value.trim() || "verpakking";
   const per = verpakkingPerEenheid();
-  const eenheid = $("vEenheid").value.trim() || "stuk";
-  $("vVerpHint").textContent = per === null
-    ? "Vul in wat je voor de hele rol of doos betaalde en hoeveel erin zit — dan zet ik de prijs per eenheid hierboven."
-    : "Dat is € " + per.toLocaleString("nl-NL", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) + " per " + eenheid + ".";
+  if (per !== null){
+    $("vVerpHint").textContent = "Eén " + verp + " van " + aantal.toLocaleString("nl-NL") + " " + eenheid +
+      " komt neer op € " + per.toLocaleString("nl-NL", { minimumFractionDigits:4, maximumFractionDigits:4 }) + " per eenheid.";
+  } else if (aantal > 0){
+    $("vVerpHint").textContent = "Eén " + verp + " bevat " + aantal.toLocaleString("nl-NL") + " " + eenheid +
+      ". Vul de verpakkingsprijs erbij om de prijs per eenheid te laten uitrekenen.";
+  } else {
+    $("vVerpHint").textContent = "Het aantal per verpakking blijft bewaard, zodat je in het overzicht ziet hoeveel rollen of doosjes je hebt. Vul je er de verpakkingsprijs bij in, dan reken ik de prijs per eenheid uit.";
+  }
 }
-["vVerpPrijs","vVerpAantal","vEenheid"].forEach(id => $(id).addEventListener("input", bijwerkVerpHint));
+["vVerpPrijs","vVerpAantal","vVerpNaam","vEenheid"].forEach(id => $(id).addEventListener("input", bijwerkVerpHint));
 $("vVerpReken").addEventListener("click", () => {
   const per = verpakkingPerEenheid();
-  if (per === null){ toast("Vul eerst de verpakkingsprijs en het aantal in"); return; }
+  if (per === null){ toast("Vul eerst het aantal per verpakking én de verpakkingsprijs in"); return; }
   $("vInkoop").value = per;
-  $("vVerpPrijs").value = ""; $("vVerpAantal").value = "";
+  $("vVerpPrijs").value = "";
   bijwerkVerpHint();
   toast("Prijs per eenheid overgenomen");
 });
@@ -2230,7 +2304,10 @@ $("vOpslaan").addEventListener("click", async () => {
     op_voorraad: prodOpVoorraad,
     voorraad: prodOpVoorraad ? (parseFloat($("vVoorraad").value) || 0) : 0,
     eenheid: $("vEenheid").value.trim() || "stuks",
-    leverancier: $("vLeverancier").value.trim() || null
+    leverancier: $("vLeverancier").value.trim() || null,
+    verpakking_aantal: (parseFloat($("vVerpAantal").value) > 0 ? parseFloat($("vVerpAantal").value) : null),
+    verpakking_naam: $("vVerpNaam").value.trim() || null,
+    volledige_naam: $("vVolledigeNaam").value.trim() || null
   };
   $("vOpslaan").disabled = true;
   let fout;
@@ -2280,9 +2357,10 @@ function renderVoorraad(){
     const g = goedkoopsteVoor(p.id);
     return '<tr class="klik" data-vid="' + p.id + '">' +
       '<td style="width:34px" data-geenklik="1"><input type="checkbox" class="vSel" data-sel="' + p.id + '"></td>' +
-      '<td class="tekst">' + esc(p.naam) + '</td>' +
+      '<td class="tekst">' + esc(p.naam) +
+        (p.volledige_naam ? '<div class="m" style="margin-top:3px">' + esc(p.volledige_naam) + '</div>' : '') + '</td>' +
       '<td class="tekst">' + esc(catNaam(p.categorie_id) || "—") + '</td>' +
-      '<td class="r">' + (p.op_voorraad === false ? '<span class="chip grijs">DOORLOOP</span>' : Number(p.voorraad).toLocaleString("nl-NL") + ' ' + esc(p.eenheid || "")) + '</td>' +
+      '<td class="r">' + (p.op_voorraad === false ? '<span class="chip grijs">DOORLOOP</span>' : Number(p.voorraad).toLocaleString("nl-NL") + ' ' + esc(p.eenheid || "") + verpakkingTekst(p)) + '</td>' +
       '<td class="r">' + eurP(p.inkoopprijs || 0) + '</td>' +
       '<td class="r">' + eurP(p.verkoopprijs || 0) + '</td>' +
       '<td class="r" style="color:' + (marge > 0 ? "var(--groen)" : "var(--ink3)") + '">' + eurP(marge) + '</td>' +
@@ -2315,7 +2393,11 @@ function renderVoorraad(){
     $("vVerwijder").style.display = "inline-block";
     $("vPrijzenBlok").style.display = "block";
     renderVPrijzen(p.id);
-    $("vVerpPrijs").value = ""; $("vVerpAantal").value = ""; bijwerkVerpHint();
+    $("vVerpPrijs").value = "";
+    $("vVerpAantal").value = p.verpakking_aantal ?? "";
+    $("vVerpNaam").value = p.verpakking_naam || "";
+    $("vVolledigeNaam").value = p.volledige_naam || "";
+    bijwerkVerpHint();
     $("vForm").style.display = "block";
     window.scrollTo(0, 0);
   }));
