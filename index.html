@@ -3663,7 +3663,7 @@ $("fdPrint").addEventListener("click", async () => {
     '<div style="text-align:right">' +
     '<div class="pnaam">' + esc(I.bedrijf_naam || "LRoks Elektrotechniek") + '</div>' +
     '<div class="pklein">' + esc(I.bedrijf_adres || "") + '<br>' + esc(I.bedrijf_postcode_plaats || "") + '<br>' +
-    esc(I.bedrijf_email || "") + (I.bedrijf_telefoon ? " · " + esc(I.bedrijf_telefoon) : "") +
+    [I.bedrijf_email, I.bedrijf_telefoon].filter(Boolean).map(esc).join(" · ") +
     '<br>KVK ' + esc(I.bedrijf_kvk || "-") + ' · BTW ' + esc(I.bedrijf_btw || "-") +
     '<br>IBAN ' + esc(I.bedrijf_iban || "-") + '</div></div></div>' +
     '<h1>FACTUUR ' + esc(f.nummer || "") + '</h1>' +
