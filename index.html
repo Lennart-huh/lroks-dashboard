@@ -3699,7 +3699,7 @@ function genereerFactuurPdf(f, k, I, regels){
 
   try {
     const logoW = 22, logoH = logoW * 628 / 700;
-    doc.addImage(LOGO_DATA_URI, "PNG", L, y, logoW, logoH);
+    doc.addImage(LOGO_DATA_URI, "PNG", L, y, logoW, logoH, undefined, "SLOW");
   } catch (e) { console.error("Logo tekenen mislukt", e); }
 
   doc.setFont("helvetica", "bold"); doc.setFontSize(13);
@@ -3773,7 +3773,7 @@ function genereerFactuurPdf(f, k, I, regels){
   if (fdQrDataUri){
     try {
       const qrSize = 28;
-      doc.addImage(fdQrDataUri, "PNG", R - qrSize, y - 4, qrSize, qrSize);
+      doc.addImage(fdQrDataUri, "PNG", R - qrSize, y - 4, qrSize, qrSize, undefined, "SLOW");
       doc.setFontSize(7.5);
       doc.text("Scan om te betalen", R - qrSize / 2, y - 4 + qrSize + 3, { align: "center" });
     } catch (e) { console.error("QR tekenen mislukt", e); }
