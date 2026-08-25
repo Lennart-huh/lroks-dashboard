@@ -597,6 +597,13 @@ nav.onderbalk{display:none}
             <tbody id="owKwartaalBody"></tbody>
           </table>
         </div>
+        <h3 style="font-size:.95rem;margin:0 0 10px">Per maand</h3>
+        <div class="tbl-wrap" style="margin-bottom:20px">
+          <table>
+            <thead><tr><th>Maand</th><th class="r">Omzet</th><th class="r">Kosten</th><th class="r">Winst</th><th class="r">Marge</th></tr></thead>
+            <tbody id="owMaandBody"></tbody>
+          </table>
+        </div>
         <h3 style="font-size:.95rem;margin:0 0 10px">Waar je winst vandaan komt</h3>
         <div class="tbl-wrap" style="margin-bottom:20px">
           <table>
@@ -1486,10 +1493,11 @@ function omzetWinstPerMaand(jaar){
     }
   });
   const winst = omzet.map((o, i) => o - kosten[i]);
-  return { omzet, winst };
+  return { omzet, kosten, winst };
 }
 
 const MAAND_KORT = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+const MAAND_NAMEN = ["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
 
 /* Gegroepeerde staafdiagram (omzet + winst per maand) als inline SVG, met
    hover-tooltip per staaf. Winst kan negatief zijn, dus de nullijn ligt niet
@@ -3811,6 +3819,11 @@ function renderOmzet(){
   };
   $("owKwartaalBody").innerHTML =
     KWARTAAL_NAMEN.map((n, i) => rij(n, f.omzet[i], f.kosten[i])).join("") +
+    rij("<b>Heel " + jaar + "</b>", omzetJ, kostenJ, ' style="border-top:2px solid var(--line)"');
+
+  const fm = omzetWinstPerMaand(jaar);
+  $("owMaandBody").innerHTML =
+    MAAND_NAMEN.map((n, i) => rij(n, fm.omzet[i], fm.kosten[i])).join("") +
     rij("<b>Heel " + jaar + "</b>", omzetJ, kostenJ, ' style="border-top:2px solid var(--line)"');
 
   const rijen = Object.values(winstBronnen(jaar)).filter(b => b.omzet || b.kost);
