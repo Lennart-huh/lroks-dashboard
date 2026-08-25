@@ -976,7 +976,8 @@ nav.onderbalk{display:none}
         </div>
         <div class="hint" style="margin-bottom:16px">Al je inkoopfacturen per kostensoort — wat het gekost heeft en bij welke
           leverancier, zodat je in één oogopslag ziet waar je iets moet bijbestellen.</div>
-        <div id="ksBlokken"></div>
+        <div class="subtabs" id="ksSubtabs"></div>
+        <div id="ksBlok"></div>
       </div>
     </main>
   </div>
@@ -3896,23 +3897,34 @@ function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); rend
 
 /* Alle inkoopfacturen gegroepeerd per kostensoort — bedrag en leverancier,
    zodat je ziet wat iets gekost heeft en waar je het weer kunt bestellen. */
+let ksActief = KOSTEN[0][0];
+
 function renderKostensoorten(){
   const jaar = vulJaarKeuze("ksJaar");
   const inkoop = factData.filter(f => f.type === "inkoop" && new Date(f.datum).getFullYear() === jaar);
-  $("ksBlokken").innerHTML = KOSTEN.map(([code, naam]) => {
-    const lijst = inkoop.filter(f => (f.categorie || "materiaal") === code)
-      .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
-    const totaal = lijst.reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
-    const rijen = lijst.length
-      ? lijst.map(f =>
-          '<tr><td>' + fmtDatum(f.datum) + '</td>' +
-          '<td class="tekst">' + esc(f.leverancier || "—") + '</td>' +
-          '<td class="tekst">' + esc(f.nummer || "—") + '</td>' +
-          '<td class="r">' + eur2(f.bedrag_excl || 0) + '</td></tr>').join("")
-      : '<tr><td colspan="4" class="leeg">Nog geen inkoopfacturen in ' + jaar + '.</td></tr>';
-    return '<div class="form-card" style="margin-bottom:16px">' +
+
+  $("ksSubtabs").innerHTML = KOSTEN.map(([code, naam]) =>
+    '<button data-ks="' + code + '" class="' + (code === ksActief ? "aan" : "") + '">' + esc(naam) + '</button>'
+  ).join("");
+  $("ksSubtabs").querySelectorAll("[data-ks]").forEach(b => b.addEventListener("click", () => {
+    ksActief = b.dataset.ks;
+    renderKostensoorten();
+  }));
+
+  const lijst = inkoop.filter(f => (f.categorie || "materiaal") === ksActief)
+    .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  const totaal = lijst.reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
+  const rijen = lijst.length
+    ? lijst.map(f =>
+        '<tr><td>' + fmtDatum(f.datum) + '</td>' +
+        '<td class="tekst">' + esc(f.leverancier || "—") + '</td>' +
+        '<td class="tekst">' + esc(f.nummer || "—") + '</td>' +
+        '<td class="r">' + eur2(f.bedrag_excl || 0) + '</td></tr>').join("")
+    : '<tr><td colspan="4" class="leeg">Nog geen inkoopfacturen in ' + jaar + '.</td></tr>';
+  $("ksBlok").innerHTML =
+    '<div class="form-card">' +
       '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">' +
-        '<h3 style="font-size:.92rem;margin:0">' + esc(naam) + '</h3>' +
+        '<h3 style="font-size:.92rem;margin:0">' + esc(kostenNaam(ksActief)) + '</h3>' +
         '<span class="mono" style="font-weight:600">' + eur2(totaal) + '</span>' +
       '</div>' +
       '<div class="tbl-wrap"><table>' +
@@ -3920,7 +3932,6 @@ function renderKostensoorten(){
         '<tbody>' + rijen + '</tbody>' +
       '</table></div>' +
     '</div>';
-  }).join("");
 }
 $("ksJaar").addEventListener("change", renderKostensoorten);
 ["owJaar","bwJaar","btJaar"].forEach(id => $(id).addEventListener("change", renderFinancieel));
