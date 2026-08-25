@@ -749,7 +749,7 @@ nav.onderbalk{display:none}
           </div>
           <div class="rij2">
             <div class="veld" id="vVoorraadVeld"><label>Voorraad</label><input type="number" id="vVoorraad" step="0.5" inputmode="decimal"></div>
-            <div class="veld"><label>Eenheid</label><input type="text" id="vEenheid" placeholder="stuks / meter / doos"></div>
+            <div class="veld"><label>Eenheid</label><input type="text" id="vEenheid" placeholder="stuks / meter / doos — leeg laten voor een vast bedrag"></div>
           </div>
           <div class="veld"><label>Leverancier</label><input type="text" id="vLeverancier"></div>
           <div class="veld"><label>Volledige naam</label>
@@ -2308,7 +2308,7 @@ $("vOpslaan").addEventListener("click", async () => {
     verkoopprijs: isNaN(margeV) ? r2(parseFloat($("vVerkoop").value) || 0) : r2(inkoopV * (1 + margeV / 100)),
     op_voorraad: prodOpVoorraad,
     voorraad: prodOpVoorraad ? (parseFloat($("vVoorraad").value) || 0) : 0,
-    eenheid: $("vEenheid").value.trim() || "stuks",
+    eenheid: $("vEenheid").value.trim(),
     leverancier: $("vLeverancier").value.trim() || null,
     verpakking_aantal: (parseFloat($("vVerpAantal").value) > 0 ? parseFloat($("vVerpAantal").value) : null),
     verpakking_naam: $("vVerpNaam").value.trim() || null,
@@ -3779,7 +3779,8 @@ function genereerFactuurPdf(f, k, I, regels){
   [
     I.bedrijf_adres,
     I.bedrijf_postcode_plaats,
-    [(I.bedrijf_email_facturen || I.bedrijf_email), I.bedrijf_telefoon].filter(Boolean).join(" · "),
+    I.bedrijf_telefoon,
+    I.bedrijf_email_facturen || I.bedrijf_email,
     "KVK " + (I.bedrijf_kvk || "-"),
     "BTW " + (I.bedrijf_btw || "-"),
     "IBAN " + (I.bedrijf_iban || "-")
