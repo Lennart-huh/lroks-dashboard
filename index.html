@@ -984,8 +984,8 @@ function fmtDatum(iso){
 }
 // "2 meter" i.p.v. kaal "2"; en "€ 0,36 / meter" i.p.v. kaal "€ 0,36" —
 // alleen als de regel een eenheid heeft (arbeid=uur, kilometers=km, product=eigen eenheid)
-const fmtAantal = r => Number(r.aantal).toLocaleString("nl-NL") + (r.eenheid ? " " + r.eenheid : "");
-const fmtPrijsPerEenheid = r => eur2(r.prijs) + (r.eenheid ? " / " + r.eenheid : "");
+const fmtAantal = r => r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") + " " + r.eenheid : "—";
+const fmtPrijsPerEenheid = r => r.eenheid ? eur2(r.prijs) + " / " + r.eenheid : "—";
 function toast(msg){
   const t = $("toast");
   t.textContent = msg;
@@ -3767,8 +3767,10 @@ function genereerFactuurPdf(f, k, I, regels){
   const L = 15, R = 195;
   let y = 18;
 
+  let logoH = 0;
   try {
-    const logoW = 22, logoH = logoW * 628 / 700;
+    const logoW = 40;
+    logoH = logoW * 628 / 700;
     doc.addImage(LOGO_DATA_URI, "PNG", L, y, logoW, logoH, undefined, "SLOW");
   } catch (e) { console.error("Logo tekenen mislukt", e); }
 
@@ -3786,7 +3788,7 @@ function genereerFactuurPdf(f, k, I, regels){
     "IBAN " + (I.bedrijf_iban || "-")
   ].filter(Boolean).forEach(regel => { doc.text(regel, R, ry, { align: "right" }); ry += 4.5; });
 
-  y = Math.max(y + 30, ry) + 8;
+  y = Math.max(y + logoH + 8, ry) + 8;
   doc.setFont("helvetica", "bold"); doc.setFontSize(16);
   doc.text("FACTUUR " + (f.nummer || ""), L, y);
   y += 10;
