@@ -339,6 +339,11 @@ nav.onderbalk{display:none}
               <div class="hint" id="pZoekHint"></div></div>
             <div class="veld"><label>Aantal</label><input type="number" id="pAantal" step="0.5" min="0" inputmode="decimal" placeholder="bv. 4"></div>
           </div>
+          <div class="veld" id="pCmVeld" style="display:none">
+            <label>Of vul cm in</label>
+            <input type="number" id="pCm" step="1" min="0" inputmode="decimal" placeholder="bv. 30">
+            <div class="hint">Rekent automatisch om naar het Aantal-veld hierboven (in meter).</div>
+          </div>
           <div class="veld"><label>Datum</label><input type="date" id="pDatum"></div>
           <button class="knop" id="pOpslaan">Gebruik opslaan</button>
           <button class="knop klein stil" id="pAnnuleer" style="display:none">Wijzigen annuleren</button>
@@ -1979,6 +1984,7 @@ function stopGebruikBewerken(){
   $("pOpslaan").textContent = "Gebruik opslaan";
   $("pAnnuleer").style.display = "none";
   $("pAantal").value = "";
+  $("pCm").value = "";
   $("pDatum").value = vandaagISO();
 }
 $("pAnnuleer").addEventListener("click", stopGebruikBewerken);
@@ -1995,7 +2001,9 @@ function startGebruikBewerken(g){
   $("pZoek").value = ""; $("pZoekCategorie").value = "";
   vulProductKeuze();
   $("pProduct").value = g.product_id || "";
+  bijwerkPCmZichtbaarheid();
   $("pAantal").value = Math.abs(Number(g.aantal));
+  $("pCm").value = "";
   $("pDatum").value = g.datum;
   $("pOpslaan").textContent = "Wijziging opslaan";
   $("pAnnuleer").style.display = "block";
@@ -2035,9 +2043,25 @@ function vulProductKeuze(){
   $("pZoekHint").textContent = (term || cat)
     ? lijst.length + " van " + totaal + " producten" + (lijst.length ? "" : " — niets gevonden, pas je zoekterm aan")
     : totaal + " producten";
+
+  bijwerkPCmZichtbaarheid();
 }
 ["pZoek","pZoekCategorie"].forEach(id => $(id).addEventListener("input", vulProductKeuze));
 $("pZoekCategorie").addEventListener("change", vulProductKeuze);
+
+/* cm-hulpje: alleen zinvol bij producten die per meter gaan (draad, buis).
+   Rekent rechtstreeks om naar het Aantal-veld, dat in meter blijft staan. */
+function bijwerkPCmZichtbaarheid(){
+  const prod = cache.producten.find(p => p.id === $("pProduct").value);
+  const perMeter = !!(prod && /meter/i.test(prod.eenheid || ""));
+  $("pCmVeld").style.display = perMeter ? "block" : "none";
+  if (!perMeter) $("pCm").value = "";
+}
+$("pProduct").addEventListener("change", bijwerkPCmZichtbaarheid);
+$("pCm").addEventListener("input", () => {
+  const cm = parseFloat($("pCm").value);
+  $("pAantal").value = cm >= 0 ? r2(cm / 100) : "";
+});
 
 $("pOpslaan").addEventListener("click", async () => {
   const projectId = $("pProject").value;
