@@ -403,7 +403,10 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Regels — kies per regel wat ermee moet gebeuren</label>
               <div id="pfRegels"></div>
             </div>
-            <button class="knop klein" id="pfVerwerk">Verwerken</button>
+            <div style="display:flex;gap:10px">
+              <button class="knop klein" id="pfVerwerk">Verwerken</button>
+              <button class="knop klein stil" id="pfAnnuleer">Annuleren</button>
+            </div>
           </div>
         </div>
 
@@ -2955,6 +2958,12 @@ $("pdfLees").addEventListener("click", async () => {
     status.textContent = "Inlezen mislukt: " + e.message;
   }
   $("pdfLees").disabled = false;
+});
+
+$("pfAnnuleer").addEventListener("click", () => {
+  $("pdfResultaat").style.display = "none";
+  $("pdfBestand").value = "";
+  $("pdfStatus").textContent = "";
 });
 
 function matchProduct(oms){
