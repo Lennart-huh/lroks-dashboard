@@ -706,6 +706,9 @@ nav.onderbalk{display:none}
               <div class="veld"><label>Project</label><div class="lees" id="fdiProject">—</div></div>
             </div>
             <div class="veld"><label>Notitie</label><div class="lees" id="fdiNotitie">—</div></div>
+            <div class="veld" id="fdiRegelsVeld" style="display:none"><label>Wat zat erin</label>
+              <div id="fdiRegels"></div>
+            </div>
             <div class="veld"><label>Betaald?</label>
               <div class="schakel">
                 <button type="button" id="fdiStatusOpen" class="aan">Nog open</button>
@@ -3695,7 +3698,22 @@ function openInkoop(id){
   $("fdiNotitie").textContent = f.notities || "\u2014";
   zetInkoopStatus(f.status === "betaald" ? "betaald" : "open");
   $("fiDetail").style.display = "block";
+  laadInkoopRegels(id);
   window.scrollTo(0, 0);
+}
+
+/* toont wat er in de inkoopfactuur zat, ook als je bij het verwerken op
+   "overslaan" klikte en er dus geen product van gemaakt is */
+async function laadInkoopRegels(factuurId){
+  $("fdiRegelsVeld").style.display = "none";
+  const { data, error } = await db.from("factuur_inkoop_regels").select("*").eq("factuur_id", factuurId);
+  if (error || !data || !data.length) return;
+  $("fdiRegelsVeld").style.display = "block";
+  $("fdiRegels").innerHTML = data.map(r =>
+    '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--line)">' +
+      '<span>' + esc(r.omschrijving) + (r.product_id ? ' <span class="chip grijs">PRODUCT</span>' : '') + '</span>' +
+      '<span class="mono">' + (r.aantal ? Number(r.aantal).toLocaleString("nl-NL") + ' \u00d7 ' : '') + eur2(r.prijs || 0) + '</span>' +
+    '</div>').join("");
 }
 
 function zetInkoopStatus(s){
