@@ -3864,10 +3864,6 @@ function genereerFactuurPdf(f, k, I, regels){
 
   y += 14;
   if (y > 265) { doc.addPage(); y = 20; }
-  doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-  doc.text("Bedankt voor uw opdracht!", L, y);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-  y += 7;
   const betaalTekst = "Graag betalen voor de vervaldatum op " + (I.bedrijf_iban || "ons rekeningnummer") +
     " onder vermelding van factuurnummer " + (f.nummer || "") + ".";
   doc.text(doc.splitTextToSize(betaalTekst, fdQrDataUri ? 110 : 170), L, y);
@@ -3880,6 +3876,14 @@ function genereerFactuurPdf(f, k, I, regels){
       doc.text("Scan om te betalen", R - qrSize / 2, y - 4 + qrSize + 3, { align: "center" });
     } catch (e) { console.error("QR tekenen mislukt", e); }
   }
+
+  // afsluitende bedankregel onderaan de pagina, los van de betaalinstructies erboven
+  const paginaHoogte = doc.internal.pageSize.getHeight();
+  let bedanktY = paginaHoogte - 20;
+  if (bedanktY < y + 10) { doc.addPage(); bedanktY = paginaHoogte - 20; }
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text("Bedankt voor uw opdracht!", 105, bedanktY, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
 
   return doc;
 }
