@@ -604,7 +604,12 @@ nav.onderbalk{display:none}
           <div class="form-card" id="fDetail" style="display:none;margin-bottom:18px;max-width:680px">
             <div class="rij2">
               <div class="veld"><label>Factuurnummer</label><input type="text" id="fdNummer"></div>
-              <div class="veld"><label>Klant</label><select id="fdKlant"></select></div>
+              <div class="veld"><label>Klant</label>
+                <div style="display:flex;gap:6px">
+                  <select id="fdKlant" style="flex:1"></select>
+                  <button type="button" class="knop klein stil" id="fdKlantKopieer" title="Klantnaam kopiëren">⧉</button>
+                </div>
+              </div>
             </div>
             <div class="rij2">
               <div class="veld"><label>Factuurdatum</label><input type="date" id="fdDatum"></div>
@@ -1950,6 +1955,12 @@ $("klNaamKopieer").addEventListener("click", async () => {
   const naam = $("klNaam").value.trim();
   if (!naam) { toast("Geen naam om te kopiëren"); return; }
   try { await navigator.clipboard.writeText(naam); toast("Naam gekopieerd"); }
+  catch (e) { console.error(e); toast("Kopiëren mislukt"); }
+});
+$("fdKlantKopieer").addEventListener("click", async () => {
+  const klant = cache.klanten.find(k => k.id === $("fdKlant").value);
+  if (!klant) { toast("Geen klant gekozen"); return; }
+  try { await navigator.clipboard.writeText(klant.naam); toast("Naam gekopieerd"); }
   catch (e) { console.error(e); toast("Kopiëren mislukt"); }
 });
 
