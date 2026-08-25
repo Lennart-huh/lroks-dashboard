@@ -23,6 +23,7 @@
   --amber:#B0720A; --amber-bg:#F8EFDD;
   --rood:#B3372B; --rood-bg:#F9E8E5;
   --accent:#171B19;
+  --chart-omzet:#2a78d6; --chart-winst:#008300;
   --nav-h:60px;
 }
 [data-theme="dark"]{
@@ -32,6 +33,7 @@
   --amber:#E0A43C; --amber-bg:#2B2213;
   --rood:#E06A5B; --rood-bg:#2C1815;
   --accent:#EDEFEC;
+  --chart-omzet:#3987e5; --chart-winst:#008300;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{font-size:16px}
@@ -116,6 +118,17 @@ main{flex:1;padding:26px 22px 90px;min-width:0}
 .status-balk .t{font-size:.72rem;color:var(--ink2)}
 .status-balk .n{font-family:'IBM Plex Mono',monospace;font-size:.78rem;font-weight:600}
 .bol{width:8px;height:8px;border-radius:50%;background:var(--groen);display:inline-block}
+
+.legende{display:flex;gap:16px;flex-wrap:wrap}
+.legende-item{display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--ink2)}
+.legende-item .bolletje{width:9px;height:9px;border-radius:2px;display:inline-block}
+.og-tooltip{position:absolute;display:none;pointer-events:none;background:var(--ink);color:var(--bg);
+  font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:6px 9px;border-radius:6px;white-space:nowrap;
+  transform:translate(-50%,-100%);z-index:5}
+#ogSvg .og-as-tekst{font-family:'Archivo',sans-serif;font-size:9px;fill:var(--ink3)}
+#ogSvg .og-grid{stroke:var(--line)}
+#ogSvg .og-nul{stroke:var(--ink3)}
+#ogSvg rect.og-bar{cursor:pointer}
 
 .tbl-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);overflow-x:auto}
 table{width:100%;border-collapse:collapse}
@@ -235,6 +248,17 @@ nav.onderbalk{display:none}
           <div class="card"><div class="k">Uren deze week</div><div class="v" id="cUren">—</div><div class="m">werk + kantoor</div></div>
           <div class="card"><div class="k">KM dit jaar</div><div class="v" id="cKm">—</div><div class="m">zakelijk</div></div>
           <div class="card"><div class="k">Open projecten</div><div class="v" id="cProjecten">—</div><div class="m" id="cKlantenSub">klanten totaal</div></div>
+        </div>
+        <div class="form-card" style="margin-top:18px;position:relative">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+            <h3 style="font-size:.95rem;margin:0">Omzet &amp; winst per maand — <span id="ogJaar"></span></h3>
+            <div class="legende">
+              <span class="legende-item"><span class="bolletje" style="background:var(--chart-omzet)"></span>Omzet</span>
+              <span class="legende-item"><span class="bolletje" style="background:var(--chart-winst)"></span>Winst</span>
+            </div>
+          </div>
+          <svg id="ogSvg" viewBox="0 0 720 260" style="width:100%;height:auto;display:block"></svg>
+          <div id="ogTooltip" class="og-tooltip"></div>
         </div>
         <div class="status-balk">
           <div><span class="bol" id="dbBol"></span><span class="t" id="dbStatus">Database verbinden…</span></div>
@@ -973,6 +997,14 @@ const LOGO_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAJ0CAY
 const $ = id => document.getElementById(id);
 const eur = n => "€ " + Math.round(n).toLocaleString("nl-NL");
 const eur2 = n => "€ " + Number(n).toLocaleString("nl-NL", {minimumFractionDigits:2, maximumFractionDigits:2});
+// compacte notatie voor asstippen in grafieken, bv. "€ 1,2k"
+const eurKort = n => {
+  const neg = n < 0, abs = Math.abs(n);
+  const kort = abs >= 1000
+    ? (abs / 1000).toLocaleString("nl-NL", { maximumFractionDigits: 1 }) + "k"
+    : Math.round(abs).toLocaleString("nl-NL");
+  return (neg ? "-" : "") + "€ " + kort;
+};
 /* stukprijzen onder een euro (draad per meter, kleingoed) met vier decimalen,
    anders lees je € 0,39 waar € 0,3937 staat */
 const eurP = n => {
@@ -1428,6 +1460,104 @@ function renderHoofd(){
   $("cProjecten").textContent = openProj;
   $("cKlantenSub").textContent = cache.klanten.length + " klanten totaal";
 
+  renderOmzetGrafiek();
+}
+
+/* Omzet en winst per maand, zelfde rekenwijze als financieelJaar() maar dan
+   per maand i.p.v. per kwartaal (investering wordt over de maanden verdeeld). */
+function omzetWinstPerMaand(jaar){
+  const omzet = new Array(12).fill(0), kosten = new Array(12).fill(0);
+  factData.forEach(f => {
+    const fJaar = new Date(f.datum).getFullYear();
+    const m = new Date(f.datum).getMonth();
+    const excl = Number(f.bedrag_excl || 0);
+    if (f.type === "verkoop"){
+      if (fJaar === jaar) omzet[m] += excl;
+    } else if (f.type === "inkoop"){
+      const jr = Number(f.afschrijf_jaren || 0);
+      if (f.is_investering && jr > 0){
+        if (jaar >= fJaar && jaar < fJaar + jr){
+          const perMaand = excl / jr / 12;
+          for (let i = 0; i < 12; i++) kosten[i] += perMaand;
+        }
+      } else if (fJaar === jaar){
+        kosten[m] += excl;
+      }
+    }
+  });
+  const winst = omzet.map((o, i) => o - kosten[i]);
+  return { omzet, winst };
+}
+
+const MAAND_KORT = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+
+/* Gegroepeerde staafdiagram (omzet + winst per maand) als inline SVG, met
+   hover-tooltip per staaf. Winst kan negatief zijn, dus de nullijn ligt niet
+   per se onderaan. */
+function renderOmzetGrafiek(){
+  const jaar = new Date().getFullYear();
+  $("ogJaar").textContent = jaar;
+  const { omzet, winst } = omzetWinstPerMaand(jaar);
+
+  const W = 720, H = 260, padL = 46, padR = 8, padT = 10, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const alleWaarden = omzet.concat(winst);
+  let maxV = Math.max(0, ...alleWaarden), minV = Math.min(0, ...alleWaarden);
+  if (maxV === 0 && minV === 0) maxV = 100; // voorkom delen door 0 als er nog niets is
+  const marge = (maxV - minV) * 0.1 || 1;
+  maxV += marge; minV -= (minV < 0 ? marge : 0);
+  const schaalY = v => padT + plotH - (v - minV) / (maxV - minV) * plotH;
+  const nulY = schaalY(0);
+
+  const clusterW = plotW / 12;
+  const barW = Math.min(16, clusterW * 0.32);
+  const gapMidden = 3;
+
+  // gridlijnen: nul + 3 tussenlijnen
+  let svg = "";
+  const stappen = 4;
+  for (let i = 0; i <= stappen; i++){
+    const v = minV + (maxV - minV) * i / stappen;
+    const y = schaalY(v);
+    svg += '<line class="og-grid" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y + '" y2="' + y + '" stroke-width="1"></line>';
+    svg += '<text class="og-as-tekst" x="' + (padL - 6) + '" y="' + (y + 3) + '" text-anchor="end">' + eurKort(v) + '</text>';
+  }
+  svg += '<line class="og-nul" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + nulY + '" y2="' + nulY + '" stroke-width="1.2"></line>';
+
+  const staaf = (x, val, kleurVar, klasse, titel) => {
+    const y1 = schaalY(0), y2 = schaalY(val);
+    const top = Math.min(y1, y2), hoogte = Math.max(1, Math.abs(y2 - y1));
+    return '<rect class="og-bar ' + klasse + '" x="' + x + '" y="' + top + '" width="' + barW +
+      '" height="' + hoogte + '" rx="3" fill="' + kleurVar + '" data-titel="' + esc(titel) + '"></rect>';
+  };
+
+  for (let m = 0; m < 12; m++){
+    const cx = padL + clusterW * m + clusterW / 2;
+    const xOmzet = cx - gapMidden / 2 - barW;
+    const xWinst = cx + gapMidden / 2;
+    svg += staaf(xOmzet, omzet[m], "var(--chart-omzet)", "og-omzet",
+      MAAND_KORT[m] + " · Omzet: " + eur2(omzet[m]));
+    svg += staaf(xWinst, winst[m], "var(--chart-winst)", "og-winst",
+      MAAND_KORT[m] + " · Winst: " + eur2(winst[m]));
+    svg += '<text class="og-as-tekst" x="' + cx + '" y="' + (H - padB + 14) + '" text-anchor="middle">' + MAAND_KORT[m] + '</text>';
+  }
+
+  $("ogSvg").innerHTML = svg;
+
+  const tip = $("ogTooltip");
+  $("ogSvg").querySelectorAll(".og-bar").forEach(el => {
+    el.addEventListener("mouseenter", () => {
+      tip.textContent = el.dataset.titel;
+      tip.style.display = "block";
+    });
+    el.addEventListener("mousemove", (e) => {
+      const kader = $("ogSvg").closest(".form-card").getBoundingClientRect();
+      tip.style.left = (e.clientX - kader.left) + "px";
+      tip.style.top = (e.clientY - kader.top - 10) + "px";
+    });
+    el.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+  });
 }
 
 /* =====================================================
