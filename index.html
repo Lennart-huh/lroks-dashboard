@@ -3038,47 +3038,59 @@ $("pfVerwerk").addEventListener("click", async () => {
   const regels = [...document.querySelectorAll("#pfRegels .pf-regel")];
   for (const el of regels){
     const keuze = el.querySelector(".pfr-select").value;
-    if (keuze === "_skip") continue;
     const naam = el.querySelector(".pfr-naam").value.trim();
     const aantal = parseFloat(el.querySelector(".pfr-aantal").value) || 0;
     const prijs = r2(parseFloat(el.querySelector(".pfr-prijs").value) || 0);
     const catId = el.querySelector(".pfr-cat").value || null;
-    let productId = keuze;
-    if (keuze === "_nieuw"){
-      if (!naam) continue;
-      const { data: np, error: npF } = await db.from("producten").insert({
-        naam: naam.slice(0, 120), inkoopprijs: prijs,
-        categorie_id: catId,
-        marge_pct: stdMarge > 0 ? stdMarge : null,
-        verkoopprijs: stdMarge > 0 ? r2(prijs * (1 + stdMarge / 100)) : 0,
-        op_voorraad: true, voorraad: 0, leverancier: lev
-      }).select().single();
-      if (npF || !np) continue;
-      cache.producten.push(np);
-      productId = np.id;
-      nieuw++;
+    let productId = null;
+
+    if (keuze !== "_skip"){
+      productId = keuze;
+      if (keuze === "_nieuw" && naam){
+        const { data: np, error: npF } = await db.from("producten").insert({
+          naam: naam.slice(0, 120), inkoopprijs: prijs,
+          categorie_id: catId,
+          marge_pct: stdMarge > 0 ? stdMarge : null,
+          verkoopprijs: stdMarge > 0 ? r2(prijs * (1 + stdMarge / 100)) : 0,
+          op_voorraad: true, voorraad: 0, leverancier: lev
+        }).select().single();
+        productId = (!npF && np) ? np.id : null;
+        if (productId){ cache.producten.push(np); nieuw++; }
+      } else if (keuze === "_nieuw"){
+        productId = null;
+      }
+      if (productId){
+        if (aantal > 0){
+          await db.from("voorraad_mutaties").insert({
+            product_id: productId, aantal: aantal, type: "inkoop", datum
+          });
+        }
+        const prod = cache.producten.find(p => p.id === productId);
+        if (prod){
+          const updates = { inkoopprijs: prijs };
+          if (catId && catId !== prod.categorie_id) updates.categorie_id = catId;
+          if (prod.marge_pct != null) updates.verkoopprijs = r2(prijs * (1 + Number(prod.marge_pct) / 100));
+          if (prod.op_voorraad !== false && aantal > 0) updates.voorraad = Number(prod.voorraad || 0) + aantal;
+          await db.from("producten").update(updates).eq("id", productId);
+          prod.inkoopprijs = prijs;
+          if (updates.categorie_id !== undefined) prod.categorie_id = updates.categorie_id;
+          if (updates.verkoopprijs !== undefined) prod.verkoopprijs = updates.verkoopprijs;
+          if (updates.voorraad !== undefined) prod.voorraad = updates.voorraad;
+        }
+        await db.from("product_prijzen").insert({
+          product_id: productId, leverancier: lev, prijs, datum, factuur_id: factuurId
+        });
+        verwerkt++;
+      }
     }
-    if (aantal > 0){
-      await db.from("voorraad_mutaties").insert({
-        product_id: productId, aantal: aantal, type: "inkoop", datum
+
+    // de regel zelf altijd bewaren, ook overgeslagen — anders is later niet meer
+    // te zien wat er in deze factuur zat (zie Kostensoorten)
+    if (naam){
+      await db.from("factuur_inkoop_regels").insert({
+        factuur_id: factuurId, omschrijving: naam, aantal: aantal || null, prijs, product_id: productId
       });
     }
-    const prod = cache.producten.find(p => p.id === productId);
-    if (prod){
-      const updates = { inkoopprijs: prijs };
-      if (catId && catId !== prod.categorie_id) updates.categorie_id = catId;
-      if (prod.marge_pct != null) updates.verkoopprijs = r2(prijs * (1 + Number(prod.marge_pct) / 100));
-      if (prod.op_voorraad !== false && aantal > 0) updates.voorraad = Number(prod.voorraad || 0) + aantal;
-      await db.from("producten").update(updates).eq("id", productId);
-      prod.inkoopprijs = prijs;
-      if (updates.categorie_id !== undefined) prod.categorie_id = updates.categorie_id;
-      if (updates.verkoopprijs !== undefined) prod.verkoopprijs = updates.verkoopprijs;
-      if (updates.voorraad !== undefined) prod.voorraad = updates.voorraad;
-    }
-    await db.from("product_prijzen").insert({
-      product_id: productId, leverancier: lev, prijs, datum, factuur_id: factuurId
-    });
-    verwerkt++;
   }
 
   $("pfVerwerk").disabled = false;
@@ -3916,7 +3928,7 @@ function renderKostensoorten(){
   const totaal = lijst.reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
   const rijen = lijst.length
     ? lijst.map(f =>
-        '<tr><td>' + fmtDatum(f.datum) + '</td>' +
+        '<tr class="klik" data-ksfid="' + f.id + '"><td>' + fmtDatum(f.datum) + '</td>' +
         '<td class="tekst">' + esc(f.leverancier || "—") + '</td>' +
         '<td class="tekst">' + esc(f.nummer || "—") + '</td>' +
         '<td class="r">' + eur2(f.bedrag_excl || 0) + '</td></tr>').join("")
@@ -3927,11 +3939,43 @@ function renderKostensoorten(){
         '<h3 style="font-size:.92rem;margin:0">' + esc(kostenNaam(ksActief)) + '</h3>' +
         '<span class="mono" style="font-weight:600">' + eur2(totaal) + '</span>' +
       '</div>' +
+      '<div class="hint" style="margin-bottom:8px">Klik op een factuur om te zien wat erin zat.</div>' +
       '<div class="tbl-wrap"><table>' +
         '<thead><tr><th>Datum</th><th>Leverancier</th><th>Factuurnummer</th><th class="r">Bedrag excl.</th></tr></thead>' +
         '<tbody>' + rijen + '</tbody>' +
       '</table></div>' +
     '</div>';
+
+  $("ksBlok").querySelectorAll("[data-ksfid]").forEach(r => r.addEventListener("click", () => toonInkoopRegels(r)));
+}
+
+/* toont/verbergt de losse regels van een inkoopfactuur direct onder de rij */
+async function toonInkoopRegels(rij){
+  const volgende = rij.nextElementSibling;
+  if (volgende && volgende.classList.contains("ks-regels")){
+    volgende.remove();
+    return;
+  }
+  rij.parentElement.querySelectorAll(".ks-regels").forEach(r => r.remove());
+  const detail = document.createElement("tr");
+  detail.className = "ks-regels";
+  detail.innerHTML = '<td colspan="4" class="leeg">Laden…</td>';
+  rij.after(detail);
+
+  const { data, error } = await db.from("factuur_inkoop_regels").select("*").eq("factuur_id", rij.dataset.ksfid);
+  if (error){ detail.innerHTML = '<td colspan="4" class="leeg">Kon de regels niet laden.</td>'; return; }
+  const regels = data || [];
+  if (!regels.length){
+    detail.innerHTML = '<td colspan="4" class="leeg">Geen regelgegevens bewaard voor deze factuur.</td>';
+    return;
+  }
+  detail.innerHTML = '<td colspan="4" style="background:var(--surface2);padding:10px 14px">' +
+    regels.map(r =>
+      '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0">' +
+        '<span>' + esc(r.omschrijving) + (r.product_id ? ' <span class="chip grijs">PRODUCT</span>' : '') + '</span>' +
+        '<span class="mono">' + (r.aantal ? Number(r.aantal).toLocaleString("nl-NL") + ' × ' : '') + eur2(r.prijs || 0) + '</span>' +
+      '</div>').join("") +
+    '</td>';
 }
 $("ksJaar").addEventListener("change", renderKostensoorten);
 ["owJaar","bwJaar","btJaar"].forEach(id => $(id).addEventListener("change", renderFinancieel));
