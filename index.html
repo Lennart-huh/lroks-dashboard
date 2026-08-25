@@ -3945,36 +3945,13 @@ function renderKostensoorten(){
       '</table></div>' +
     '</div>';
 
-  $("ksBlok").querySelectorAll("[data-ksfid]").forEach(r => r.addEventListener("click", () => toonInkoopRegels(r)));
-}
-
-/* toont/verbergt de losse regels van een inkoopfactuur direct onder de rij */
-async function toonInkoopRegels(rij){
-  const volgende = rij.nextElementSibling;
-  if (volgende && volgende.classList.contains("ks-regels")){
-    volgende.remove();
-    return;
-  }
-  rij.parentElement.querySelectorAll(".ks-regels").forEach(r => r.remove());
-  const detail = document.createElement("tr");
-  detail.className = "ks-regels";
-  detail.innerHTML = '<td colspan="4" class="leeg">Laden…</td>';
-  rij.after(detail);
-
-  const { data, error } = await db.from("factuur_inkoop_regels").select("*").eq("factuur_id", rij.dataset.ksfid);
-  if (error){ detail.innerHTML = '<td colspan="4" class="leeg">Kon de regels niet laden.</td>'; return; }
-  const regels = data || [];
-  if (!regels.length){
-    detail.innerHTML = '<td colspan="4" class="leeg">Geen regelgegevens bewaard voor deze factuur.</td>';
-    return;
-  }
-  detail.innerHTML = '<td colspan="4" style="background:var(--surface2);padding:10px 14px">' +
-    regels.map(r =>
-      '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0">' +
-        '<span>' + esc(r.omschrijving) + (r.product_id ? ' <span class="chip grijs">PRODUCT</span>' : '') + '</span>' +
-        '<span class="mono">' + (r.aantal ? Number(r.aantal).toLocaleString("nl-NL") + ' × ' : '') + eur2(r.prijs || 0) + '</span>' +
-      '</div>').join("") +
-    '</td>';
+  // klik op een factuur opent het bestaande inkoop-detailscherm (Facturen > Inkomend),
+  // met de Verwijderen-knop erbij -- geen apart eigen scherm hiervoor nodig
+  $("ksBlok").querySelectorAll("[data-ksfid]").forEach(r => r.addEventListener("click", () => {
+    toonTab("facturen");
+    kiesFSub("fIn");
+    openInkoop(r.dataset.ksfid);
+  }));
 }
 $("ksJaar").addEventListener("change", renderKostensoorten);
 ["owJaar","bwJaar","btJaar"].forEach(id => $(id).addEventListener("change", renderFinancieel));
