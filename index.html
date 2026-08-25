@@ -467,7 +467,12 @@ nav.onderbalk{display:none}
           <button class="knop klein" id="klantNieuw">+ Nieuwe klant</button></div>
         <div class="form-card" id="klantForm" style="display:none;margin-bottom:18px">
           <div class="rij2">
-            <div class="veld"><label>Naam *</label><input type="text" id="klNaam"></div>
+            <div class="veld"><label>Naam *</label>
+              <div style="display:flex;gap:6px">
+                <input type="text" id="klNaam" style="flex:1">
+                <button type="button" class="knop klein stil" id="klNaamKopieer" title="Naam kopiëren">⧉</button>
+              </div>
+            </div>
             <div class="veld"><label>Contactpersoon</label><input type="text" id="klContact"></div>
           </div>
           <div class="rij2">
@@ -598,7 +603,7 @@ nav.onderbalk{display:none}
         <div class="fpanel actief" id="fUit">
           <div class="form-card" id="fDetail" style="display:none;margin-bottom:18px;max-width:680px">
             <div class="rij2">
-              <div class="veld"><label>Factuurnummer</label><input type="text" id="fdNummer" readonly></div>
+              <div class="veld"><label>Factuurnummer</label><input type="text" id="fdNummer"></div>
               <div class="veld"><label>Klant</label><select id="fdKlant"></select></div>
             </div>
             <div class="rij2">
@@ -1941,6 +1946,12 @@ $("klantNieuw").addEventListener("click", () => {
   $("klNaam").focus();
 });
 $("klAnnuleer").addEventListener("click", () => { $("klantForm").style.display = "none"; });
+$("klNaamKopieer").addEventListener("click", async () => {
+  const naam = $("klNaam").value.trim();
+  if (!naam) { toast("Geen naam om te kopiëren"); return; }
+  try { await navigator.clipboard.writeText(naam); toast("Naam gekopieerd"); }
+  catch (e) { console.error(e); toast("Kopiëren mislukt"); }
+});
 
 $("klOpslaan").addEventListener("click", async () => {
   const naam = $("klNaam").value.trim();
@@ -3255,7 +3266,10 @@ async function openFactuur(id){
 $("fdOpslaan").addEventListener("click", async () => {
   if (pendingFactuur){ await maakFactuurAan(); return; }
   if (!bewerkFactuurId) return;
+  const nummer = $("fdNummer").value.trim();
+  if (!nummer) { toast("Factuurnummer mag niet leeg zijn"); return; }
   const rij = {
+    nummer,
     klant_id: $("fdKlant").value || null,
     datum: $("fdDatum").value || vandaagISO(),
     vervaldatum: $("fdVervaldatum").value || null,
@@ -3862,7 +3876,9 @@ $("fdPrint").addEventListener("click", () => {
   const k = cache.klanten.find(x => x.id === f.klant_id);
   try {
     const doc = genereerFactuurPdf(f, k, cache.inst, huidigeRegels);
-    doc.save("Factuur-" + (f.nummer || "concept") + ".pdf");
+    const klantVeilig = (k && k.naam ? k.naam : "").replace(/[\\/:*?"<>|]/g, "").trim();
+    const bestandsnaam = "Factuur - " + (f.nummer || "concept") + (klantVeilig ? " - " + klantVeilig : "") + ".pdf";
+    doc.save(bestandsnaam);
   } catch (e) { console.error(e); toast("PDF maken mislukt"); }
 });
 
