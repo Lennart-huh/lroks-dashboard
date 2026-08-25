@@ -614,7 +614,7 @@ nav.onderbalk{display:none}
             </div>
             <div class="veld"><label>Regels</label>
               <div class="tbl-wrap"><table>
-                <thead><tr><th>Datum</th><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs EX.</th><th class="r">Bedrag EX.</th></tr></thead>
+                <thead><tr><th>Datum</th><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Prijs per EX.</th><th class="r">Bedrag EX.</th></tr></thead>
                 <tbody id="fdRegelsBody"></tbody>
               </table></div>
               <div class="hint" style="margin-top:8px">Excl: <b id="fdExcl">—</b> · BTW: <b id="fdBtw">—</b> · Incl: <b id="fdIncl">—</b></div>
@@ -3173,13 +3173,15 @@ document.querySelectorAll("#fSubtabs button").forEach(k =>
   k.addEventListener("click", () => kiesFSub(k.dataset.fsub)));
 
 function volgendNummer(){
-  const jaar = new Date().getFullYear();
+  // formaat: JJNNN (bv. 26029) — sluit aan op de nummering die al buiten de app
+  // gebruikt werd, zodat er één doorlopende reeks blijft i.p.v. een eigen "2026-001"-reeks
+  const jaar2 = String(new Date().getFullYear()).slice(-2);
   let max = 0;
   factData.filter(f => f.type === "verkoop").forEach(f => {
-    const m = String(f.nummer || "").match(new RegExp("^" + jaar + "-(\\d+)$"));
+    const m = String(f.nummer || "").match(new RegExp("^" + jaar2 + "(\\d{3,})$"));
     if (m) max = Math.max(max, parseInt(m[1], 10));
   });
-  return jaar + "-" + String(max + 1).padStart(3, "0");
+  return jaar2 + String(max + 1).padStart(3, "0");
 }
 
 function zetFactuurStatus(s){
@@ -3811,7 +3813,7 @@ function genereerFactuurPdf(f, k, I, regels){
       0: { cellWidth: 20 }, 2: { cellWidth: 22, halign: "right" },
       3: { cellWidth: 28, halign: "right" }, 4: { cellWidth: 26, halign: "right" }
     },
-    head: [["Datum", "Omschrijving", "Aantal", "Prijs EX.", "Bedrag EX."]],
+    head: [["Datum", "Omschrijving", "Aantal", "Prijs per EX.", "Bedrag EX."]],
     body: regels.map(r => [
       r.datum ? fmtDatum(r.datum) : "—", r.omschrijving, fmtAantal(r),
       fmtPrijsPerEenheid(r), eur2(Number(r.aantal) * Number(r.prijs))
