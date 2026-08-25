@@ -3852,7 +3852,11 @@ function genereerFactuurPdf(f, k, I, regels){
   doc.setFont("helvetica", "normal"); doc.setFontSize(9);
 
   y += 14;
-  if (y > 270) { doc.addPage(); y = 20; }
+  if (y > 265) { doc.addPage(); y = 20; }
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+  doc.text("Bedankt voor uw opdracht!", L, y);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+  y += 7;
   const betaalTekst = "Graag betalen voor de vervaldatum op " + (I.bedrijf_iban || "ons rekeningnummer") +
     " onder vermelding van factuurnummer " + (f.nummer || "") + ".";
   doc.text(doc.splitTextToSize(betaalTekst, fdQrDataUri ? 110 : 170), L, y);
