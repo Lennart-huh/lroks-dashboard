@@ -674,6 +674,32 @@ nav.onderbalk{display:none}
             <tbody id="owBronBody"></tbody>
           </table>
         </div>
+        <h3 style="font-size:.95rem;margin:0 0 10px">Overige boekingen (buiten facturen om)</h3>
+        <div class="hint" style="margin-bottom:10px">Voor omzet of kosten die niet uit een factuur in de app komen — bv. omzet van voor je
+          overstapte, of losse in-/uitgaande bedragen. Telt mee in alle bedragen hierboven en bij Belasting/BTW.</div>
+        <div class="tbl-wrap" style="margin-bottom:14px">
+          <table>
+            <thead><tr><th>Datum</th><th>Omschrijving</th><th>Soort</th><th class="r">Bedrag excl.</th><th class="r">Btw</th><th></th></tr></thead>
+            <tbody id="owCorrectiesBody"></tbody>
+          </table>
+        </div>
+        <div class="form-card" style="margin-bottom:20px;background:var(--surface2)">
+          <div class="rij2">
+            <div class="veld"><label>Datum</label><input type="date" id="ocDatum"></div>
+            <div class="veld"><label>Soort</label>
+              <div class="schakel">
+                <button type="button" id="ocOmzet" class="aan">Omzet (inkomend)</button>
+                <button type="button" id="ocKosten">Kosten (uitgaand)</button>
+              </div>
+            </div>
+          </div>
+          <div class="veld"><label>Omschrijving</label><input type="text" id="ocOmschrijving" placeholder="bv. Omzet januari-juli (voor overstap)"></div>
+          <div class="rij2">
+            <div class="veld"><label>Bedrag excl. btw (€)</label><input type="number" id="ocBedrag" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld"><label>Btw (€)</label><input type="number" id="ocBtw" step="0.01" min="0" inputmode="decimal" value="0"></div>
+          </div>
+          <button class="knop klein" id="ocToevoegen">Toevoegen</button>
+        </div>
         <div class="form-card">
           <div class="veld"><label>Omzetdoel per jaar (€)</label><input type="number" id="owDoelOmzet" min="0" step="100" inputmode="decimal" placeholder="bv. 80000"></div>
           <div class="veld"><label>Winstdoel per jaar (€)</label><input type="number" id="owDoelWinst" min="0" step="100" inputmode="decimal" placeholder="bv. 45000"></div>
@@ -1134,7 +1160,7 @@ const KOSTEN = [
 const kostenNaam = c => (KOSTEN.find(k => k[0] === c) || [null, c || "—"])[1];
 
 /* centrale gegevens */
-const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], vasteLasten:[], inst:{} };
+const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], vasteLasten:[], correcties:[], inst:{} };
 let urenData = [];
 let kmData = [];
 let factData = [];
@@ -1387,7 +1413,7 @@ $("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut();
 async function laadAlles(){
   const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm, po, vl] = await Promise.all([
+    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm, po, vl, fc] = await Promise.all([
       db.from("klanten").select("*").order("naam"),
       db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
       db.from("categorieen").select("*").order("volgorde"),
@@ -1401,7 +1427,8 @@ async function laadAlles(){
       db.from("factuur_regels").select("*"),
       db.from("voorraad_mutaties").select("*"),
       db.from("product_onderdelen").select("*"),
-      db.from("vaste_lasten").select("*").eq("actief", true)
+      db.from("vaste_lasten").select("*").eq("actief", true),
+      db.from("financiele_correcties").select("*")
     ]);
     const eerste = [kl,pr,cat,prod,inst,ur,km,ft,pp].find(r => r.error);
     if (eerste) throw eerste.error;
@@ -1421,6 +1448,7 @@ async function laadAlles(){
     cache.regels = fr.data || [];
     cache.mutaties = vm.data || [];
     cache.vasteLasten = vl.data || [];
+    cache.correcties = fc.data || [];
 
     vulSelects();
     vulVoorraadSelects();
@@ -1680,6 +1708,12 @@ function omzetWinstPerMaand(jaar){
         kosten[m] += excl;
       }
     }
+  });
+  cache.correcties.forEach(c => {
+    if (new Date(c.datum).getFullYear() !== jaar) return;
+    const m = new Date(c.datum).getMonth();
+    if (c.type === "omzet") omzet[m] += Number(c.bedrag_excl || 0);
+    else kosten[m] += Number(c.bedrag_excl || 0);
   });
   const winst = omzet.map((o, i) => o - kosten[i]);
   return { omzet, kosten, winst };
@@ -4039,6 +4073,15 @@ function financieelJaar(jaar){
       }
     }
   });
+  // handmatige correcties: omzet/kosten die niet uit een factuur in de app komen
+  // (bv. van voor de overstap, of losse in-/uitgaande bedragen) — net als bij
+  // facturen bepaalt de datum het kwartaal, geen los kwartaalveld
+  cache.correcties.forEach(c => {
+    if (new Date(c.datum).getFullYear() !== jaar) return;
+    const k = kwartaalVan(c.datum);
+    if (c.type === "omzet"){ omzet[k] += Number(c.bedrag_excl || 0); btwUit[k] += Number(c.btw || 0); }
+    else { kosten[k] += Number(c.bedrag_excl || 0); btwIn[k] += Number(c.btw || 0); }
+  });
   return { omzet, kosten, btwUit, btwIn };
 }
 
@@ -4110,7 +4153,54 @@ function renderOmzet(){
   $("owBronBody").innerHTML = rijen.length
     ? rijen.map(b => rij(b.naam, b.omzet, b.kost)).join("")
     : '<tr><td colspan="5" class="leeg">Nog geen gefactureerde regels in ' + jaar + '.</td></tr>';
+
+  renderCorrecties(jaar);
 }
+
+let ocSoort = "omzet";
+$("ocOmzet").addEventListener("click", () => { ocSoort = "omzet"; schakel("ocOmzet","ocKosten"); });
+$("ocKosten").addEventListener("click", () => { ocSoort = "kosten"; schakel("ocKosten","ocOmzet"); });
+
+function renderCorrecties(jaar){
+  if (!$("ocDatum").value) $("ocDatum").value = vandaagISO();
+  const lijst = cache.correcties.filter(c => new Date(c.datum).getFullYear() === jaar)
+    .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  $("owCorrectiesBody").innerHTML = !lijst.length
+    ? '<tr><td colspan="6" class="leeg">Nog geen overige boekingen in ' + jaar + '.</td></tr>'
+    : lijst.map(c =>
+        '<tr><td>' + fmtDatum(c.datum) + '</td>' +
+        '<td class="tekst">' + esc(c.omschrijving) + '</td>' +
+        '<td>' + (c.type === "omzet" ? "Omzet" : "Kosten") + '</td>' +
+        '<td class="r">' + eur2(c.bedrag_excl || 0) + '</td>' +
+        '<td class="r">' + eur2(c.btw || 0) + '</td>' +
+        '<td class="r"><button class="verwijder" data-ocid="' + c.id + '">✕</button></td></tr>').join("");
+  $("owCorrectiesBody").querySelectorAll("[data-ocid]").forEach(k => k.addEventListener("click", async () => {
+    if (!confirm("Deze boeking verwijderen?")) return;
+    const { error } = await db.from("financiele_correcties").delete().eq("id", k.dataset.ocid);
+    if (error){ toast("Verwijderen mislukt"); return; }
+    cache.correcties = cache.correcties.filter(c => c.id !== k.dataset.ocid);
+    toast("Verwijderd");
+    renderFinancieel(); renderHoofd();
+  }));
+}
+
+$("ocToevoegen").addEventListener("click", async () => {
+  const omschrijving = $("ocOmschrijving").value.trim();
+  const datum = $("ocDatum").value;
+  const bedrag = parseFloat($("ocBedrag").value);
+  const btw = parseFloat($("ocBtw").value) || 0;
+  if (!omschrijving || !datum || !(bedrag >= 0)) { toast("Vul omschrijving, datum en bedrag in"); return; }
+  $("ocToevoegen").disabled = true;
+  const { data, error } = await db.from("financiele_correcties").insert({
+    omschrijving, datum, type: ocSoort, bedrag_excl: r2(bedrag), btw: r2(btw)
+  }).select().single();
+  $("ocToevoegen").disabled = false;
+  if (error){ console.error(error); toast("Toevoegen mislukt"); return; }
+  cache.correcties.push(data);
+  $("ocOmschrijving").value = ""; $("ocBedrag").value = ""; $("ocBtw").value = "0";
+  toast("Boeking toegevoegd");
+  renderFinancieel(); renderHoofd();
+});
 
 function renderBelasting(){
   const jaar = vulJaarKeuze("bwJaar");
