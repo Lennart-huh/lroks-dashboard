@@ -337,6 +337,7 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Project</label><select id="uProject"></select></div>
             <div class="veld"><label>Klant</label><select id="uKlant"></select></div>
           </div>
+          <div class="veld"><label>Klus binnen dit project (optioneel)</label><select id="uKlus"><option value="">— geen, rechtstreeks op project —</option></select></div>
           <div class="veld"><label>Omschrijving</label><input type="text" id="uOmschrijving" placeholder="wat heb je gedaan"></div>
           <button class="knop" id="uOpslaan">Uren opslaan</button>
           <button class="knop klein stil" id="uAnnuleer" style="display:none">Wijzigen annuleren</button>
@@ -354,6 +355,7 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Project</label><select id="kProject"></select></div>
             <div class="veld"><label>Klant / bedrijf</label><select id="kKlant"></select></div>
           </div>
+          <div class="veld"><label>Klus binnen dit project (optioneel)</label><select id="kKlus"><option value="">— geen, rechtstreeks op project —</option></select></div>
           <div class="rij2">
             <div class="veld"><label>Type rit</label>
               <div class="schakel">
@@ -370,6 +372,7 @@ nav.onderbalk{display:none}
         <!-- PRODUCT -->
         <div class="subform form-card" id="sub-product">
           <div class="veld"><label>Project</label><select id="pProject"></select></div>
+          <div class="veld"><label>Klus binnen dit project (optioneel)</label><select id="pKlus"><option value="">— geen, rechtstreeks op project —</option></select></div>
           <div class="rij2">
             <div class="veld"><label>Zoek product</label>
               <input type="search" id="pZoek" placeholder="naam, omschrijving of artikelnummer" autocomplete="off"></div>
@@ -414,6 +417,7 @@ nav.onderbalk{display:none}
             bijvoorbeeld een afgesproken vaste prijs voor (een deel van) een klus. Komt gewoon als eigen regel op de factuur
             te staan zodra je dit project factureert.</div>
           <div class="veld"><label>Project</label><select id="erProject"></select></div>
+          <div class="veld"><label>Klus binnen dit project (optioneel)</label><select id="erKlus"><option value="">— geen, rechtstreeks op project —</option></select></div>
           <div class="rij2">
             <div class="veld"><label>Omschrijving</label><input type="text" id="erOmschrijving" placeholder="bv. Aanleg groepenkast — vaste prijs"></div>
             <div class="veld"><label>Datum</label><input type="date" id="erDatum"></div>
@@ -659,6 +663,45 @@ nav.onderbalk{display:none}
                 <tbody id="prVastVergelijkBody"></tbody>
               </table>
             </div>
+          </div>
+          <div class="veld" id="prKlussenBlok" style="display:none"><label>Klussen in dit project</label>
+            <div class="hint" style="margin-bottom:8px">Een deelklus binnen dit project — bv. een vaste prijs voor één onderdeel
+              van een groter project. Kies deze klus bij Uren/KM/Product/Extra regel om eraan te koppelen; klik hieronder op
+              een klus voor de winstvergelijking.</div>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>Naam</th><th>Prijstype</th><th class="r">Vaste prijs</th><th>Status</th></tr></thead>
+                <tbody id="prKlussenBody"></tbody>
+              </table>
+            </div>
+            <div id="prKlusVergelijkBlok" style="display:none;margin-top:10px;background:var(--surface2);border-radius:8px;padding:12px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+                <b id="prKlusVergelijkNaam"></b>
+                <button type="button" class="knop klein stil" id="prKlusVergelijkSluit">Sluiten</button>
+              </div>
+              <div class="tbl-wrap"><table>
+                <thead><tr><th></th><th class="r">Geschat</th><th class="r">Werkelijk</th></tr></thead>
+                <tbody id="prKlusVergelijkBody"></tbody>
+              </table></div>
+            </div>
+            <div class="rij2" style="margin-top:12px">
+              <div class="veld"><label>Nieuwe klus — naam</label><input type="text" id="pkNaam" placeholder="bv. Groepenkast garage"></div>
+              <div class="veld"><label>Prijstype</label>
+                <div class="schakel">
+                  <button type="button" id="pkUurbasis" class="aan">Uurbasis</button>
+                  <button type="button" id="pkVast">Vaste prijs</button>
+                </div>
+              </div>
+            </div>
+            <div class="rij2" id="pkVastVelden" style="display:none">
+              <div class="veld"><label>Vaste prijs (excl., €)</label><input type="number" id="pkVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
+              <div class="veld"><label>Geschatte uren</label><input type="number" id="pkGeschatUren" step="0.5" min="0" inputmode="decimal"></div>
+            </div>
+            <div class="rij2" id="pkVastVelden2" style="display:none">
+              <div class="veld"><label>Geschatte materiaalkosten (€)</label><input type="number" id="pkGeschatKosten" step="0.01" min="0" inputmode="decimal"></div>
+              <div class="veld"><label>Geschatte km</label><input type="number" id="pkGeschatKm" step="1" min="0" inputmode="decimal"></div>
+            </div>
+            <button type="button" class="knop klein stil" id="pkToevoegen">Klus toevoegen</button>
           </div>
           <div class="veld"><label>Omschrijving / notities</label><textarea id="prOmschrijving" placeholder="Hier kun je zoveel opschrijven als je wilt."></textarea></div>
           <div class="veld" id="prUrenBlok" style="display:none"><label>Uren op dit project</label>
@@ -1299,7 +1342,7 @@ const KOSTEN = [
 const kostenNaam = c => (KOSTEN.find(k => k[0] === c) || [null, c || "—"])[1];
 
 /* centrale gegevens */
-const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], vasteLasten:[], correcties:[], notities:[], inst:{} };
+const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], vasteLasten:[], correcties:[], notities:[], klussen:[], inst:{} };
 let urenData = [];
 let kmData = [];
 let factData = [];
@@ -1552,7 +1595,7 @@ $("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut();
 async function laadAlles(){
   const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm, po, vl, fc] = await Promise.all([
+    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm, po, vl, fc, kls] = await Promise.all([
       db.from("klanten").select("*").order("naam"),
       db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
       db.from("categorieen").select("*").order("volgorde"),
@@ -1567,7 +1610,8 @@ async function laadAlles(){
       db.from("voorraad_mutaties").select("*"),
       db.from("product_onderdelen").select("*"),
       db.from("vaste_lasten").select("*").eq("actief", true),
-      db.from("financiele_correcties").select("*")
+      db.from("financiele_correcties").select("*"),
+      db.from("klussen").select("*")
     ]);
     const eerste = [kl,pr,cat,prod,inst,ur,km,ft,pp].find(r => r.error);
     if (eerste) throw eerste.error;
@@ -1588,6 +1632,7 @@ async function laadAlles(){
     cache.mutaties = vm.data || [];
     cache.vasteLasten = vl.data || [];
     cache.correcties = fc.data || [];
+    cache.klussen = kls.data || [];
 
     vulSelects();
     vulVoorraadSelects();
@@ -1667,7 +1712,26 @@ function vulSelects(){
 
   bijwerkKmHint();
   vulNotitieSelects();
+  ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
+    vulKlusSelect(projId, ["uKlus","kKlus","pKlus","erKlus"][i]));
 }
+
+/* Klussen = optionele deelklussen binnen een project (bv. een vaste-prijs
+   klus binnen een groter project). De keuzelijst toont alleen open klussen
+   van het op dat moment gekozen project, en ververst zodra je van project
+   wisselt. */
+function vulKlusSelect(projectSelId, klusSelId){
+  const projectId = $(projectSelId).value;
+  const huidig = $(klusSelId).value;
+  const klussenVoorProject = cache.klussen.filter(k => k.project_id === projectId && k.status === "open");
+  $(klusSelId).innerHTML = '<option value="">— geen, rechtstreeks op project —</option>' +
+    klussenVoorProject.map(k => '<option value="' + k.id + '">' + esc(k.naam) + '</option>').join("");
+  if (klussenVoorProject.some(k => k.id === huidig)) $(klusSelId).value = huidig;
+}
+["uProject","kProject","pProject","erProject"].forEach((projId, i) => {
+  const klusId = ["uKlus","kKlus","pKlus","erKlus"][i];
+  $(projId).addEventListener("change", () => vulKlusSelect(projId, klusId));
+});
 
 /* welke kostensoort gebruikte je de vorige keer bij deze leverancier */
 function vorigeKostensoort(lev){
@@ -1979,6 +2043,7 @@ $("uOpslaan").addEventListener("click", async () => {
     tarief: tarief > 0 ? tarief : null,
     project_id: $("uProject").value || null,
     klant_id: $("uKlant").value || null,
+    klus_id: $("uKlus").value || null,
     omschrijving: $("uOmschrijving").value.trim() || null
   };
   $("uOpslaan").disabled = true;
@@ -2005,6 +2070,8 @@ function startUrenBewerken(id){
   urenSoort = u.soort;
   if (u.soort === "werk") schakel("uSoortWerk","uSoortKantoor"); else schakel("uSoortKantoor","uSoortWerk");
   $("uProject").value = u.project_id || "";
+  vulKlusSelect("uProject", "uKlus");
+  $("uKlus").value = u.klus_id || "";
   $("uKlant").value = u.klant_id || "";
   $("uOmschrijving").value = u.omschrijving || "";
   $("uOpslaan").textContent = "Wijziging opslaan";
@@ -2162,6 +2229,7 @@ $("kOpslaan").addEventListener("click", async () => {
     omschrijving: $("kOmschrijving").value.trim() || null,
     klant_id: $("kKlant").value || null,
     project_id: $("kProject").value || null,
+    klus_id: $("kKlus").value || null,
     km_prijs: (parseFloat($("kPrijs").value) > 0 ? parseFloat($("kPrijs").value) : null),
     zakelijk: kmZakelijk
   };
@@ -2213,6 +2281,8 @@ function startKmBewerken(id){
       '<option value="' + p.id + '">' + esc(p.naam) + ' (afgerond)</option>');
   }
   $("kProject").value = k.project_id || "";
+  vulKlusSelect("kProject", "kKlus");
+  $("kKlus").value = k.klus_id || "";
   $("kPrijs").value = (k.km_prijs ?? Number(cache.inst.km_prijs || 0.35));
   kmZakelijk = !!k.zakelijk;
   if (kmZakelijk) schakel("kZakelijk","kPrive"); else schakel("kPrive","kZakelijk");
@@ -2343,6 +2413,8 @@ function startGebruikBewerken(g){
       '<option value="' + p.id + '">' + esc(p.naam) + ' (afgerond)</option>');
   }
   $("pProject").value = g.project_id || "";
+  vulKlusSelect("pProject", "pKlus");
+  $("pKlus").value = g.klus_id || "";
   /* filters leegmaken, anders valt het product dat je bewerkt buiten de lijst */
   $("pZoek").value = ""; $("pZoekCategorie").value = "";
   vulProductKeuze();
@@ -2411,6 +2483,7 @@ $("pCm").addEventListener("input", () => {
 
 $("pOpslaan").addEventListener("click", async () => {
   const projectId = $("pProject").value;
+  const klusId = $("pKlus").value || null;
   const productId = $("pProduct").value;
   const aantal = parseFloat($("pAantal").value);
   const datum = $("pDatum").value || vandaagISO();
@@ -2421,7 +2494,7 @@ $("pOpslaan").addEventListener("click", async () => {
   let fout;
   if (bewerkGebruikRow){
     ({ error: fout } = await db.from("voorraad_mutaties").update({
-      product_id: productId, aantal: -aantal, project_id: projectId, datum
+      product_id: productId, aantal: -aantal, project_id: projectId, datum, klus_id: klusId
     }).eq("id", bewerkGebruikRow.id));
     if (!fout){
       // oude afboeking (en die van eventuele onderdelen) terugdraaien, nieuwe doorvoeren
@@ -2429,12 +2502,13 @@ $("pOpslaan").addEventListener("click", async () => {
       await boekVoorraadAf(productId, aantal);
     }
   } else {
-    // staat dit product al als (nog niet gefactureerde) regel bij dit project op dezelfde datum?
-    // dan optellen in plaats van een nieuwe regel; op een andere datum blijft het een aparte regel
-    const { data: bestaandLijst, error: eZoek } = await db.from("voorraad_mutaties")
+    // staat dit product al als (nog niet gefactureerde) regel bij dit project/deze klus op
+    // dezelfde datum? dan optellen i.p.v. een nieuwe regel; andere klus of datum blijft apart
+    let zoekQuery = db.from("voorraad_mutaties")
       .select("id, aantal").eq("project_id", projectId).eq("product_id", productId)
-      .eq("type", "gebruik").eq("gefactureerd", false).eq("datum", datum)
-      .order("aangemaakt_op", { ascending: true }).limit(1);
+      .eq("type", "gebruik").eq("gefactureerd", false).eq("datum", datum);
+    zoekQuery = klusId ? zoekQuery.eq("klus_id", klusId) : zoekQuery.is("klus_id", null);
+    const { data: bestaandLijst, error: eZoek } = await zoekQuery.order("aangemaakt_op", { ascending: true }).limit(1);
     const bestaand = bestaandLijst && bestaandLijst[0];
     if (eZoek) fout = eZoek;
     else if (bestaand){
@@ -2444,7 +2518,7 @@ $("pOpslaan").addEventListener("click", async () => {
     } else {
       ({ error: fout } = await db.from("voorraad_mutaties").insert({
         product_id: productId, aantal: -aantal, type: "gebruik",
-        project_id: projectId, datum
+        project_id: projectId, datum, klus_id: klusId
       }));
     }
     if (!fout) await boekVoorraadAf(productId, aantal);
@@ -2581,6 +2655,8 @@ $("erAnnuleer").addEventListener("click", stopExtraRegelBewerken);
 function startExtraRegelBewerken(r){
   bewerkExtraRegelId = r.id;
   $("erProject").value = r.project_id || "";
+  vulKlusSelect("erProject", "erKlus");
+  $("erKlus").value = r.klus_id || "";
   $("erOmschrijving").value = r.omschrijving || "";
   $("erDatum").value = r.datum || vandaagISO();
   $("erAantal").value = r.aantal;
@@ -2601,7 +2677,7 @@ $("erOpslaan").addEventListener("click", async () => {
   if (!projectId) { toast("Kies een project"); return; }
   if (!omschrijving || !(aantal > 0) || !(prijs >= 0)) { toast("Vul omschrijving, aantal en prijs in"); return; }
   const rij = {
-    project_id: projectId, omschrijving, datum,
+    project_id: projectId, klus_id: $("erKlus").value || null, omschrijving, datum,
     aantal, prijs: r2(prijs), eenheid: $("erEenheid").value.trim() || null
   };
   $("erOpslaan").disabled = true;
@@ -2666,39 +2742,112 @@ function laadProjectKm(projectId){
    uren/materiaal/km tegenaan geboekt is, en laat zien of de vaste prijs
    winst oplevert (uren tegen tarief, materiaal tegen inkoopprijs — de
    kostprijs, niet de verkoopprijs, want die wordt hier niet los gefactureerd). */
-function renderVastPrijsVergelijking(project){
-  const urenLijst = urenData.filter(u => u.project_id === project.id);
+/* Werkelijke kosten optellen voor een project of een klus daarbinnen — 'veld'
+   is 'project_id' of 'klus_id', zodat dezelfde berekening voor allebei werkt.
+   Materiaal rekent tegen kostprijs (inkoopprijs), niet verkoopprijs, want dat
+   wordt hier niet los gefactureerd. */
+function berekenWerkelijkeKosten(veld, id){
+  const urenLijst = urenData.filter(u => u[veld] === id);
   const werkelijkeUren = urenLijst.reduce((s, u) => s + Number(u.aantal || 0), 0);
   const werkelijkeUrenKosten = urenLijst.reduce((s, u) => s + Number(u.aantal || 0) * Number(u.tarief || 0), 0);
 
-  const mutLijst = cache.mutaties.filter(m => m.project_id === project.id && m.type === "gebruik");
+  const mutLijst = cache.mutaties.filter(m => m[veld] === id && m.type === "gebruik");
   const werkelijkeMateriaalKosten = mutLijst.reduce((s, m) => {
     const prod = cache.producten.find(p => p.id === m.product_id);
     return s + Math.abs(Number(m.aantal || 0)) * Number(prod ? (prod.inkoopprijs || 0) : 0);
   }, 0);
 
-  const kmLijst = kmData.filter(k => k.project_id === project.id && k.zakelijk && k.gereden > 0);
+  const kmLijst = kmData.filter(k => k[veld] === id && k.zakelijk && k.gereden > 0);
   const werkelijkeKm = kmLijst.reduce((s, k) => s + Number(k.gereden || 0), 0);
   const werkelijkeKmKosten = kmLijst.reduce((s, k) =>
     s + Number(k.gereden || 0) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0)), 0);
 
-  const werkelijkeTotaal = werkelijkeUrenKosten + werkelijkeMateriaalKosten + werkelijkeKmKosten;
-  const vastePrijs = Number(project.vaste_prijs || 0);
-  const winst = vastePrijs - werkelijkeTotaal;
+  return {
+    werkelijkeUren, werkelijkeUrenKosten, werkelijkeMateriaalKosten, werkelijkeKm, werkelijkeKmKosten,
+    werkelijkeTotaal: werkelijkeUrenKosten + werkelijkeMateriaalKosten + werkelijkeKmKosten
+  };
+}
 
+function renderVergelijkTabel(bodyId, doel, kosten){
+  const vastePrijs = Number(doel.vaste_prijs || 0);
+  const winst = vastePrijs - kosten.werkelijkeTotaal;
   const rij = (naam, geschat, werkelijk) =>
     '<tr><td class="tekst">' + naam + '</td><td class="r">' + geschat + '</td><td class="r">' + werkelijk + '</td></tr>';
-
-  $("prVastVergelijkBody").innerHTML =
-    rij("Uren", project.geschat_uren != null ? Number(project.geschat_uren).toLocaleString("nl-NL") : "—",
-      werkelijkeUren.toLocaleString("nl-NL") + " (" + eur2(werkelijkeUrenKosten) + ")") +
-    rij("Materiaal (kostprijs)", project.geschat_kosten != null ? eur2(project.geschat_kosten) : "—", eur2(werkelijkeMateriaalKosten)) +
-    rij("Kilometers", project.geschat_km != null ? Number(project.geschat_km).toLocaleString("nl-NL") : "—",
-      werkelijkeKm.toLocaleString("nl-NL") + " (" + eur2(werkelijkeKmKosten) + ")") +
+  $(bodyId).innerHTML =
+    rij("Uren", doel.geschat_uren != null ? Number(doel.geschat_uren).toLocaleString("nl-NL") : "—",
+      kosten.werkelijkeUren.toLocaleString("nl-NL") + " (" + eur2(kosten.werkelijkeUrenKosten) + ")") +
+    rij("Materiaal (kostprijs)", doel.geschat_kosten != null ? eur2(doel.geschat_kosten) : "—", eur2(kosten.werkelijkeMateriaalKosten)) +
+    rij("Kilometers", doel.geschat_km != null ? Number(doel.geschat_km).toLocaleString("nl-NL") : "—",
+      kosten.werkelijkeKm.toLocaleString("nl-NL") + " (" + eur2(kosten.werkelijkeKmKosten) + ")") +
     '<tr style="border-top:2px solid var(--line)"><td class="tekst"><b>Vaste prijs</b></td><td class="r" colspan="2"><b>' + eur2(vastePrijs) + '</b></td></tr>' +
-    '<tr><td class="tekst">Werkelijke kosten (totaal)</td><td class="r" colspan="2">' + eur2(werkelijkeTotaal) + '</td></tr>' +
+    '<tr><td class="tekst">Werkelijke kosten (totaal)</td><td class="r" colspan="2">' + eur2(kosten.werkelijkeTotaal) + '</td></tr>' +
     '<tr><td class="tekst"><b>Winst</b></td><td class="r" colspan="2" style="color:' + (winst >= 0 ? "var(--groen)" : "var(--rood)") + '"><b>' + eur2(winst) + '</b></td></tr>';
 }
+
+function renderVastPrijsVergelijking(project){
+  renderVergelijkTabel("prVastVergelijkBody", project, berekenWerkelijkeKosten("project_id", project.id));
+}
+
+/* ---- klussen: deelklussen binnen een project ---- */
+function renderKlussen(projectId){
+  const lijst = cache.klussen.filter(k => k.project_id === projectId);
+  $("prKlussenBody").innerHTML = !lijst.length
+    ? '<tr><td colspan="4" class="leeg">Nog geen klussen bij dit project.</td></tr>'
+    : lijst.map(k =>
+        '<tr class="klik" data-klid="' + k.id + '">' +
+          '<td class="tekst">' + esc(k.naam) + '</td>' +
+          '<td>' + (k.prijstype === "vast" ? "Vaste prijs" : "Uurbasis") + '</td>' +
+          '<td class="r">' + (k.prijstype === "vast" ? eur2(k.vaste_prijs || 0) : "—") + '</td>' +
+          '<td><span class="chip ' + (k.status === "open" ? "amber" : "grijs") + '">' + (k.status === "open" ? "OPEN" : "AFGEROND") + '</span></td>' +
+        '</tr>').join("");
+  $("prKlussenBody").querySelectorAll("[data-klid]").forEach(r => r.addEventListener("click", () => {
+    const k = lijst.find(x => x.id === r.dataset.klid);
+    if (k) renderKlusVergelijking(k);
+  }));
+}
+
+function renderKlusVergelijking(klus){
+  $("prKlusVergelijkNaam").textContent = klus.naam;
+  renderVergelijkTabel("prKlusVergelijkBody", klus, berekenWerkelijkeKosten("klus_id", klus.id));
+  $("prKlusVergelijkBlok").style.display = "block";
+}
+$("prKlusVergelijkSluit").addEventListener("click", () => { $("prKlusVergelijkBlok").style.display = "none"; });
+
+let pkPrijstype = "uurbasis";
+$("pkUurbasis").addEventListener("click", () => {
+  pkPrijstype = "uurbasis"; schakel("pkUurbasis","pkVast");
+  $("pkVastVelden").style.display = "none"; $("pkVastVelden2").style.display = "none";
+});
+$("pkVast").addEventListener("click", () => {
+  pkPrijstype = "vast"; schakel("pkVast","pkUurbasis");
+  $("pkVastVelden").style.display = "grid"; $("pkVastVelden2").style.display = "grid";
+});
+
+$("pkToevoegen").addEventListener("click", async () => {
+  if (!bewerkProjectId) return;
+  const naam = $("pkNaam").value.trim();
+  if (!naam) { toast("Vul een naam voor de klus in"); return; }
+  const rij = {
+    project_id: bewerkProjectId, naam, prijstype: pkPrijstype,
+    vaste_prijs: pkPrijstype === "vast" ? (parseFloat($("pkVastePrijs").value) || 0) : null,
+    geschat_uren: pkPrijstype === "vast" ? (parseFloat($("pkGeschatUren").value) || null) : null,
+    geschat_kosten: pkPrijstype === "vast" ? (parseFloat($("pkGeschatKosten").value) || null) : null,
+    geschat_km: pkPrijstype === "vast" ? (parseFloat($("pkGeschatKm").value) || null) : null
+  };
+  $("pkToevoegen").disabled = true;
+  const { data, error } = await db.from("klussen").insert(rij).select().single();
+  $("pkToevoegen").disabled = false;
+  if (error){ console.error(error); toast("Klus toevoegen mislukt"); return; }
+  cache.klussen.push(data);
+  $("pkNaam").value = ""; $("pkVastePrijs").value = ""; $("pkGeschatUren").value = "";
+  $("pkGeschatKosten").value = ""; $("pkGeschatKm").value = "";
+  pkPrijstype = "uurbasis"; schakel("pkUurbasis","pkVast");
+  $("pkVastVelden").style.display = "none"; $("pkVastVelden2").style.display = "none";
+  toast("Klus toegevoegd");
+  renderKlussen(bewerkProjectId);
+  ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
+    vulKlusSelect(projId, ["uKlus","kKlus","pKlus","erKlus"][i]));
+});
 
 async function laadProjectGebruik(projectId){
   const body = $("prGebruikBody");
@@ -2841,6 +2990,8 @@ $("projNieuw").addEventListener("click", () => {
   $("prVastVergelijkBlok").style.display = "none";
   $("prVastePrijs").value = ""; $("prGeschatUren").value = "";
   $("prGeschatKosten").value = ""; $("prGeschatKm").value = "";
+  $("prKlussenBlok").style.display = "none";
+  $("prKlusVergelijkBlok").style.display = "none";
   $("prUrenBlok").style.display = "none";
   $("prKmBlok").style.display = "none";
   $("prGebruikBlok").style.display = "none";
@@ -2931,6 +3082,9 @@ function renderProjecten(){
     } else {
       $("prVastVergelijkBlok").style.display = "none";
     }
+    $("prKlussenBlok").style.display = "block";
+    $("prKlusVergelijkBlok").style.display = "none";
+    renderKlussen(p.id);
     $("prUrenBlok").style.display = "block";
     laadProjectUren(p.id);
     $("prKmBlok").style.display = "block";
