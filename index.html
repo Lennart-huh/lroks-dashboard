@@ -232,6 +232,7 @@ nav.onderbalk{display:none}
       <button data-tab="voorraad">Voorraad</button>
       <button data-tab="kostensoorten">Kostensoorten</button>
       <button data-tab="projecten">Projecten</button>
+      <button data-tab="klussen">Klussen</button>
       <button data-tab="klanten">Klanten</button>
       <button data-tab="notities">Notities</button>
       <div class="groep">Cijfers</div>
@@ -761,6 +762,31 @@ nav.onderbalk{display:none}
         </div>
       </div>
 
+      <!-- ========== KLUSSEN ========== -->
+      <div class="tab" id="tab-klussen">
+        <h2>Klussen</h2>
+        <div class="hint" style="margin-bottom:14px">Alle klussen uit al je projecten in één overzicht — bij een vaste
+          prijs zie je meteen of die winst of verlies heeft opgeleverd.</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Klus</th><th>Project</th><th>Prijstype</th><th class="r">Vaste prijs</th>
+            <th class="r">Werkelijke kosten</th><th class="r">Winst/verlies</th><th>Status</th></tr></thead>
+          <tbody id="klBody"></tbody>
+        </table></div>
+        <div class="form-card" id="klVergelijkBlok" style="display:none;margin-top:16px;background:var(--surface2)">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+            <b id="klVergelijkNaam"></b>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="knop klein stil" id="klNaarProject">Naar project →</button>
+              <button type="button" class="knop klein stil" id="klVergelijkSluit">Sluiten</button>
+            </div>
+          </div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th></th><th class="r">Geschat</th><th class="r">Werkelijk</th></tr></thead>
+            <tbody id="klVergelijkBody"></tbody>
+          </table></div>
+        </div>
+      </div>
+
       <!-- ========== PLACEHOLDERS ========== -->
       <div class="tab" id="tab-omzet">
         <div class="tab-kop"><h2>Omzet / winst</h2>
@@ -1258,6 +1284,7 @@ nav.onderbalk{display:none}
     <button data-tab="offertes">Offertes</button>
     <button data-tab="kostensoorten">Kostensoorten</button>
     <button data-tab="projecten">Projecten</button>
+    <button data-tab="klussen">Klussen</button>
     <button data-tab="klanten">Klanten</button>
     <button data-tab="notities">Notities</button>
     <button data-tab="belasting">Belasting</button>
@@ -1406,7 +1433,10 @@ function toonTab(naam){
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("[data-tab]").forEach(k =>
-  k.addEventListener("click", () => toonTab(k.dataset.tab)));
+  k.addEventListener("click", () => {
+    toonTab(k.dataset.tab);
+    if (k.dataset.tab === "klussen"){ $("klVergelijkBlok").style.display = "none"; renderKlussenTab(); }
+  }));
 $("meerKnop").addEventListener("click", () => $("meerSheet").classList.toggle("open"));
 
 function kiesSub(subId){
@@ -1638,6 +1668,7 @@ async function laadAlles(){
     vulVoorraadSelects();
     renderKlanten();
     renderProjecten();
+    renderKlussenTab();
     renderUren();
     vulTariefDefault();
     if (!$("kPrijs").value) $("kPrijs").value = Number(cache.inst.km_prijs || 0.35).toFixed(2);
@@ -2874,9 +2905,74 @@ $("pkToevoegen").addEventListener("click", async () => {
   $("pkVastVelden").style.display = "none"; $("pkVastVelden2").style.display = "none";
   toast("Klus toegevoegd");
   renderKlussen(bewerkProjectId);
+  renderKlussenTab();
   ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
     vulKlusSelect(projId, ["uKlus","kKlus","pKlus","erKlus"][i]));
 });
+
+/* ---- Klussen-tabblad: alle klussen uit alle projecten in één overzicht ---- */
+const projectNaamVan = id => { const p = cache.projecten.find(x => x.id === id); return p ? p.naam : "—"; };
+
+function renderKlussenTab(){
+  const body = $("klBody");
+  if (!cache.klussen.length){
+    body.innerHTML = '<tr><td colspan="7" class="leeg">Nog geen klussen — maak er een aan vanuit een project.</td></tr>';
+    return;
+  }
+  const vastRijen = cache.klussen.filter(k => k.prijstype === "vast")
+    .map(k => ({ k, kosten: berekenWerkelijkeKosten("klus_id", k.id) }))
+    .sort((a, b) => (Number(a.k.vaste_prijs || 0) - a.kosten.werkelijkeTotaal) - (Number(b.k.vaste_prijs || 0) - b.kosten.werkelijkeTotaal));
+  const uurRijen = cache.klussen.filter(k => k.prijstype !== "vast");
+
+  const statusChip = k => '<span class="chip ' + (k.status === "open" ? "amber" : "grijs") + '">' + (k.status === "open" ? "OPEN" : "AFGEROND") + '</span>';
+
+  const htmlVast = vastRijen.map(({ k, kosten }) => {
+    const winst = Number(k.vaste_prijs || 0) - kosten.werkelijkeTotaal;
+    return '<tr class="klik" data-klid="' + k.id + '">' +
+      '<td class="tekst">' + esc(k.naam) + '</td>' +
+      '<td class="tekst">' + esc(projectNaamVan(k.project_id)) + '</td>' +
+      '<td>Vaste prijs</td>' +
+      '<td class="r">' + eur2(k.vaste_prijs || 0) + '</td>' +
+      '<td class="r">' + eur2(kosten.werkelijkeTotaal) + '</td>' +
+      '<td class="r" style="color:' + (winst >= 0 ? "var(--groen)" : "var(--rood)") + '"><b>' + eur2(winst) + '</b></td>' +
+      '<td>' + statusChip(k) + '</td></tr>';
+  }).join("");
+
+  const htmlUur = uurRijen.map(k => {
+    const kosten = berekenWerkelijkeKosten("klus_id", k.id);
+    return '<tr class="klik" data-klid="' + k.id + '">' +
+      '<td class="tekst">' + esc(k.naam) + '</td>' +
+      '<td class="tekst">' + esc(projectNaamVan(k.project_id)) + '</td>' +
+      '<td>Uurbasis</td>' +
+      '<td class="r">—</td>' +
+      '<td class="r">' + eur2(kosten.werkelijkeTotaal) + '</td>' +
+      '<td class="r">—</td>' +
+      '<td>' + statusChip(k) + '</td></tr>';
+  }).join("");
+
+  body.innerHTML = htmlVast + htmlUur;
+  body.querySelectorAll("[data-klid]").forEach(r => r.addEventListener("click", () => {
+    const k = cache.klussen.find(x => x.id === r.dataset.klid);
+    if (k) renderKlusVergelijkingTab(k);
+  }));
+}
+
+function renderKlusVergelijkingTab(klus){
+  $("klVergelijkNaam").textContent = klus.naam + " — " + projectNaamVan(klus.project_id);
+  const kosten = berekenWerkelijkeKosten("klus_id", klus.id);
+  if (klus.prijstype === "vast"){
+    renderVergelijkTabel("klVergelijkBody", klus, kosten);
+  } else {
+    $("klVergelijkBody").innerHTML =
+      '<tr><td class="tekst">Uren</td><td class="r">—</td><td class="r">' + kosten.werkelijkeUren.toLocaleString("nl-NL") + ' (' + eur2(kosten.werkelijkeUrenKosten) + ')</td></tr>' +
+      '<tr><td class="tekst">Materiaal (kostprijs)</td><td class="r">—</td><td class="r">' + eur2(kosten.werkelijkeMateriaalKosten) + '</td></tr>' +
+      '<tr><td class="tekst">Kilometers</td><td class="r">—</td><td class="r">' + kosten.werkelijkeKm.toLocaleString("nl-NL") + ' (' + eur2(kosten.werkelijkeKmKosten) + ')</td></tr>' +
+      '<tr style="border-top:2px solid var(--line)"><td class="tekst"><b>Totale kosten</b></td><td class="r" colspan="2"><b>' + eur2(kosten.werkelijkeTotaal) + '</b></td></tr>';
+  }
+  $("klNaarProject").onclick = () => { toonTab("projecten"); openProjectDetail(klus.project_id); };
+  $("klVergelijkBlok").style.display = "block";
+}
+$("klVergelijkSluit").addEventListener("click", () => { $("klVergelijkBlok").style.display = "none"; });
 
 async function laadProjectGebruik(projectId){
   const body = $("prGebruikBody");
@@ -3089,8 +3185,11 @@ function renderProjecten(){
       '<td class="tekst">' + esc(klantNaam(p.klant_id) || "—") + '</td>' +
       '<td><span class="chip ' + (p.status === "open" ? "amber" : "grijs") + '">' + (p.status === "open" ? "OPEN" : "AFGEROND") + '</span></td>' +
     '</tr>').join("");
-  body.querySelectorAll("[data-prid]").forEach(r => r.addEventListener("click", () => {
-    const p = cache.projecten.find(x => x.id === r.dataset.prid);
+  body.querySelectorAll("[data-prid]").forEach(r => r.addEventListener("click", () => openProjectDetail(r.dataset.prid)));
+}
+
+function openProjectDetail(id){
+    const p = cache.projecten.find(x => x.id === id);
     if (!p) return;
     bewerkProjectId = p.id;
     $("prNaam").value = p.naam || "";
@@ -3128,7 +3227,6 @@ function renderProjecten(){
     $("prVerwijder").style.display = "inline-block";
     $("projForm").style.display = "block";
     window.scrollTo(0, 0);
-  }));
 }
 
 /* =====================================================
