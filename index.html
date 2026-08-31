@@ -267,33 +267,7 @@ nav.onderbalk{display:none}
         <div class="form-card" style="margin-top:18px">
           <div class="tab-kop" style="margin:0 0 12px">
             <h3 style="font-size:.95rem;margin:0">Vaste lasten</h3>
-            <button class="knop klein stil" id="vlNieuw">+ Vaste last</button>
-          </div>
-          <div class="form-card" id="vlForm" style="display:none;margin-bottom:14px;background:var(--surface2)">
-            <div class="rij2">
-              <div class="veld"><label>Naam</label><input type="text" id="vlNaam" placeholder="bv. Bedrijfsverzekering"></div>
-              <div class="veld"><label>Bedrag (€)</label><input type="number" id="vlBedrag" step="0.01" min="0" inputmode="decimal"></div>
-            </div>
-            <div class="rij2">
-              <div class="veld"><label>Elke</label>
-                <div style="display:flex;gap:8px">
-                  <input type="number" id="vlIntervalAantal" min="1" step="1" value="1" style="width:70px">
-                  <select id="vlIntervalEenheid" style="flex:1">
-                    <option value="maand">maand(en)</option>
-                    <option value="jaar">jaar/jaren</option>
-                    <option value="week">we(k/ken)</option>
-                    <option value="dag">dag(en)</option>
-                  </select>
-                </div>
-              </div>
-              <div class="veld"><label>Eerste/volgende keer op</label><input type="date" id="vlStartDatum"></div>
-            </div>
-            <div class="veld"><label>Notitie</label><input type="text" id="vlNotitie" placeholder="optioneel — bv. bij wie of waarvoor"></div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
-              <button class="knop klein" id="vlOpslaan">Opslaan</button>
-              <button class="knop klein stil" id="vlAnnuleer">Annuleren</button>
-              <button class="knop klein gevaar" id="vlVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
-            </div>
+            <button class="knop klein stil" id="vlNaarInvullen">+ Vaste last</button>
           </div>
           <div class="tbl-wrap"><table>
             <thead><tr><th>Wat</th><th>Volgende keer</th><th class="r">Bedrag</th></tr></thead>
@@ -316,6 +290,7 @@ nav.onderbalk{display:none}
           <button data-sub="sub-product">Product gebruikt</button>
           <button data-sub="sub-extra">Extra regel</button>
           <button data-sub="sub-inkoop">Inkoopfactuur</button>
+          <button data-sub="sub-vastelast">Vaste last</button>
         </div>
 
         <!-- UREN -->
@@ -522,6 +497,36 @@ nav.onderbalk{display:none}
           <button class="knop klein stil" id="ikAnnuleer" style="display:none">Wijzigen annuleren</button>
         </div>
       </div>
+
+        <!-- VASTE LAST -->
+        <div class="subform form-card" id="sub-vastelast">
+          <div class="hint" style="margin-bottom:13px">Een vaste terugkerende kostenpost — bv. verzekering, abonnement of
+            huur. Verschijnt op de hoofdpagina met de eerstvolgende afschrijfdatum.</div>
+          <div class="rij2">
+            <div class="veld"><label>Naam</label><input type="text" id="vlNaam" placeholder="bv. Bedrijfsverzekering"></div>
+            <div class="veld"><label>Bedrag (€)</label><input type="number" id="vlBedrag" step="0.01" min="0" inputmode="decimal"></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Elke</label>
+              <div style="display:flex;gap:8px">
+                <input type="number" id="vlIntervalAantal" min="1" step="1" value="1" style="width:70px">
+                <select id="vlIntervalEenheid" style="flex:1">
+                  <option value="maand">maand(en)</option>
+                  <option value="jaar">jaar/jaren</option>
+                  <option value="week">we(k/ken)</option>
+                  <option value="dag">dag(en)</option>
+                </select>
+              </div>
+            </div>
+            <div class="veld"><label>Eerste/volgende keer op</label><input type="date" id="vlStartDatum"></div>
+          </div>
+          <div class="veld"><label>Notitie</label><input type="text" id="vlNotitie" placeholder="optioneel — bv. bij wie of waarvoor"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="knop" id="vlOpslaan">Opslaan</button>
+            <button class="knop klein stil" id="vlAnnuleer" style="display:none">Wijzigen annuleren</button>
+            <button class="knop klein gevaar" id="vlVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+          </div>
+        </div>
       </div>
 
       <!-- ========== URENREGISTRATIE ========== -->
@@ -1648,6 +1653,7 @@ async function laadAlles(){
     herlaadOffertes();
     herlaadNotities();
     vulBedrijf();
+    vlFormLeeg();
     renderHoofd();
     renderFinancieel();
     checkHerinnering();
@@ -1832,13 +1838,15 @@ function vlFormLeeg(){
   $("vlNotitie").value = "";
   $("vlOpslaan").textContent = "Opslaan";
   $("vlVerwijder").style.display = "none";
+  $("vlAnnuleer").style.display = "none";
 }
-$("vlNieuw").addEventListener("click", () => {
+$("vlNaarInvullen").addEventListener("click", () => {
   vlFormLeeg();
-  $("vlForm").style.display = "block";
+  toonTab("invullen");
+  kiesSub("sub-vastelast");
   $("vlNaam").focus();
 });
-$("vlAnnuleer").addEventListener("click", () => { $("vlForm").style.display = "none"; });
+$("vlAnnuleer").addEventListener("click", vlFormLeeg);
 
 function startVasteLastBewerken(id){
   const vl = cache.vasteLasten.find(x => x.id === id);
@@ -1852,8 +1860,9 @@ function startVasteLastBewerken(id){
   $("vlNotitie").value = vl.notitie || "";
   $("vlOpslaan").textContent = "Wijziging opslaan";
   $("vlVerwijder").style.display = "inline-block";
-  $("vlForm").style.display = "block";
-  window.scrollTo(0, 0);
+  $("vlAnnuleer").style.display = "inline-block";
+  toonTab("invullen");
+  kiesSub("sub-vastelast");
 }
 
 $("vlOpslaan").addEventListener("click", async () => {
@@ -1877,11 +1886,12 @@ $("vlOpslaan").addEventListener("click", async () => {
   }
   $("vlOpslaan").disabled = false;
   if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
-  toast("Vaste last opgeslagen");
-  $("vlForm").style.display = "none";
+  const wasBewerken = !!bewerkVasteLastId;
+  vlFormLeeg();
   const { data } = await db.from("vaste_lasten").select("*").eq("actief", true);
   cache.vasteLasten = data || [];
   renderVasteLasten();
+  toast(wasBewerken ? "Vaste last bijgewerkt" : "Vaste last opgeslagen");
 });
 
 $("vlVerwijder").addEventListener("click", async () => {
@@ -1890,7 +1900,7 @@ $("vlVerwijder").addEventListener("click", async () => {
   const { error } = await db.from("vaste_lasten").delete().eq("id", bewerkVasteLastId);
   if (error){ toast("Verwijderen mislukt"); return; }
   toast("Verwijderd");
-  $("vlForm").style.display = "none";
+  vlFormLeeg();
   cache.vasteLasten = cache.vasteLasten.filter(x => x.id !== bewerkVasteLastId);
   renderVasteLasten();
 });
