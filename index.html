@@ -2819,7 +2819,7 @@ function laadProjectUren(projectId){
 }
 function laadProjectKm(projectId){
   const body = $("prKmBody");
-  const lijst = kmData.filter(k => k.project_id === projectId && !k.klus_id && k.zakelijk && k.gereden > 0)
+  const lijst = kmRegels().filter(k => k.project_id === projectId && !k.klus_id && k.zakelijk && k.gereden > 0)
     .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
   body.innerHTML = !lijst.length
     ? '<tr><td colspan="4" class="leeg">Nog geen kilometers op dit project.</td></tr>'
@@ -2851,7 +2851,7 @@ function berekenWerkelijkeKosten(veld, id){
     return s + Math.abs(Number(m.aantal || 0)) * Number(prod ? (prod.inkoopprijs || 0) : 0);
   }, 0);
 
-  const kmLijst = kmData.filter(k => k[veld] === id && k.zakelijk && k.gereden > 0);
+  const kmLijst = kmRegels().filter(k => k[veld] === id && k.zakelijk && k.gereden > 0);
   const werkelijkeKm = kmLijst.reduce((s, k) => s + Number(k.gereden || 0), 0);
   const werkelijkeKmKosten = kmLijst.reduce((s, k) =>
     s + Number(k.gereden || 0) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0)), 0);
@@ -3070,7 +3070,7 @@ function laadKlusRegels(klusId){
         '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td></tr>').join("");
   $("klUrenBody").querySelectorAll("[data-klueid]").forEach(r => r.addEventListener("click", () => startUrenBewerken(r.dataset.klueid)));
 
-  const kmLijst = kmData.filter(k => k.klus_id === klusId && k.zakelijk && k.gereden > 0).sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  const kmLijst = kmRegels().filter(k => k.klus_id === klusId && k.zakelijk && k.gereden > 0).sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
   $("klKmBody").innerHTML = !kmLijst.length
     ? '<tr><td colspan="3" class="leeg">Geen kilometers op deze klus.</td></tr>'
     : kmLijst.map(k =>
