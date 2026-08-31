@@ -292,6 +292,7 @@ nav.onderbalk{display:none}
           <button data-sub="sub-extra">Extra regel</button>
           <button data-sub="sub-inkoop">Inkoopfactuur</button>
           <button data-sub="sub-vastelast">Vaste last</button>
+          <button data-sub="sub-klus">Klus</button>
         </div>
 
         <!-- UREN -->
@@ -524,6 +525,31 @@ nav.onderbalk{display:none}
             <button class="knop klein gevaar" id="vlVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
           </div>
         </div>
+
+        <!-- KLUS -->
+        <div class="subform form-card" id="sub-klus">
+          <div class="hint" style="margin-bottom:13px">Een deelklus binnen een project — bv. een vaste prijs voor één
+            onderdeel van een groter project. Kies deze klus daarna bij Uren/KM/Product/Extra regel om eraan te koppelen.</div>
+          <div class="veld"><label>Project</label><select id="pkProject"></select></div>
+          <div class="rij2">
+            <div class="veld"><label>Naam</label><input type="text" id="pkNaam" placeholder="bv. Groepenkast garage"></div>
+            <div class="veld"><label>Prijstype</label>
+              <div class="schakel">
+                <button type="button" id="pkUurbasis" class="aan">Uurbasis</button>
+                <button type="button" id="pkVast">Vaste prijs</button>
+              </div>
+            </div>
+          </div>
+          <div class="rij2" id="pkVastVelden" style="display:none">
+            <div class="veld"><label>Vaste prijs (excl., €)</label><input type="number" id="pkVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld"><label>Geschatte uren</label><input type="number" id="pkGeschatUren" step="0.5" min="0" inputmode="decimal"></div>
+          </div>
+          <div class="rij2" id="pkVastVelden2" style="display:none">
+            <div class="veld"><label>Geschatte materiaalkosten (€)</label><input type="number" id="pkGeschatKosten" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld"><label>Geschatte km</label><input type="number" id="pkGeschatKm" step="1" min="0" inputmode="decimal"></div>
+          </div>
+          <button class="knop" id="pkToevoegen">Klus toevoegen</button>
+        </div>
       </div>
 
       <!-- ========== URENREGISTRATIE ========== -->
@@ -668,8 +694,8 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld" id="prKlussenBlok" style="display:none"><label>Klussen in dit project</label>
             <div class="hint" style="margin-bottom:8px">Een deelklus binnen dit project — bv. een vaste prijs voor één onderdeel
-              van een groter project. Kies deze klus bij Uren/KM/Product/Extra regel om eraan te koppelen; klik hieronder op
-              een klus voor de winstvergelijking.</div>
+              van een groter project. Nieuwe klussen maak je aan via het Invulformulier. Kies een klus bij Uren/KM/Product/
+              Extra regel om eraan te koppelen; klik hieronder op een klus voor de winstvergelijking.</div>
             <div class="tbl-wrap">
               <table>
                 <thead><tr><th>Naam</th><th>Prijstype</th><th class="r">Vaste prijs</th><th>Status</th></tr></thead>
@@ -686,24 +712,6 @@ nav.onderbalk{display:none}
                 <tbody id="prKlusVergelijkBody"></tbody>
               </table></div>
             </div>
-            <div class="rij2" style="margin-top:12px">
-              <div class="veld"><label>Nieuwe klus — naam</label><input type="text" id="pkNaam" placeholder="bv. Groepenkast garage"></div>
-              <div class="veld"><label>Prijstype</label>
-                <div class="schakel">
-                  <button type="button" id="pkUurbasis" class="aan">Uurbasis</button>
-                  <button type="button" id="pkVast">Vaste prijs</button>
-                </div>
-              </div>
-            </div>
-            <div class="rij2" id="pkVastVelden" style="display:none">
-              <div class="veld"><label>Vaste prijs (excl., €)</label><input type="number" id="pkVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
-              <div class="veld"><label>Geschatte uren</label><input type="number" id="pkGeschatUren" step="0.5" min="0" inputmode="decimal"></div>
-            </div>
-            <div class="rij2" id="pkVastVelden2" style="display:none">
-              <div class="veld"><label>Geschatte materiaalkosten (€)</label><input type="number" id="pkGeschatKosten" step="0.01" min="0" inputmode="decimal"></div>
-              <div class="veld"><label>Geschatte km</label><input type="number" id="pkGeschatKm" step="1" min="0" inputmode="decimal"></div>
-            </div>
-            <button type="button" class="knop klein stil" id="pkToevoegen">Klus toevoegen</button>
           </div>
           <div class="veld"><label>Omschrijving / notities</label><textarea id="prOmschrijving" placeholder="Hier kun je zoveel opschrijven als je wilt."></textarea></div>
           <div class="veld" id="prUrenBlok" style="display:none"><label>Uren op dit project</label>
@@ -1717,6 +1725,8 @@ function vulSelects(){
   $("pProject").innerHTML = '<option value="">— kies project —</option>' +
     open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
   $("erProject").innerHTML = '<option value="">— kies project —</option>' +
+    open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
+  $("pkProject").innerHTML = '<option value="">— kies project —</option>' +
     open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
 
   $("pZoekCategorie").innerHTML = '<option value="">Alle categorieën</option>' +
@@ -2884,11 +2894,12 @@ $("pkVast").addEventListener("click", () => {
 });
 
 $("pkToevoegen").addEventListener("click", async () => {
-  if (!bewerkProjectId) return;
+  const projectId = $("pkProject").value;
+  if (!projectId) { toast("Kies een project"); return; }
   const naam = $("pkNaam").value.trim();
   if (!naam) { toast("Vul een naam voor de klus in"); return; }
   const rij = {
-    project_id: bewerkProjectId, naam, prijstype: pkPrijstype,
+    project_id: projectId, naam, prijstype: pkPrijstype,
     vaste_prijs: pkPrijstype === "vast" ? (parseFloat($("pkVastePrijs").value) || 0) : null,
     geschat_uren: pkPrijstype === "vast" ? (parseFloat($("pkGeschatUren").value) || null) : null,
     geschat_kosten: pkPrijstype === "vast" ? (parseFloat($("pkGeschatKosten").value) || null) : null,
@@ -2904,7 +2915,7 @@ $("pkToevoegen").addEventListener("click", async () => {
   pkPrijstype = "uurbasis"; schakel("pkUurbasis","pkVast");
   $("pkVastVelden").style.display = "none"; $("pkVastVelden2").style.display = "none";
   toast("Klus toegevoegd");
-  renderKlussen(bewerkProjectId);
+  if (bewerkProjectId === projectId) renderKlussen(bewerkProjectId);
   renderKlussenTab();
   ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
     vulKlusSelect(projId, ["uKlus","kKlus","pKlus","erKlus"][i]));
