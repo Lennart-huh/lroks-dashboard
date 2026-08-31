@@ -594,6 +594,32 @@ nav.onderbalk{display:none}
               <button type="button" id="prAfgerond">Afgerond</button>
             </div>
           </div>
+          <div class="veld"><label>Prijsafspraak</label>
+            <div class="schakel">
+              <button type="button" id="prUurbasis" class="aan">Uurbasis</button>
+              <button type="button" id="prVast">Vaste prijs</button>
+            </div>
+          </div>
+          <div class="veld" id="prVastBlok" style="display:none;background:var(--surface2);border-radius:8px;padding:12px">
+            <div class="rij2">
+              <div class="veld" style="margin-bottom:0"><label>Vaste prijs (excl. btw, €)</label><input type="number" id="prVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
+              <div class="veld" style="margin-bottom:0"><label>Geschatte uren</label><input type="number" id="prGeschatUren" step="0.5" min="0" inputmode="decimal"></div>
+            </div>
+            <div class="rij2" style="margin-top:13px">
+              <div class="veld" style="margin-bottom:0"><label>Geschatte materiaalkosten (€)</label><input type="number" id="prGeschatKosten" step="0.01" min="0" inputmode="decimal"></div>
+              <div class="veld" style="margin-bottom:0"><label>Geschatte km</label><input type="number" id="prGeschatKm" step="1" min="0" inputmode="decimal"></div>
+            </div>
+            <div class="hint" style="margin-top:8px">Je blijft uren/producten/km gewoon loggen bij dit project — voor je eigen inzicht
+              en om voorraad bij te houden. Je factureert straks één regel met deze vaste prijs, niet de losse regels.</div>
+          </div>
+          <div class="veld" id="prVastVergelijkBlok" style="display:none"><label>Vaste prijs vs werkelijk</label>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th></th><th class="r">Geschat</th><th class="r">Werkelijk</th></tr></thead>
+                <tbody id="prVastVergelijkBody"></tbody>
+              </table>
+            </div>
+          </div>
           <div class="veld"><label>Omschrijving / notities</label><textarea id="prOmschrijving" placeholder="Hier kun je zoveel opschrijven als je wilt."></textarea></div>
           <div class="veld" id="prUrenBlok" style="display:none"><label>Uren op dit project</label>
             <div class="tbl-wrap">
@@ -2460,6 +2486,44 @@ function laadProjectKm(projectId){
     r.addEventListener("click", () => startKmBewerken(r.dataset.prkeid)));
 }
 
+/* Vaste-prijs projecten: vergelijkt de schatting met wat er werkelijk aan
+   uren/materiaal/km tegenaan geboekt is, en laat zien of de vaste prijs
+   winst oplevert (uren tegen tarief, materiaal tegen inkoopprijs — de
+   kostprijs, niet de verkoopprijs, want die wordt hier niet los gefactureerd). */
+function renderVastPrijsVergelijking(project){
+  const urenLijst = urenData.filter(u => u.project_id === project.id);
+  const werkelijkeUren = urenLijst.reduce((s, u) => s + Number(u.aantal || 0), 0);
+  const werkelijkeUrenKosten = urenLijst.reduce((s, u) => s + Number(u.aantal || 0) * Number(u.tarief || 0), 0);
+
+  const mutLijst = cache.mutaties.filter(m => m.project_id === project.id && m.type === "gebruik");
+  const werkelijkeMateriaalKosten = mutLijst.reduce((s, m) => {
+    const prod = cache.producten.find(p => p.id === m.product_id);
+    return s + Math.abs(Number(m.aantal || 0)) * Number(prod ? (prod.inkoopprijs || 0) : 0);
+  }, 0);
+
+  const kmLijst = kmData.filter(k => k.project_id === project.id && k.zakelijk && k.gereden > 0);
+  const werkelijkeKm = kmLijst.reduce((s, k) => s + Number(k.gereden || 0), 0);
+  const werkelijkeKmKosten = kmLijst.reduce((s, k) =>
+    s + Number(k.gereden || 0) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0)), 0);
+
+  const werkelijkeTotaal = werkelijkeUrenKosten + werkelijkeMateriaalKosten + werkelijkeKmKosten;
+  const vastePrijs = Number(project.vaste_prijs || 0);
+  const winst = vastePrijs - werkelijkeTotaal;
+
+  const rij = (naam, geschat, werkelijk) =>
+    '<tr><td class="tekst">' + naam + '</td><td class="r">' + geschat + '</td><td class="r">' + werkelijk + '</td></tr>';
+
+  $("prVastVergelijkBody").innerHTML =
+    rij("Uren", project.geschat_uren != null ? Number(project.geschat_uren).toLocaleString("nl-NL") : "—",
+      werkelijkeUren.toLocaleString("nl-NL") + " (" + eur2(werkelijkeUrenKosten) + ")") +
+    rij("Materiaal (kostprijs)", project.geschat_kosten != null ? eur2(project.geschat_kosten) : "—", eur2(werkelijkeMateriaalKosten)) +
+    rij("Kilometers", project.geschat_km != null ? Number(project.geschat_km).toLocaleString("nl-NL") : "—",
+      werkelijkeKm.toLocaleString("nl-NL") + " (" + eur2(werkelijkeKmKosten) + ")") +
+    '<tr style="border-top:2px solid var(--line)"><td class="tekst"><b>Vaste prijs</b></td><td class="r" colspan="2"><b>' + eur2(vastePrijs) + '</b></td></tr>' +
+    '<tr><td class="tekst">Werkelijke kosten (totaal)</td><td class="r" colspan="2">' + eur2(werkelijkeTotaal) + '</td></tr>' +
+    '<tr><td class="tekst"><b>Winst</b></td><td class="r" colspan="2" style="color:' + (winst >= 0 ? "var(--groen)" : "var(--rood)") + '"><b>' + eur2(winst) + '</b></td></tr>';
+}
+
 async function laadProjectGebruik(projectId){
   const body = $("prGebruikBody");
   body.innerHTML = '<tr><td colspan="4" class="leeg">Laden…</td></tr>';
@@ -2548,10 +2612,25 @@ function laadKlantFacturen(klantId){
     openFactuur(r.dataset.kfid);
   }));
 }
+let projPrijstype = "uurbasis";
+$("prUurbasis").addEventListener("click", () => {
+  projPrijstype = "uurbasis"; schakel("prUurbasis","prVast");
+  $("prVastBlok").style.display = "none";
+});
+$("prVast").addEventListener("click", () => {
+  projPrijstype = "vast"; schakel("prVast","prUurbasis");
+  $("prVastBlok").style.display = "block";
+});
+
 $("projNieuw").addEventListener("click", () => {
   bewerkProjectId = null;
   $("prNaam").value = ""; $("prKlant").value = ""; $("prOmschrijving").value = "";
   projStatus = "open"; schakel("prOpen","prAfgerond");
+  projPrijstype = "uurbasis"; schakel("prUurbasis","prVast");
+  $("prVastBlok").style.display = "none";
+  $("prVastVergelijkBlok").style.display = "none";
+  $("prVastePrijs").value = ""; $("prGeschatUren").value = "";
+  $("prGeschatKosten").value = ""; $("prGeschatKm").value = "";
   $("prUrenBlok").style.display = "none";
   $("prKmBlok").style.display = "none";
   $("prGebruikBlok").style.display = "none";
@@ -2570,7 +2649,12 @@ $("prOpslaan").addEventListener("click", async () => {
     naam,
     klant_id: $("prKlant").value || null,
     omschrijving: $("prOmschrijving").value.trim() || null,
-    status: projStatus
+    status: projStatus,
+    prijstype: projPrijstype,
+    vaste_prijs: projPrijstype === "vast" ? (parseFloat($("prVastePrijs").value) || 0) : null,
+    geschat_uren: projPrijstype === "vast" ? (parseFloat($("prGeschatUren").value) || null) : null,
+    geschat_kosten: projPrijstype === "vast" ? (parseFloat($("prGeschatKosten").value) || null) : null,
+    geschat_km: projPrijstype === "vast" ? (parseFloat($("prGeschatKm").value) || null) : null
   };
   $("prOpslaan").disabled = true;
   let fout;
@@ -2623,6 +2707,19 @@ function renderProjecten(){
     $("prOmschrijving").value = p.omschrijving || "";
     projStatus = p.status;
     if (p.status === "open") schakel("prOpen","prAfgerond"); else schakel("prAfgerond","prOpen");
+    projPrijstype = p.prijstype === "vast" ? "vast" : "uurbasis";
+    if (projPrijstype === "vast") schakel("prVast","prUurbasis"); else schakel("prUurbasis","prVast");
+    $("prVastBlok").style.display = projPrijstype === "vast" ? "block" : "none";
+    $("prVastePrijs").value = p.vaste_prijs ?? "";
+    $("prGeschatUren").value = p.geschat_uren ?? "";
+    $("prGeschatKosten").value = p.geschat_kosten ?? "";
+    $("prGeschatKm").value = p.geschat_km ?? "";
+    if (projPrijstype === "vast"){
+      $("prVastVergelijkBlok").style.display = "block";
+      renderVastPrijsVergelijking(p);
+    } else {
+      $("prVastVergelijkBlok").style.display = "none";
+    }
     $("prUrenBlok").style.display = "block";
     laadProjectUren(p.id);
     $("prKmBlok").style.display = "block";
@@ -3771,7 +3868,10 @@ async function startFacturering(projectId){
   const gebruik = gebrRes.data || [];
   const kmVoor = kmRegels().filter(r =>
     r.project_id === projectId && !r.gefactureerd && r.zakelijk && r.gereden > 0);
-  if (!uren.length && !gebruik.length && !kmVoor.length){
+  const vastePrijs = project && project.prijstype === "vast";
+  if (vastePrijs){
+    if (!(Number(project.vaste_prijs) > 0)){ toast("Vul eerst een vaste prijs in bij dit project"); return; }
+  } else if (!uren.length && !gebruik.length && !kmVoor.length){
     toast("Niets te factureren bij dit project");
     return;
   }
@@ -3805,7 +3905,13 @@ async function startFacturering(projectId){
       uren_id: null, mutatie_id: null, km_id: r.id
     });
   });
-  pendingFactuur = { projectId, regels };
+  // bij vaste prijs komt er maar 1 regel op de factuur (de afgesproken prijs),
+  // maar de losse uren/producten/km blijven wél gemarkeerd als gefactureerd
+  // (via 'regels' hierboven) zodat ze niet nogmaals als 'nog te factureren' tellen
+  const factuurRegels = vastePrijs
+    ? [{ omschrijving: project.naam, datum: vandaagISO(), eenheid: "", aantal: 1, prijs: Number(project.vaste_prijs) }]
+    : regels;
+  pendingFactuur = { projectId, regels, factuurRegels: vastePrijs ? factuurRegels : null };
   bewerkFactuurId = null;
   huidigeRegels = [];
   vulFdKlanten();
@@ -3825,7 +3931,7 @@ async function startFacturering(projectId){
   $("fdVerwijder").style.display = "none";
   $("fdPrint").style.display = "none";
   $("fDetail").style.display = "block";
-  toonFdRegels(pendingFactuur.regels);
+  toonFdRegels(factuurRegels);
   if (zonderTarief) toast(zonderTarief + " urenregel(s) zonder tarief — die staan op € 0");
   toonTab("facturen");
   kiesFSub("fUit");
@@ -3833,7 +3939,8 @@ async function startFacturering(projectId){
 }
 
 async function maakFactuurAan(){
-  const tot = toonFdRegels(pendingFactuur.regels);
+  const factuurRegels = pendingFactuur.factuurRegels || pendingFactuur.regels;
+  const tot = toonFdRegels(factuurRegels);
   const rij = {
     nummer: $("fdNummer").value.trim() || volgendNummer(),
     type: "verkoop",
@@ -3854,21 +3961,23 @@ async function maakFactuurAan(){
     toast("Aanmaken mislukt: " + (error.message || "onbekende fout"));
     return;
   }
-  const regels = pendingFactuur.regels.map(r => ({
+  const invoerRegels = factuurRegels.map(r => ({
     factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
     aantal: r.aantal, prijs: r.prijs,
-    uren_id: r.uren_id, mutatie_id: r.mutatie_id, km_id: r.km_id || null
+    uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null
   }));
-  const { error: e2 } = await db.from("factuur_regels").insert(regels);
+  const { error: e2 } = await db.from("factuur_regels").insert(invoerRegels);
   if (e2){
     $("fdOpslaan").disabled = false;
     console.error(e2);
     toast("Regels opslaan mislukt");
     return;
   }
-  const urenIds = regels.map(r => r.uren_id).filter(Boolean);
-  const mutIds = regels.map(r => r.mutatie_id).filter(Boolean);
-  const kmIds = regels.map(r => r.km_id).filter(Boolean);
+  // gefactureerd-markering gaat altijd via de echte onderliggende uren/producten/km,
+  // ook bij vaste prijs waar de factuur zelf maar 1 regel heeft
+  const urenIds = pendingFactuur.regels.map(r => r.uren_id).filter(Boolean);
+  const mutIds = pendingFactuur.regels.map(r => r.mutatie_id).filter(Boolean);
+  const kmIds = pendingFactuur.regels.map(r => r.km_id).filter(Boolean);
   if (urenIds.length) await db.from("uren").update({ gefactureerd: true }).in("id", urenIds);
   if (mutIds.length) await db.from("voorraad_mutaties").update({ gefactureerd: true }).in("id", mutIds);
   if (kmIds.length) await db.from("km_registratie").update({ gefactureerd: true }).in("id", kmIds);
