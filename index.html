@@ -314,6 +314,7 @@ nav.onderbalk{display:none}
           <button data-sub="sub-uren" class="aan">Uren</button>
           <button data-sub="sub-km">Kilometers</button>
           <button data-sub="sub-product">Product gebruikt</button>
+          <button data-sub="sub-extra">Extra regel</button>
           <button data-sub="sub-inkoop">Inkoopfactuur</button>
         </div>
 
@@ -405,6 +406,25 @@ nav.onderbalk{display:none}
             </div>
             <button class="knop klein stil" id="npOpslaan">Product toevoegen</button>
           </div>
+        </div>
+
+        <!-- EXTRA REGEL -->
+        <div class="subform form-card" id="sub-extra">
+          <div class="hint" style="margin-bottom:13px">Voor een losse post die niet via uren, kilometers of een product loopt —
+            bijvoorbeeld een afgesproken vaste prijs voor (een deel van) een klus. Komt gewoon als eigen regel op de factuur
+            te staan zodra je dit project factureert.</div>
+          <div class="veld"><label>Project</label><select id="erProject"></select></div>
+          <div class="rij2">
+            <div class="veld"><label>Omschrijving</label><input type="text" id="erOmschrijving" placeholder="bv. Aanleg groepenkast — vaste prijs"></div>
+            <div class="veld"><label>Datum</label><input type="date" id="erDatum"></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Aantal</label><input type="number" id="erAantal" step="0.5" min="0" value="1" inputmode="decimal"></div>
+            <div class="veld"><label>Eenheid</label><input type="text" id="erEenheid" placeholder="leeg = vast bedrag"></div>
+          </div>
+          <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="erPrijs" step="0.01" min="0" inputmode="decimal"></div>
+          <button class="knop" id="erOpslaan">Regel opslaan</button>
+          <button class="knop klein stil" id="erAnnuleer" style="display:none">Wijzigen annuleren</button>
         </div>
 
         <!-- INKOOPFACTUUR -->
@@ -665,6 +685,14 @@ nav.onderbalk{display:none}
               </table>
             </div>
           </div>
+          <div class="veld" id="prExtraBlok" style="display:none"><label>Extra regels op dit project</label>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>Datum</th><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Bedrag</th><th></th></tr></thead>
+                <tbody id="prExtraBody"></tbody>
+              </table>
+            </div>
+          </div>
           <div class="veld" id="prFacturenBlok" style="display:none"><label>Facturen van dit project</label>
             <div class="tbl-wrap">
               <table>
@@ -793,6 +821,12 @@ nav.onderbalk{display:none}
             </div>
             <button type="button" class="knop klein stil" id="orToevoegen">Regel toevoegen</button>
             <div class="hint" style="margin-top:8px">Excl: <b id="offExcl">—</b> · BTW: <b id="offBtw">—</b> · Incl: <b id="offIncl">—</b></div>
+          </div>
+          <div class="veld" id="offBestelBlok" style="display:none"><label>Wat moet ik bestellen?</label>
+            <div class="tbl-wrap"><table>
+              <thead><tr><th>Product</th><th class="r">Nodig</th><th class="r">Op voorraad</th><th></th></tr></thead>
+              <tbody id="offBestelBody"></tbody>
+            </table></div>
           </div>
           <div class="veld"><label>Notities</label><input type="text" id="offNotities"></div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -1604,6 +1638,8 @@ function vulSelects(){
   $("uProject").innerHTML = pOpties;
   $("kProject").innerHTML = pOpties;
   $("pProject").innerHTML = '<option value="">— kies project —</option>' +
+    open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
+  $("erProject").innerHTML = '<option value="">— kies project —</option>' +
     open.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
 
   $("pZoekCategorie").innerHTML = '<option value="">Alle categorieën</option>' +
@@ -2526,6 +2562,64 @@ function renderKlanten(){
 }
 
 /* =====================================================
+   EXTRA REGELS — losse factuurregels per project (bv. een afgesproken
+   vaste prijs voor een deel van het werk), niet gekoppeld aan uren/km/
+   producten. Werkt verder net als de andere invulformulieren: opslaan,
+   bewerken, verwijderen, en ze komen mee bij het factureren van het project.
+   ===================================================== */
+let bewerkExtraRegelId = null;
+
+function stopExtraRegelBewerken(){
+  bewerkExtraRegelId = null;
+  $("erOpslaan").textContent = "Regel opslaan";
+  $("erAnnuleer").style.display = "none";
+  $("erOmschrijving").value = ""; $("erAantal").value = 1; $("erEenheid").value = ""; $("erPrijs").value = "";
+  $("erDatum").value = vandaagISO();
+}
+$("erAnnuleer").addEventListener("click", stopExtraRegelBewerken);
+
+function startExtraRegelBewerken(r){
+  bewerkExtraRegelId = r.id;
+  $("erProject").value = r.project_id || "";
+  $("erOmschrijving").value = r.omschrijving || "";
+  $("erDatum").value = r.datum || vandaagISO();
+  $("erAantal").value = r.aantal;
+  $("erEenheid").value = r.eenheid || "";
+  $("erPrijs").value = r.prijs;
+  $("erOpslaan").textContent = "Wijziging opslaan";
+  $("erAnnuleer").style.display = "block";
+  toonTab("invullen");
+  kiesSub("sub-extra");
+}
+
+$("erOpslaan").addEventListener("click", async () => {
+  const projectId = $("erProject").value;
+  const omschrijving = $("erOmschrijving").value.trim();
+  const aantal = parseFloat($("erAantal").value);
+  const prijs = parseFloat($("erPrijs").value);
+  const datum = $("erDatum").value || vandaagISO();
+  if (!projectId) { toast("Kies een project"); return; }
+  if (!omschrijving || !(aantal > 0) || !(prijs >= 0)) { toast("Vul omschrijving, aantal en prijs in"); return; }
+  const rij = {
+    project_id: projectId, omschrijving, datum,
+    aantal, prijs: r2(prijs), eenheid: $("erEenheid").value.trim() || null
+  };
+  $("erOpslaan").disabled = true;
+  let fout;
+  if (bewerkExtraRegelId){
+    ({ error: fout } = await db.from("project_extra_regels").update(rij).eq("id", bewerkExtraRegelId));
+  } else {
+    ({ error: fout } = await db.from("project_extra_regels").insert(rij));
+  }
+  $("erOpslaan").disabled = false;
+  if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
+  const wasBewerken = !!bewerkExtraRegelId;
+  stopExtraRegelBewerken();
+  if (bewerkProjectId) laadProjectExtraRegels(bewerkProjectId);
+  toast(wasBewerken ? "Regel bijgewerkt" : "Regel opgeslagen");
+});
+
+/* =====================================================
    PROJECTEN
    ===================================================== */
 let bewerkProjectId = null;
@@ -2643,6 +2737,40 @@ async function laadProjectGebruik(projectId){
   }));
 }
 
+async function laadProjectExtraRegels(projectId){
+  const body = $("prExtraBody");
+  body.innerHTML = '<tr><td colspan="5" class="leeg">Laden…</td></tr>';
+  const { data, error } = await db.from("project_extra_regels")
+    .select("*").eq("project_id", projectId)
+    .order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false });
+  if (error){ console.error(error); body.innerHTML = '<tr><td colspan="5" class="leeg">Kon de regels niet laden.</td></tr>'; return; }
+  const lijst = data || [];
+  if (!lijst.length){
+    body.innerHTML = '<tr><td colspan="5" class="leeg">Nog geen extra regels bij dit project.</td></tr>';
+    return;
+  }
+  body.innerHTML = lijst.map(r =>
+    '<tr' + (r.gefactureerd ? '' : ' class="klik" data-eredit="' + r.id + '"') + '>' +
+      '<td>' + fmtDatum(r.datum) + '</td>' +
+      '<td class="tekst">' + esc(r.omschrijving) + (r.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
+      '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + (r.eenheid ? " " + esc(r.eenheid) : "") + '</td>' +
+      '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td>' +
+      '<td class="r">' + (r.gefactureerd ? '' : '<button class="verwijder" data-erid="' + r.id + '" title="Verwijderen">✕</button>') + '</td>' +
+    '</tr>').join("");
+  body.querySelectorAll("[data-eredit]").forEach(el => el.addEventListener("click", () => {
+    const r = lijst.find(x => x.id === el.dataset.eredit);
+    if (r) startExtraRegelBewerken(r);
+  }));
+  body.querySelectorAll("[data-erid]").forEach(k => k.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm("Deze regel verwijderen?")) return;
+    const { error: delFout } = await db.from("project_extra_regels").delete().eq("id", k.dataset.erid);
+    if (delFout){ toast("Verwijderen mislukt"); return; }
+    toast("Regel verwijderd");
+    laadProjectExtraRegels(projectId);
+  }));
+}
+
 function laadProjectFacturen(projectId){
   const body = $("prFacturenBody");
   const lijst = factData.filter(f => f.project_id === projectId && f.type === "verkoop");
@@ -2716,6 +2844,7 @@ $("projNieuw").addEventListener("click", () => {
   $("prUrenBlok").style.display = "none";
   $("prKmBlok").style.display = "none";
   $("prGebruikBlok").style.display = "none";
+  $("prExtraBlok").style.display = "none";
   $("prFacturenBlok").style.display = "none";
   $("prFactureer").style.display = "none";
   $("prVerwijder").style.display = "none";
@@ -2808,6 +2937,8 @@ function renderProjecten(){
     laadProjectKm(p.id);
     $("prGebruikBlok").style.display = "block";
     laadProjectGebruik(p.id);
+    $("prExtraBlok").style.display = "block";
+    laadProjectExtraRegels(p.id);
     $("prFacturenBlok").style.display = "block";
     laadProjectFacturen(p.id);
     $("prFactureer").style.display = "inline-block";
@@ -3940,20 +4071,20 @@ $("prFactureer").addEventListener("click", () => {
 
 async function startFacturering(projectId){
   const project = cache.projecten.find(p => p.id === projectId);
-  const [urenRes, gebrRes] = await Promise.all([
+  const [urenRes, gebrRes, extraRes] = await Promise.all([
     db.from("uren").select("*").eq("project_id", projectId)
       .eq("gefactureerd", false).order("datum"),
     db.from("voorraad_mutaties").select("*").eq("project_id", projectId)
-      .eq("type", "gebruik").eq("gefactureerd", false).order("datum")
+      .eq("type", "gebruik").eq("gefactureerd", false).order("datum"),
+    db.from("project_extra_regels").select("*").eq("project_id", projectId)
+      .eq("gefactureerd", false).order("datum")
   ]);
   const uren = urenRes.data || [];
   const gebruik = gebrRes.data || [];
+  const extra = extraRes.data || [];
   const kmVoor = kmRegels().filter(r =>
     r.project_id === projectId && !r.gefactureerd && r.zakelijk && r.gereden > 0);
-  const vastePrijs = project && project.prijstype === "vast";
-  if (vastePrijs){
-    if (!(Number(project.vaste_prijs) > 0)){ toast("Vul eerst een vaste prijs in bij dit project"); return; }
-  } else if (!uren.length && !gebruik.length && !kmVoor.length){
+  if (!uren.length && !gebruik.length && !kmVoor.length && !extra.length){
     toast("Niets te factureren bij dit project");
     return;
   }
@@ -3965,7 +4096,7 @@ async function startFacturering(projectId){
       omschrijving: "Arbeid" + (u.omschrijving ? " — " + u.omschrijving : ""),
       datum: u.datum, eenheid: "uur",
       aantal: Number(u.aantal), prijs: Number(u.tarief || 0),
-      uren_id: u.id, mutatie_id: null, km_id: null
+      uren_id: u.id, mutatie_id: null, km_id: null, extra_id: null
     });
   });
   gebruik.forEach(g => {
@@ -3975,7 +4106,7 @@ async function startFacturering(projectId){
       datum: g.datum, eenheid: (prod && prod.eenheid) || "",
       aantal: Math.abs(Number(g.aantal)),
       prijs: Number(prod ? (prod.verkoopprijs || 0) : 0),
-      uren_id: null, mutatie_id: g.id, km_id: null
+      uren_id: null, mutatie_id: g.id, km_id: null, extra_id: null
     });
   });
   kmVoor.forEach(r => {
@@ -3984,16 +4115,20 @@ async function startFacturering(projectId){
       datum: r.datum, eenheid: "km",
       aantal: r.gereden,
       prijs: Number(r.km_prijs ?? (cache.inst.km_prijs || 0)),
-      uren_id: null, mutatie_id: null, km_id: r.id
+      uren_id: null, mutatie_id: null, km_id: r.id, extra_id: null
     });
   });
-  // bij vaste prijs komt er maar 1 regel op de factuur (de afgesproken prijs),
-  // maar de losse uren/producten/km blijven wél gemarkeerd als gefactureerd
-  // (via 'regels' hierboven) zodat ze niet nogmaals als 'nog te factureren' tellen
-  const factuurRegels = vastePrijs
-    ? [{ omschrijving: project.naam, datum: vandaagISO(), eenheid: "", aantal: 1, prijs: Number(project.vaste_prijs) }]
-    : regels;
-  pendingFactuur = { projectId, regels, factuurRegels: vastePrijs ? factuurRegels : null };
+  // extra regels (bv. een afgesproken vaste prijs voor een deel van de klus,
+  // via Invulformulier > Extra regel) komen gewoon als eigen regel(s) mee
+  extra.forEach(r => {
+    regels.push({
+      omschrijving: r.omschrijving,
+      datum: r.datum, eenheid: r.eenheid || "",
+      aantal: Number(r.aantal), prijs: Number(r.prijs),
+      uren_id: null, mutatie_id: null, km_id: null, extra_id: r.id
+    });
+  });
+  pendingFactuur = { projectId, regels };
   bewerkFactuurId = null;
   huidigeRegels = [];
   vulFdKlanten();
@@ -4013,7 +4148,7 @@ async function startFacturering(projectId){
   $("fdVerwijder").style.display = "none";
   $("fdPrint").style.display = "none";
   $("fDetail").style.display = "block";
-  toonFdRegels(factuurRegels);
+  toonFdRegels(regels);
   if (zonderTarief) toast(zonderTarief + " urenregel(s) zonder tarief — die staan op € 0");
   toonTab("facturen");
   kiesFSub("fUit");
@@ -4021,8 +4156,7 @@ async function startFacturering(projectId){
 }
 
 async function maakFactuurAan(){
-  const factuurRegels = pendingFactuur.factuurRegels || pendingFactuur.regels;
-  const tot = toonFdRegels(factuurRegels);
+  const tot = toonFdRegels(pendingFactuur.regels);
   const rij = {
     nummer: $("fdNummer").value.trim() || volgendNummer(),
     type: "verkoop",
@@ -4043,10 +4177,10 @@ async function maakFactuurAan(){
     toast("Aanmaken mislukt: " + (error.message || "onbekende fout"));
     return;
   }
-  const invoerRegels = factuurRegels.map(r => ({
+  const invoerRegels = pendingFactuur.regels.map(r => ({
     factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
     aantal: r.aantal, prijs: r.prijs,
-    uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null
+    uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null, extra_id: r.extra_id || null
   }));
   const { error: e2 } = await db.from("factuur_regels").insert(invoerRegels);
   if (e2){
@@ -4055,20 +4189,21 @@ async function maakFactuurAan(){
     toast("Regels opslaan mislukt");
     return;
   }
-  // gefactureerd-markering gaat altijd via de echte onderliggende uren/producten/km,
-  // ook bij vaste prijs waar de factuur zelf maar 1 regel heeft
   const urenIds = pendingFactuur.regels.map(r => r.uren_id).filter(Boolean);
   const mutIds = pendingFactuur.regels.map(r => r.mutatie_id).filter(Boolean);
   const kmIds = pendingFactuur.regels.map(r => r.km_id).filter(Boolean);
+  const extraIds = pendingFactuur.regels.map(r => r.extra_id).filter(Boolean);
   if (urenIds.length) await db.from("uren").update({ gefactureerd: true }).in("id", urenIds);
   if (mutIds.length) await db.from("voorraad_mutaties").update({ gefactureerd: true }).in("id", mutIds);
   if (kmIds.length) await db.from("km_registratie").update({ gefactureerd: true }).in("id", kmIds);
+  if (extraIds.length) await db.from("project_extra_regels").update({ gefactureerd: true }).in("id", extraIds);
   $("fdOpslaan").disabled = false;
   toast("Factuur " + nieuw.nummer + " aangemaakt");
   pendingFactuur = null;
   await herlaadFacturen();
   await herlaadUren();
   await herlaadKm();
+  if (bewerkProjectId) laadProjectExtraRegels(bewerkProjectId);
   openFactuur(nieuw.id);
 }
 
@@ -4789,16 +4924,40 @@ function zetOfferteStatus(s){
   offerteStatus = s;
   ["Concept","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
     $("offStatus" + n).classList.toggle("aan", n.toLowerCase() === s));
+  renderOffBestellijst();
 }
 ["Concept","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
   $("offStatus" + n).addEventListener("click", () => zetOfferteStatus(n.toLowerCase())));
+
+/* Na acceptatie: welke gekoppelde producten heb je niet genoeg op voorraad,
+   zodat je niet zelf hoeft na te zoeken wat je moet bijbestellen. */
+function renderOffBestellijst(){
+  const gekoppeld = offerteRegels.filter(r => r.product_id);
+  if (!gekoppeld.length || offerteStatus !== "geaccepteerd"){
+    $("offBestelBlok").style.display = "none";
+    return;
+  }
+  $("offBestelBlok").style.display = "block";
+  $("offBestelBody").innerHTML = gekoppeld.map(r => {
+    const prod = cache.producten.find(p => p.id === r.product_id);
+    const voorraad = prod ? Number(prod.voorraad || 0) : 0;
+    const tekort = Number(r.aantal) - voorraad;
+    const status = tekort > 0
+      ? '<span class="chip amber">BESTELLEN — ' + tekort.toLocaleString("nl-NL") + ' tekort</span>'
+      : '<span class="chip groen">OP VOORRAAD</span>';
+    return '<tr><td class="tekst">' + esc(prod ? prod.naam : r.omschrijving) + '</td>' +
+      '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
+      '<td class="r">' + voorraad.toLocaleString("nl-NL") + '</td>' +
+      '<td>' + status + '</td></tr>';
+  }).join("");
+}
 
 function toonOffRegels(){
   const body = $("offRegelsBody");
   body.innerHTML = !offerteRegels.length
     ? '<tr><td colspan="6" class="leeg">Nog geen regels.</td></tr>'
     : offerteRegels.map((r, i) =>
-        '<tr><td class="tekst">' + esc(r.omschrijving) + '</td>' +
+        '<tr><td class="tekst">' + esc(r.omschrijving) + (r.product_id ? ' <span class="chip grijs">PRODUCT</span>' : '') + '</td>' +
         '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
         '<td>' + esc(r.eenheid || "—") + '</td>' +
         '<td class="r">' + eur2(r.prijs) + '</td>' +
@@ -4813,6 +4972,7 @@ function toonOffRegels(){
   $("offExcl").textContent = eur2(excl);
   $("offBtw").textContent = eur2(btw);
   $("offIncl").textContent = eur2(excl + btw);
+  renderOffBestellijst();
   return { excl: r2(excl), btw, incl: r2(excl + btw) };
 }
 
@@ -4821,9 +4981,17 @@ $("orToevoegen").addEventListener("click", () => {
   const aantal = parseFloat($("orAantal").value);
   const prijs = parseFloat($("orPrijs").value);
   if (!omschrijving || !(aantal > 0) || !(prijs >= 0)) { toast("Vul omschrijving, aantal en prijs in"); return; }
-  offerteRegels.push({ omschrijving, eenheid: $("orEenheid").value.trim(), aantal, prijs: r2(prijs) });
+  // automatisch koppelen aan een bestaand product op basis van de omschrijving
+  // (zelfde herkenning als bij het inlezen van een inkoopfactuur) — geen
+  // handmatige selectie nodig, en de offerte haalt hierdoor niets uit voorraad
+  const match = matchProduct(omschrijving);
+  offerteRegels.push({
+    omschrijving, eenheid: $("orEenheid").value.trim(), aantal, prijs: r2(prijs),
+    product_id: match ? match.id : null
+  });
   $("orOmschrijving").value = ""; $("orEenheid").value = ""; $("orAantal").value = 1; $("orPrijs").value = "";
   toonOffRegels();
+  if (match) toast("Gekoppeld aan product: " + match.naam);
 });
 
 function offerteFormLeeg(){
@@ -4861,7 +5029,9 @@ async function openOfferte(id){
   $("offVerwijder").style.display = "inline-block";
   $("offAccepteren").style.display = o.status === "geaccepteerd" ? "none" : "inline-block";
   const { data } = await db.from("offerte_regels").select("*").eq("offerte_id", id).order("aangemaakt_op");
-  offerteRegels = (data || []).map(r => ({ omschrijving: r.omschrijving, eenheid: r.eenheid, aantal: Number(r.aantal), prijs: Number(r.prijs) }));
+  offerteRegels = (data || []).map(r => ({
+    omschrijving: r.omschrijving, eenheid: r.eenheid, aantal: Number(r.aantal), prijs: Number(r.prijs), product_id: r.product_id
+  }));
   toonOffRegels();
   $("offDetail").style.display = "block";
   window.scrollTo(0, 0);
@@ -4893,7 +5063,8 @@ $("offOpslaan").addEventListener("click", async () => {
   // regels herschrijven: eenvoudigst is alles weggooien en opnieuw invoegen
   await db.from("offerte_regels").delete().eq("offerte_id", offerteId);
   await db.from("offerte_regels").insert(offerteRegels.map(r => ({
-    offerte_id: offerteId, omschrijving: r.omschrijving, eenheid: r.eenheid || null, aantal: r.aantal, prijs: r.prijs
+    offerte_id: offerteId, omschrijving: r.omschrijving, eenheid: r.eenheid || null, aantal: r.aantal, prijs: r.prijs,
+    product_id: r.product_id || null
   })));
   $("offOpslaan").disabled = false;
   toast("Offerte opgeslagen");
