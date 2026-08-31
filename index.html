@@ -227,6 +227,7 @@ nav.onderbalk{display:none}
       <button data-tab="uren">Urenregistratie</button>
       <button data-tab="km">KM-registratie</button>
       <div class="groep">Administratie</div>
+      <button data-tab="offertes">Offertes</button>
       <button data-tab="facturen">Facturen</button>
       <button data-tab="voorraad">Voorraad</button>
       <button data-tab="kostensoorten">Kostensoorten</button>
@@ -732,6 +733,63 @@ nav.onderbalk{display:none}
           <button class="knop" id="owDoelenOpslaan">Doelen opslaan</button>
         </div>
       </div>
+      <!-- ========== OFFERTES ========== -->
+      <div class="tab" id="tab-offertes">
+        <div class="tab-kop"><h2>Offertes</h2>
+          <button class="knop klein" id="offNieuw">+ Nieuwe offerte</button></div>
+        <div class="form-card" id="offDetail" style="display:none;margin-bottom:18px;max-width:680px">
+          <div class="rij2">
+            <div class="veld"><label>Offertenummer</label><input type="text" id="offNummer"></div>
+            <div class="veld"><label>Klant</label>
+              <div style="display:flex;gap:6px">
+                <select id="offKlant" style="flex:1"></select>
+                <button type="button" class="knop klein stil" id="offKlantKopieer" title="Klantnaam kopiëren">⧉</button>
+              </div>
+            </div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Datum</label><input type="date" id="offDatum"></div>
+            <div class="veld"><label>Geldig tot</label><input type="date" id="offGeldigTot"></div>
+          </div>
+          <div class="veld"><label>Status</label>
+            <div class="schakel">
+              <button type="button" id="offStatusConcept" class="aan">Concept</button>
+              <button type="button" id="offStatusVerstuurd">Verstuurd</button>
+              <button type="button" id="offStatusGeaccepteerd">Geaccepteerd</button>
+              <button type="button" id="offStatusAfgewezen">Afgewezen</button>
+            </div>
+          </div>
+          <div class="veld"><label>Regels</label>
+            <div class="tbl-wrap"><table>
+              <thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th>Eenheid</th><th class="r">Prijs</th><th class="r">Bedrag</th><th></th></tr></thead>
+              <tbody id="offRegelsBody"></tbody>
+            </table></div>
+            <div class="rij2" style="margin-top:10px">
+              <div class="veld"><label>Omschrijving</label><input type="text" id="orOmschrijving" placeholder="bv. Aanleg groepenkast, of 'Project X — vaste prijs'"></div>
+              <div class="veld"><label>Eenheid</label><input type="text" id="orEenheid" placeholder="leeg = vast bedrag"></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Aantal</label><input type="number" id="orAantal" step="0.5" min="0" value="1"></div>
+              <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="orPrijs" step="0.01" min="0" inputmode="decimal"></div>
+            </div>
+            <button type="button" class="knop klein stil" id="orToevoegen">Regel toevoegen</button>
+            <div class="hint" style="margin-top:8px">Excl: <b id="offExcl">—</b> · BTW: <b id="offBtw">—</b> · Incl: <b id="offIncl">—</b></div>
+          </div>
+          <div class="veld"><label>Notities</label><input type="text" id="offNotities"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="knop klein" id="offOpslaan">Opslaan</button>
+            <button class="knop klein stil" id="offPdf">PDF downloaden</button>
+            <button class="knop klein stil" id="offAccepteren" style="display:none">Accepteren → nieuw project</button>
+            <button class="knop klein stil" id="offSluit">Sluiten</button>
+            <button class="knop klein gevaar" id="offVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+          </div>
+        </div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Nr</th><th>Klant</th><th>Datum</th><th>Status</th><th class="r">Excl.</th></tr></thead>
+          <tbody id="offBody"></tbody>
+        </table></div>
+      </div>
+
       <div class="tab" id="tab-facturen">
         <h2>Facturen</h2>
         <div class="grid4">
@@ -1101,6 +1159,7 @@ nav.onderbalk{display:none}
     <button data-tab="omzet">Omzet / winst</button>
     <button data-tab="uren">Urenregistratie</button>
     <button data-tab="km">KM-registratie</button>
+    <button data-tab="offertes">Offertes</button>
     <button data-tab="kostensoorten">Kostensoorten</button>
     <button data-tab="projecten">Projecten</button>
     <button data-tab="klanten">Klanten</button>
@@ -1487,6 +1546,7 @@ async function laadAlles(){
     renderVoorraad();
     renderGereedschap();
     renderFacturen();
+    herlaadOffertes();
     vulBedrijf();
     renderHoofd();
     renderFinancieel();
@@ -4557,6 +4617,320 @@ function genereerFactuurPdf(f, k, I, regels){
 
   return doc;
 }
+
+/* Zelfde opzet als de factuur-PDF (logo, bedrijfsgegevens, regels, totalen),
+   maar dan als OFFERTE: geen datum-kolom (regels zijn handmatig, niet uit
+   gedateerde uren/producten/km), geen betaal-QR, en een geldigheidstekst
+   i.p.v. betaalinstructies. */
+function genereerOffertePdf(o, k, I, regels){
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+  const L = 15, R = 195;
+  let y = 18;
+
+  let logoH = 0;
+  try {
+    const logoW = 40;
+    logoH = logoW * 628 / 700;
+    doc.addImage(LOGO_DATA_URI, "PNG", L, y, logoW, logoH, undefined, "SLOW");
+  } catch (e) { console.error("Logo tekenen mislukt", e); }
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+  doc.text(I.bedrijf_naam || "LRoks Elektrotechniek", R, y + 3, { align: "right" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+  let ry = y + 9;
+  [
+    I.bedrijf_adres,
+    I.bedrijf_postcode_plaats,
+    I.bedrijf_telefoon,
+    I.bedrijf_email_facturen || I.bedrijf_email,
+    "KVK " + (I.bedrijf_kvk || "-"),
+    "BTW " + (I.bedrijf_btw || "-")
+  ].filter(Boolean).forEach(regel => { doc.text(regel, R, ry, { align: "right" }); ry += 4.5; });
+
+  y = Math.max(y + logoH + 8, ry) + 8;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+  doc.text("OFFERTE " + (o.nummer || ""), L, y);
+  y += 10;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold"); doc.text("Aan", L, y);
+  doc.setFont("helvetica", "normal");
+  let ky = y + 4.5;
+  [
+    k ? k.naam : "—",
+    k && k.adres ? k.adres : "",
+    k ? [k.postcode, k.plaats].filter(Boolean).join(" ") : ""
+  ].filter(Boolean).forEach(regel => { doc.text(regel, L, ky); ky += 4.5; });
+  doc.text("Datum: " + fmtDatum(o.datum), R, y, { align: "right" });
+  doc.text("Geldig tot: " + (o.geldig_tot ? fmtDatum(o.geldig_tot) : "-"), R, y + 4.5, { align: "right" });
+
+  y = Math.max(ky, y + 9) + 6;
+  doc.autoTable({
+    startY: y,
+    margin: { left: L, right: 210 - R },
+    theme: "plain",
+    styles: { font: "helvetica", fontSize: 9, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: { bottom: 0.2 } },
+    headStyles: { fontStyle: "bold", fontSize: 8, textColor: 20, lineColor: [0, 0, 0], lineWidth: { bottom: 0.5 } },
+    columnStyles: {
+      1: { cellWidth: 22, halign: "right" }, 3: { cellWidth: 28, halign: "right" }, 4: { cellWidth: 28, halign: "right" }
+    },
+    head: [["Omschrijving", "Aantal", "Eenheid", "Prijs excl.", "Bedrag excl."]],
+    body: regels.map(r => [
+      r.omschrijving, Number(r.aantal).toLocaleString("nl-NL"), r.eenheid || "—",
+      eur2(r.prijs), eur2(Number(r.aantal) * Number(r.prijs))
+    ])
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+  if (y > 255) { doc.addPage(); y = 20; }
+  const totX = R - 60;
+  doc.setFontSize(9);
+  doc.text("Subtotaal ex. BTW", totX, y); doc.text(eur2(o.bedrag_excl || 0), R, y, { align: "right" });
+  y += 5;
+  doc.text("BTW " + btwPct() + "%", totX, y); doc.text(eur2(o.btw_bedrag || 0), R, y, { align: "right" });
+  y += 3;
+  doc.setLineWidth(0.4); doc.line(totX, y, R, y);
+  y += 4;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text("Totaal", totX, y); doc.text(eur2(o.bedrag_incl || 0), R, y, { align: "right" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+
+  y += 14;
+  if (y > 265) { doc.addPage(); y = 20; }
+  const geldigTekst = (o.geldig_tot ? "Deze offerte is geldig tot " + fmtDatum(o.geldig_tot) + "." : "") +
+    " Neem voor vragen of akkoord gerust contact op.";
+  doc.text(doc.splitTextToSize(geldigTekst.trim(), 170), L, y);
+
+  const paginaHoogte = doc.internal.pageSize.getHeight();
+  let bedanktY = paginaHoogte - 20;
+  if (bedanktY < y + 10) { doc.addPage(); bedanktY = paginaHoogte - 20; }
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text("Bedankt voor uw interesse!", 105, bedanktY, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+
+  return doc;
+}
+
+/* =====================================================
+   OFFERTES
+   ===================================================== */
+let offerteData = [];
+let bewerkOfferteId = null;
+let offerteRegels = [];
+let offerteStatus = "concept";
+
+function volgendOfferteNummer(){
+  const jaar2 = String(new Date().getFullYear()).slice(-2);
+  let max = 0;
+  offerteData.forEach(o => {
+    const m = String(o.nummer || "").match(new RegExp("^OFF" + jaar2 + "(\\d{3,})$"));
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return "OFF" + jaar2 + String(max + 1).padStart(3, "0");
+}
+
+async function herlaadOffertes(){
+  const { data } = await db.from("offertes").select("*").order("datum", { ascending:false });
+  offerteData = data || [];
+  renderOffertes();
+}
+
+function renderOffertes(){
+  const body = $("offBody");
+  if (!offerteData.length){
+    body.innerHTML = '<tr><td colspan="5" class="leeg">Nog geen offertes.</td></tr>';
+    return;
+  }
+  const chip = s => s === "geaccepteerd" ? '<span class="chip groen">GEACCEPTEERD</span>'
+    : s === "afgewezen" ? '<span class="chip rood">AFGEWEZEN</span>'
+    : s === "verstuurd" ? '<span class="chip amber">VERSTUURD</span>'
+    : '<span class="chip grijs">CONCEPT</span>';
+  body.innerHTML = offerteData.map(o =>
+    '<tr class="klik" data-ofid="' + o.id + '">' +
+      '<td>' + esc(o.nummer || "") + '</td>' +
+      '<td class="tekst">' + esc(klantNaam(o.klant_id) || "—") + '</td>' +
+      '<td>' + fmtDatum(o.datum) + '</td>' +
+      '<td>' + chip(o.status) + '</td>' +
+      '<td class="r">' + eur2(o.bedrag_excl || 0) + '</td>' +
+    '</tr>').join("");
+  body.querySelectorAll("[data-ofid]").forEach(r => r.addEventListener("click", () => openOfferte(r.dataset.ofid)));
+}
+
+function vulOffKlanten(){
+  const huidig = $("offKlant").value;
+  $("offKlant").innerHTML = '<option value="">— kies klant —</option>' +
+    cache.klanten.map(k => '<option value="' + k.id + '">' + esc(k.naam) + '</option>').join("");
+  $("offKlant").value = huidig;
+}
+
+function zetOfferteStatus(s){
+  offerteStatus = s;
+  ["Concept","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
+    $("offStatus" + n).classList.toggle("aan", n.toLowerCase() === s));
+}
+["Concept","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
+  $("offStatus" + n).addEventListener("click", () => zetOfferteStatus(n.toLowerCase())));
+
+function toonOffRegels(){
+  const body = $("offRegelsBody");
+  body.innerHTML = !offerteRegels.length
+    ? '<tr><td colspan="6" class="leeg">Nog geen regels.</td></tr>'
+    : offerteRegels.map((r, i) =>
+        '<tr><td class="tekst">' + esc(r.omschrijving) + '</td>' +
+        '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
+        '<td>' + esc(r.eenheid || "—") + '</td>' +
+        '<td class="r">' + eur2(r.prijs) + '</td>' +
+        '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td>' +
+        '<td class="r"><button class="verwijder" data-ori="' + i + '">✕</button></td></tr>').join("");
+  body.querySelectorAll("[data-ori]").forEach(k => k.addEventListener("click", () => {
+    offerteRegels.splice(Number(k.dataset.ori), 1);
+    toonOffRegels();
+  }));
+  const excl = offerteRegels.reduce((s, r) => s + Number(r.aantal) * Number(r.prijs), 0);
+  const btw = r2(excl * btwPct() / 100);
+  $("offExcl").textContent = eur2(excl);
+  $("offBtw").textContent = eur2(btw);
+  $("offIncl").textContent = eur2(excl + btw);
+  return { excl: r2(excl), btw, incl: r2(excl + btw) };
+}
+
+$("orToevoegen").addEventListener("click", () => {
+  const omschrijving = $("orOmschrijving").value.trim();
+  const aantal = parseFloat($("orAantal").value);
+  const prijs = parseFloat($("orPrijs").value);
+  if (!omschrijving || !(aantal > 0) || !(prijs >= 0)) { toast("Vul omschrijving, aantal en prijs in"); return; }
+  offerteRegels.push({ omschrijving, eenheid: $("orEenheid").value.trim(), aantal, prijs: r2(prijs) });
+  $("orOmschrijving").value = ""; $("orEenheid").value = ""; $("orAantal").value = 1; $("orPrijs").value = "";
+  toonOffRegels();
+});
+
+function offerteFormLeeg(){
+  bewerkOfferteId = null;
+  offerteRegels = [];
+  vulOffKlanten();
+  $("offNummer").value = volgendOfferteNummer();
+  $("offKlant").value = "";
+  $("offDatum").value = vandaagISO();
+  $("offGeldigTot").value = "";
+  zetOfferteStatus("concept");
+  $("offNotities").value = "";
+  $("offVerwijder").style.display = "none";
+  $("offAccepteren").style.display = "none";
+  toonOffRegels();
+}
+$("offNieuw").addEventListener("click", () => {
+  offerteFormLeeg();
+  $("offDetail").style.display = "block";
+  window.scrollTo(0, 0);
+});
+$("offSluit").addEventListener("click", () => { $("offDetail").style.display = "none"; });
+
+async function openOfferte(id){
+  const o = offerteData.find(x => x.id === id);
+  if (!o) return;
+  bewerkOfferteId = id;
+  vulOffKlanten();
+  $("offNummer").value = o.nummer || "";
+  $("offKlant").value = o.klant_id || "";
+  $("offDatum").value = o.datum || "";
+  $("offGeldigTot").value = o.geldig_tot || "";
+  zetOfferteStatus(o.status || "concept");
+  $("offNotities").value = o.notities || "";
+  $("offVerwijder").style.display = "inline-block";
+  $("offAccepteren").style.display = o.status === "geaccepteerd" ? "none" : "inline-block";
+  const { data } = await db.from("offerte_regels").select("*").eq("offerte_id", id).order("aangemaakt_op");
+  offerteRegels = (data || []).map(r => ({ omschrijving: r.omschrijving, eenheid: r.eenheid, aantal: Number(r.aantal), prijs: Number(r.prijs) }));
+  toonOffRegels();
+  $("offDetail").style.display = "block";
+  window.scrollTo(0, 0);
+}
+
+$("offOpslaan").addEventListener("click", async () => {
+  const nummer = $("offNummer").value.trim();
+  if (!offerteRegels.length) { toast("Voeg minstens 1 regel toe"); return; }
+  const tot = toonOffRegels();
+  const rij = {
+    nummer: nummer || null,
+    klant_id: $("offKlant").value || null,
+    datum: $("offDatum").value || vandaagISO(),
+    geldig_tot: $("offGeldigTot").value || null,
+    status: offerteStatus,
+    bedrag_excl: tot.excl, btw_bedrag: tot.btw, bedrag_incl: tot.incl,
+    notities: $("offNotities").value.trim() || null
+  };
+  $("offOpslaan").disabled = true;
+  let offerteId = bewerkOfferteId, fout;
+  if (bewerkOfferteId){
+    ({ error: fout } = await db.from("offertes").update(rij).eq("id", bewerkOfferteId));
+  } else {
+    const { data, error } = await db.from("offertes").insert(rij).select().single();
+    fout = error;
+    if (data) offerteId = data.id;
+  }
+  if (fout){ $("offOpslaan").disabled = false; console.error(fout); toast("Opslaan mislukt"); return; }
+  // regels herschrijven: eenvoudigst is alles weggooien en opnieuw invoegen
+  await db.from("offerte_regels").delete().eq("offerte_id", offerteId);
+  await db.from("offerte_regels").insert(offerteRegels.map(r => ({
+    offerte_id: offerteId, omschrijving: r.omschrijving, eenheid: r.eenheid || null, aantal: r.aantal, prijs: r.prijs
+  })));
+  $("offOpslaan").disabled = false;
+  toast("Offerte opgeslagen");
+  bewerkOfferteId = offerteId;
+  $("offVerwijder").style.display = "inline-block";
+  $("offAccepteren").style.display = offerteStatus === "geaccepteerd" ? "none" : "inline-block";
+  await herlaadOffertes();
+});
+
+$("offVerwijder").addEventListener("click", async () => {
+  if (!bewerkOfferteId) return;
+  if (!confirm("Deze offerte verwijderen?")) return;
+  const { error } = await db.from("offertes").delete().eq("id", bewerkOfferteId);
+  if (error){ toast("Verwijderen mislukt"); return; }
+  $("offDetail").style.display = "none";
+  toast("Offerte verwijderd");
+  await herlaadOffertes();
+});
+
+$("offKlantKopieer").addEventListener("click", async () => {
+  const klant = cache.klanten.find(k => k.id === $("offKlant").value);
+  if (!klant) { toast("Geen klant gekozen"); return; }
+  try { await navigator.clipboard.writeText(klant.naam); toast("Naam gekopieerd"); }
+  catch (e) { console.error(e); toast("Kopiëren mislukt"); }
+});
+
+$("offAccepteren").addEventListener("click", async () => {
+  if (!bewerkOfferteId) return;
+  const o = offerteData.find(x => x.id === bewerkOfferteId);
+  if (!o) return;
+  if (!confirm("Offerte accepteren en een nieuw project aanmaken? Alles is daarna nog aan te passen in het project zelf.")) return;
+  const naam = (klantNaam(o.klant_id) || "Nieuw project") + " — " + (o.nummer || "offerte");
+  const { data: nieuw, error } = await db.from("projecten").insert({
+    naam, klant_id: o.klant_id || null, status: "open",
+    omschrijving: "Ontstaan uit offerte " + (o.nummer || ""),
+    prijstype: "vast", vaste_prijs: o.bedrag_excl || 0
+  }).select().single();
+  if (error || !nieuw){ console.error(error); toast("Project aanmaken mislukt"); return; }
+  await db.from("offertes").update({ status: "geaccepteerd", project_id: nieuw.id }).eq("id", bewerkOfferteId);
+  cache.projecten.push(nieuw);
+  vulSelects();
+  toast("Project '" + naam + "' aangemaakt");
+  $("offDetail").style.display = "none";
+  await herlaadOffertes();
+  toonTab("projecten");
+  renderProjecten();
+});
+
+$("offPdf").addEventListener("click", () => {
+  if (!bewerkOfferteId) return;
+  const o = offerteData.find(x => x.id === bewerkOfferteId);
+  if (!o) return;
+  const k = cache.klanten.find(x => x.id === o.klant_id);
+  try {
+    const doc = genereerOffertePdf(o, k, cache.inst, offerteRegels);
+    const klantVeilig = (k && k.naam ? k.naam : "").replace(/[\\/:*?"<>|]/g, "").trim();
+    doc.save("Offerte - " + (o.nummer || "concept") + (klantVeilig ? " - " + klantVeilig : "") + ".pdf");
+  } catch (e) { console.error(e); toast("PDF maken mislukt"); }
+});
 
 $("fdPrint").addEventListener("click", () => {
   if (!bewerkFactuurId) return;
