@@ -1806,6 +1806,25 @@ function volgendeAfschrijving(vl, vanaf){
 }
 const isoDatum = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 
+/* Alle afschrijfdatums van een vaste last die in 'jaar' vallen — voor
+   Kostensoorten, waar elke afschrijving als aparte kostenregel meetelt. */
+function vasteLastDatumsInJaar(vl, jaar){
+  const datums = [];
+  const d = new Date(vl.start_datum + "T00:00:00");
+  const aantal = Math.max(1, Number(vl.interval_aantal) || 1);
+  const eindeJaar = new Date(jaar, 11, 31);
+  let guard = 0;
+  while (d <= eindeJaar && guard < 20000){
+    if (d.getFullYear() === jaar) datums.push(isoDatum(d));
+    if (vl.interval_eenheid === "dag") d.setDate(d.getDate() + aantal);
+    else if (vl.interval_eenheid === "week") d.setDate(d.getDate() + aantal * 7);
+    else if (vl.interval_eenheid === "jaar") d.setFullYear(d.getFullYear() + aantal);
+    else d.setMonth(d.getMonth() + aantal); // maand = standaard
+    guard++;
+  }
+  return datums;
+}
+
 let bewerkVasteLastId = null;
 
 function renderVasteLasten(){
@@ -4758,16 +4777,30 @@ function renderKostensoorten(){
     renderKostensoorten();
   }));
 
-  const lijst = inkoop.filter(f => (f.categorie || "materiaal") === ksActief)
-    .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
-  const totaal = lijst.reduce((s, f) => s + Number(f.bedrag_excl || 0), 0);
+  const inkoopRegels = inkoop.filter(f => (f.categorie || "materiaal") === ksActief)
+    .map(f => ({ soort: "inkoop", f, datum: f.datum, bedrag: Number(f.bedrag_excl || 0) }));
+
+  // vaste lasten zonder kostensoort tellen nergens mee -- alleen wie er bewust
+  // een koos komt hier terecht, met elke afschrijving in dit jaar als eigen regel
+  const vasteLastRegels = cache.vasteLasten
+    .filter(vl => vl.categorie === ksActief)
+    .flatMap(vl => vasteLastDatumsInJaar(vl, jaar).map(datum =>
+      ({ soort: "vast", vl, datum, bedrag: Number(vl.bedrag || 0) })));
+
+  const lijst = [...inkoopRegels, ...vasteLastRegels].sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  const totaal = lijst.reduce((s, r) => s + r.bedrag, 0);
   const rijen = lijst.length
-    ? lijst.map(f =>
-        '<tr class="klik" data-ksfid="' + f.id + '"><td>' + fmtDatum(f.datum) + '</td>' +
-        '<td class="tekst">' + esc(f.leverancier || "—") + '</td>' +
-        '<td class="tekst">' + esc(f.nummer || "—") + '</td>' +
-        '<td class="r">' + eur2(f.bedrag_excl || 0) + '</td></tr>').join("")
-    : '<tr><td colspan="4" class="leeg">Nog geen inkoopfacturen in ' + jaar + '.</td></tr>';
+    ? lijst.map(r => r.soort === "inkoop"
+        ? '<tr class="klik" data-ksfid="' + r.f.id + '"><td>' + fmtDatum(r.datum) + '</td>' +
+          '<td class="tekst">' + esc(r.f.leverancier || "—") + '</td>' +
+          '<td class="tekst">' + esc(r.f.nummer || "—") + '</td>' +
+          '<td class="r">' + eur2(r.bedrag) + '</td></tr>'
+        : '<tr class="klik" data-ksvlid="' + r.vl.id + '"><td>' + fmtDatum(r.datum) + '</td>' +
+          '<td class="tekst">' + esc(r.vl.naam) + '</td>' +
+          '<td class="tekst"><span class="chip grijs">VASTE LAST</span></td>' +
+          '<td class="r">' + eur2(r.bedrag) + '</td></tr>'
+      ).join("")
+    : '<tr><td colspan="4" class="leeg">Nog geen kosten in ' + jaar + '.</td></tr>';
   $("ksBlok").innerHTML =
     '<div class="form-card">' +
       '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">' +
@@ -4787,6 +4820,9 @@ function renderKostensoorten(){
     kiesFSub("fIn");
     openInkoop(r.dataset.ksfid);
   }));
+  // klik op een vaste last springt naar het Invulformulier om 'm te bewerken
+  $("ksBlok").querySelectorAll("[data-ksvlid]").forEach(r => r.addEventListener("click", () =>
+    startVasteLastBewerken(r.dataset.ksvlid)));
 }
 $("ksJaar").addEventListener("change", renderKostensoorten);
 ["owJaar","bwJaar","btJaar"].forEach(id => $(id).addEventListener("change", renderFinancieel));
