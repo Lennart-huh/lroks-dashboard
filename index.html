@@ -233,6 +233,7 @@ nav.onderbalk{display:none}
       <button data-tab="kostensoorten">Kostensoorten</button>
       <button data-tab="projecten">Projecten</button>
       <button data-tab="klanten">Klanten</button>
+      <button data-tab="notities">Notities</button>
       <div class="groep">Cijfers</div>
       <button data-tab="belasting">Belasting</button>
       <button data-tab="btw">BTW</button>
@@ -578,6 +579,24 @@ nav.onderbalk{display:none}
             <tbody id="klantBody"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- ========== NOTITIES ========== -->
+      <div class="tab" id="tab-notities">
+        <h2>Notities</h2>
+        <div class="form-card" style="margin-bottom:18px">
+          <div class="veld"><label>Idee of afspraak</label><textarea id="ntTekst" placeholder="Schrijf zoveel op als je wilt…"></textarea></div>
+          <div class="rij2">
+            <div class="veld"><label>Koppel aan project (optioneel)</label><select id="ntProject"><option value="">— geen —</option></select></div>
+            <div class="veld"><label>Koppel aan klant (optioneel)</label><select id="ntKlant"><option value="">— geen —</option></select></div>
+          </div>
+          <button class="knop klein" id="ntToevoegen">Toevoegen</button>
+        </div>
+        <div class="rij2" style="margin-bottom:14px">
+          <div class="veld" style="margin-bottom:0"><label>Filter op project</label><select id="ntFilterProject"><option value="">Alle</option></select></div>
+          <div class="veld" style="margin-bottom:0"><label>Filter op klant</label><select id="ntFilterKlant"><option value="">Alle</option></select></div>
+        </div>
+        <div id="ntLijst"></div>
       </div>
 
       <!-- ========== PROJECTEN ========== -->
@@ -1163,6 +1182,7 @@ nav.onderbalk{display:none}
     <button data-tab="kostensoorten">Kostensoorten</button>
     <button data-tab="projecten">Projecten</button>
     <button data-tab="klanten">Klanten</button>
+    <button data-tab="notities">Notities</button>
     <button data-tab="belasting">Belasting</button>
     <button data-tab="btw">BTW</button>
   </div>
@@ -1245,7 +1265,7 @@ const KOSTEN = [
 const kostenNaam = c => (KOSTEN.find(k => k[0] === c) || [null, c || "—"])[1];
 
 /* centrale gegevens */
-const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], vasteLasten:[], correcties:[], inst:{} };
+const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], vasteLasten:[], correcties:[], notities:[], inst:{} };
 let urenData = [];
 let kmData = [];
 let factData = [];
@@ -1547,6 +1567,7 @@ async function laadAlles(){
     renderGereedschap();
     renderFacturen();
     herlaadOffertes();
+    herlaadNotities();
     vulBedrijf();
     renderHoofd();
     renderFinancieel();
@@ -1609,6 +1630,7 @@ function vulSelects(){
   $("ikLevLijst").innerHTML = levs.map(l => '<option value="' + esc(l) + '">').join("");
 
   bijwerkKmHint();
+  vulNotitieSelects();
 }
 
 /* welke kostensoort gebruikte je de vorige keer bij deze leverancier */
@@ -4931,6 +4953,73 @@ $("offPdf").addEventListener("click", () => {
     doc.save("Offerte - " + (o.nummer || "concept") + (klantVeilig ? " - " + klantVeilig : "") + ".pdf");
   } catch (e) { console.error(e); toast("PDF maken mislukt"); }
 });
+
+/* =====================================================
+   NOTITIES — ideeën en afspraken, los of gekoppeld aan een project/klant
+   ===================================================== */
+async function herlaadNotities(){
+  const { data } = await db.from("notities").select("*").order("aangemaakt_op", { ascending: false });
+  cache.notities = data || [];
+  renderNotities();
+}
+
+function vulNotitieSelects(){
+  const projOpties = cache.projecten.map(p => '<option value="' + p.id + '">' + esc(p.naam) + '</option>').join("");
+  const klantOpties = cache.klanten.map(k => '<option value="' + k.id + '">' + esc(k.naam) + '</option>').join("");
+  const huidigNt = $("ntProject").value, huidigNf = $("ntFilterProject").value;
+  $("ntProject").innerHTML = '<option value="">— geen —</option>' + projOpties;
+  $("ntProject").value = huidigNt;
+  $("ntFilterProject").innerHTML = '<option value="">Alle</option>' + projOpties;
+  $("ntFilterProject").value = huidigNf;
+  const huidigKt = $("ntKlant").value, huidigKf = $("ntFilterKlant").value;
+  $("ntKlant").innerHTML = '<option value="">— geen —</option>' + klantOpties;
+  $("ntKlant").value = huidigKt;
+  $("ntFilterKlant").innerHTML = '<option value="">Alle</option>' + klantOpties;
+  $("ntFilterKlant").value = huidigKf;
+}
+
+function renderNotities(){
+  const filterProject = $("ntFilterProject").value;
+  const filterKlant = $("ntFilterKlant").value;
+  const lijst = cache.notities.filter(n =>
+    (!filterProject || n.project_id === filterProject) && (!filterKlant || n.klant_id === filterKlant));
+  $("ntLijst").innerHTML = !lijst.length
+    ? '<div class="hint">Nog geen notities.</div>'
+    : lijst.map(n => {
+        const koppels = [projectNaam(n.project_id), klantNaam(n.klant_id)].filter(Boolean);
+        return '<div class="form-card" style="margin-bottom:10px">' +
+          '<div style="white-space:pre-wrap">' + esc(n.tekst) + '</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:10px">' +
+          '<span class="hint" style="margin:0">' + fmtDatum(n.aangemaakt_op.slice(0, 10)) +
+            (koppels.length ? ' · ' + koppels.map(esc).join(' · ') : '') + '</span>' +
+          '<button class="verwijder" data-ntid="' + n.id + '" title="Verwijderen">✕</button>' +
+          '</div></div>';
+      }).join("");
+  $("ntLijst").querySelectorAll("[data-ntid]").forEach(k => k.addEventListener("click", async () => {
+    if (!confirm("Deze notitie verwijderen?")) return;
+    const { error } = await db.from("notities").delete().eq("id", k.dataset.ntid);
+    if (error){ toast("Verwijderen mislukt"); return; }
+    cache.notities = cache.notities.filter(n => n.id !== k.dataset.ntid);
+    renderNotities();
+  }));
+}
+
+$("ntToevoegen").addEventListener("click", async () => {
+  const tekst = $("ntTekst").value.trim();
+  if (!tekst) { toast("Vul een tekst in"); return; }
+  $("ntToevoegen").disabled = true;
+  const { data, error } = await db.from("notities").insert({
+    tekst, project_id: $("ntProject").value || null, klant_id: $("ntKlant").value || null
+  }).select().single();
+  $("ntToevoegen").disabled = false;
+  if (error){ console.error(error); toast("Opslaan mislukt"); return; }
+  cache.notities.unshift(data);
+  $("ntTekst").value = ""; $("ntProject").value = ""; $("ntKlant").value = "";
+  toast("Notitie toegevoegd");
+  renderNotities();
+});
+$("ntFilterProject").addEventListener("change", renderNotities);
+$("ntFilterKlant").addEventListener("change", renderNotities);
 
 $("fdPrint").addEventListener("click", () => {
   if (!bewerkFactuurId) return;
