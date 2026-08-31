@@ -2174,6 +2174,7 @@ async function herlaadUren(){
   const { data } = await db.from("uren").select("*").order("datum", { ascending:false }).limit(400);
   urenData = data || [];
   renderUren(); renderHoofd(); checkHerinnering();
+  if (bewerkProjectId) laadProjectUren(bewerkProjectId);
 }
 
 /* laatst gebruikte tarief alvast invullen als het veld leeg is */
@@ -2387,6 +2388,7 @@ async function herlaadKm(){
   const { data } = await db.from("km_registratie").select("*").order("datum", { ascending:true });
   kmData = data || [];
   renderKm(); renderHoofd(); checkHerinnering(); bijwerkKmHint();
+  if (bewerkProjectId) laadProjectKm(bewerkProjectId);
 }
 
 /* per regel: gereden = stand - de vorige ingevoerde stand */
@@ -2618,6 +2620,8 @@ $("pOpslaan").addEventListener("click", async () => {
   const wasBewerken = !!bewerkGebruikRow;
   stopGebruikBewerken();
   renderVoorraad();
+  const { data: mutData } = await db.from("voorraad_mutaties").select("*");
+  cache.mutaties = mutData || [];
   if (bewerkProjectId) laadProjectGebruik(bewerkProjectId);
   toast(wasBewerken ? "Gebruik gewijzigd" : "Gebruik opgeslagen bij " + (projectNaam(projectId) || "project"));
 });
@@ -3120,6 +3124,7 @@ async function laadProjectGebruik(projectId){
     if (delFout){ toast("Verwijderen mislukt"); return; }
     await boekVoorraadTerug(g.product_id, Math.abs(Number(g.aantal))); // gebruik is negatief, dus dit boekt terug
     renderVoorraad();
+    cache.mutaties = cache.mutaties.filter(m => m.id !== g.id);
     toast("Regel verwijderd");
     laadProjectGebruik(projectId);
   }));
