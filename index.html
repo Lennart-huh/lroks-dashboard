@@ -261,6 +261,44 @@ nav.onderbalk{display:none}
           <svg id="ogSvg" viewBox="0 0 720 260" style="width:100%;height:auto;display:block"></svg>
           <div id="ogTooltip" class="og-tooltip"></div>
         </div>
+
+        <div class="form-card" style="margin-top:18px">
+          <div class="tab-kop" style="margin:0 0 12px">
+            <h3 style="font-size:.95rem;margin:0">Vaste lasten</h3>
+            <button class="knop klein stil" id="vlNieuw">+ Vaste last</button>
+          </div>
+          <div class="form-card" id="vlForm" style="display:none;margin-bottom:14px;background:var(--surface2)">
+            <div class="rij2">
+              <div class="veld"><label>Naam</label><input type="text" id="vlNaam" placeholder="bv. Bedrijfsverzekering"></div>
+              <div class="veld"><label>Bedrag (€)</label><input type="number" id="vlBedrag" step="0.01" min="0" inputmode="decimal"></div>
+            </div>
+            <div class="rij2">
+              <div class="veld"><label>Elke</label>
+                <div style="display:flex;gap:8px">
+                  <input type="number" id="vlIntervalAantal" min="1" step="1" value="1" style="width:70px">
+                  <select id="vlIntervalEenheid" style="flex:1">
+                    <option value="maand">maand(en)</option>
+                    <option value="jaar">jaar/jaren</option>
+                    <option value="week">we(k/ken)</option>
+                    <option value="dag">dag(en)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="veld"><label>Eerste/volgende keer op</label><input type="date" id="vlStartDatum"></div>
+            </div>
+            <div class="veld"><label>Notitie</label><input type="text" id="vlNotitie" placeholder="optioneel — bv. bij wie of waarvoor"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="knop klein" id="vlOpslaan">Opslaan</button>
+              <button class="knop klein stil" id="vlAnnuleer">Annuleren</button>
+              <button class="knop klein gevaar" id="vlVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+            </div>
+          </div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Wat</th><th>Volgende keer</th><th class="r">Bedrag</th></tr></thead>
+            <tbody id="vlBody"></tbody>
+          </table></div>
+        </div>
+
         <div class="status-balk">
           <div><span class="bol" id="dbBol"></span><span class="t" id="dbStatus">Database verbinden…</span></div>
         </div>
@@ -1096,7 +1134,7 @@ const KOSTEN = [
 const kostenNaam = c => (KOSTEN.find(k => k[0] === c) || [null, c || "—"])[1];
 
 /* centrale gegevens */
-const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], inst:{} };
+const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], vasteLasten:[], inst:{} };
 let urenData = [];
 let kmData = [];
 let factData = [];
@@ -1349,7 +1387,7 @@ $("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut();
 async function laadAlles(){
   const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm, po] = await Promise.all([
+    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm, po, vl] = await Promise.all([
       db.from("klanten").select("*").order("naam"),
       db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
       db.from("categorieen").select("*").order("volgorde"),
@@ -1362,7 +1400,8 @@ async function laadAlles(){
       db.from("gereedschap").select("*").order("naam"),
       db.from("factuur_regels").select("*"),
       db.from("voorraad_mutaties").select("*"),
-      db.from("product_onderdelen").select("*")
+      db.from("product_onderdelen").select("*"),
+      db.from("vaste_lasten").select("*").eq("actief", true)
     ]);
     const eerste = [kl,pr,cat,prod,inst,ur,km,ft,pp].find(r => r.error);
     if (eerste) throw eerste.error;
@@ -1381,6 +1420,7 @@ async function laadAlles(){
     gwData = gw.data || [];
     cache.regels = fr.data || [];
     cache.mutaties = vm.data || [];
+    cache.vasteLasten = vl.data || [];
 
     vulSelects();
     vulVoorraadSelects();
@@ -1505,7 +1545,119 @@ function renderHoofd(){
   $("cKlantenSub").textContent = cache.klanten.length + " klanten totaal";
 
   renderOmzetGrafiek();
+  renderVasteLasten();
 }
+
+/* ---- vaste lasten ----
+   Rekent de eerstvolgende afschrijfdatum uit vanaf start_datum, met het
+   ingestelde interval (dag/week/maand/jaar) — setMonth/setFullYear zorgen
+   dat maand- en jaarlengte-verschillen vanzelf goed gaan. */
+function volgendeAfschrijving(vl, vanaf){
+  vanaf = vanaf || new Date(); vanaf.setHours(0, 0, 0, 0);
+  const d = new Date(vl.start_datum + "T00:00:00");
+  const aantal = Math.max(1, Number(vl.interval_aantal) || 1);
+  let guard = 0;
+  while (d < vanaf && guard < 2000){
+    if (vl.interval_eenheid === "dag") d.setDate(d.getDate() + aantal);
+    else if (vl.interval_eenheid === "week") d.setDate(d.getDate() + aantal * 7);
+    else if (vl.interval_eenheid === "jaar") d.setFullYear(d.getFullYear() + aantal);
+    else d.setMonth(d.getMonth() + aantal); // maand = standaard
+    guard++;
+  }
+  return d;
+}
+const isoDatum = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+
+let bewerkVasteLastId = null;
+
+function renderVasteLasten(){
+  const body = $("vlBody");
+  const vandaag = new Date(); vandaag.setHours(0, 0, 0, 0);
+  const lijst = cache.vasteLasten
+    .map(vl => ({ vl, volgende: volgendeAfschrijving(vl, new Date()) }))
+    .sort((a, b) => a.volgende - b.volgende);
+  body.innerHTML = !lijst.length
+    ? '<tr><td colspan="3" class="leeg">Nog geen vaste lasten toegevoegd.</td></tr>'
+    : lijst.map(({ vl, volgende }) => {
+        const dagen = Math.round((volgende - vandaag) / 86400000);
+        const relatief = dagen <= 0 ? "vandaag" : dagen === 1 ? "morgen" : "over " + dagen + " dagen";
+        return '<tr class="klik" data-vlid="' + vl.id + '"><td class="tekst">' + esc(vl.naam) + '</td>' +
+          '<td>' + fmtDatum(isoDatum(volgende)) + ' <span style="color:var(--ink3);font-size:.75rem">(' + relatief + ')</span></td>' +
+          '<td class="r">' + eur2(vl.bedrag) + '</td></tr>';
+      }).join("");
+  body.querySelectorAll("[data-vlid]").forEach(r => r.addEventListener("click", () => startVasteLastBewerken(r.dataset.vlid)));
+}
+
+function vlFormLeeg(){
+  bewerkVasteLastId = null;
+  $("vlNaam").value = ""; $("vlBedrag").value = "";
+  $("vlIntervalAantal").value = 1; $("vlIntervalEenheid").value = "maand";
+  $("vlStartDatum").value = vandaagISO();
+  $("vlNotitie").value = "";
+  $("vlOpslaan").textContent = "Opslaan";
+  $("vlVerwijder").style.display = "none";
+}
+$("vlNieuw").addEventListener("click", () => {
+  vlFormLeeg();
+  $("vlForm").style.display = "block";
+  $("vlNaam").focus();
+});
+$("vlAnnuleer").addEventListener("click", () => { $("vlForm").style.display = "none"; });
+
+function startVasteLastBewerken(id){
+  const vl = cache.vasteLasten.find(x => x.id === id);
+  if (!vl) return;
+  bewerkVasteLastId = id;
+  $("vlNaam").value = vl.naam || "";
+  $("vlBedrag").value = vl.bedrag || "";
+  $("vlIntervalAantal").value = vl.interval_aantal || 1;
+  $("vlIntervalEenheid").value = vl.interval_eenheid || "maand";
+  $("vlStartDatum").value = vl.start_datum || "";
+  $("vlNotitie").value = vl.notitie || "";
+  $("vlOpslaan").textContent = "Wijziging opslaan";
+  $("vlVerwijder").style.display = "inline-block";
+  $("vlForm").style.display = "block";
+  window.scrollTo(0, 0);
+}
+
+$("vlOpslaan").addEventListener("click", async () => {
+  const naam = $("vlNaam").value.trim();
+  const bedrag = parseFloat($("vlBedrag").value);
+  const startDatum = $("vlStartDatum").value;
+  if (!naam || !(bedrag >= 0) || !startDatum) { toast("Vul naam, bedrag en een datum in"); return; }
+  const rij = {
+    naam, bedrag: r2(bedrag),
+    interval_aantal: Math.max(1, parseInt($("vlIntervalAantal").value, 10) || 1),
+    interval_eenheid: $("vlIntervalEenheid").value,
+    start_datum: startDatum,
+    notitie: $("vlNotitie").value.trim() || null
+  };
+  $("vlOpslaan").disabled = true;
+  let fout;
+  if (bewerkVasteLastId){
+    ({ error: fout } = await db.from("vaste_lasten").update(rij).eq("id", bewerkVasteLastId));
+  } else {
+    ({ error: fout } = await db.from("vaste_lasten").insert(rij));
+  }
+  $("vlOpslaan").disabled = false;
+  if (fout) { console.error(fout); toast("Opslaan mislukt"); return; }
+  toast("Vaste last opgeslagen");
+  $("vlForm").style.display = "none";
+  const { data } = await db.from("vaste_lasten").select("*").eq("actief", true);
+  cache.vasteLasten = data || [];
+  renderVasteLasten();
+});
+
+$("vlVerwijder").addEventListener("click", async () => {
+  if (!bewerkVasteLastId) return;
+  if (!confirm("Deze vaste last verwijderen?")) return;
+  const { error } = await db.from("vaste_lasten").delete().eq("id", bewerkVasteLastId);
+  if (error){ toast("Verwijderen mislukt"); return; }
+  toast("Verwijderd");
+  $("vlForm").style.display = "none";
+  cache.vasteLasten = cache.vasteLasten.filter(x => x.id !== bewerkVasteLastId);
+  renderVasteLasten();
+});
 
 /* Omzet en winst per maand, zelfde rekenwijze als financieelJaar() maar dan
    per maand i.p.v. per kwartaal (investering wordt over de maanden verdeeld). */
