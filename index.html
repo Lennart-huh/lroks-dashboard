@@ -557,6 +557,22 @@ nav.onderbalk{display:none}
             </div>
           </div>
           <div class="veld"><label>Omschrijving / notities</label><textarea id="prOmschrijving" placeholder="Hier kun je zoveel opschrijven als je wilt."></textarea></div>
+          <div class="veld" id="prUrenBlok" style="display:none"><label>Uren op dit project</label>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>Datum</th><th>Soort</th><th class="r">Uren</th><th></th></tr></thead>
+                <tbody id="prUrenBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="veld" id="prKmBlok" style="display:none"><label>Kilometers op dit project</label>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>Datum</th><th>Waar</th><th class="r">Km</th><th></th></tr></thead>
+                <tbody id="prKmBody"></tbody>
+              </table>
+            </div>
+          </div>
           <div class="veld" id="prGebruikBlok" style="display:none"><label>Gebruikte producten (per dag)</label>
             <div class="tbl-wrap">
               <table>
@@ -2225,6 +2241,39 @@ function productNaam(id){
   return p ? p.naam : "—";
 }
 
+/* Uren en km blijven zichtbaar zodra je ze invult, ook als ze nog niet
+   gefactureerd zijn -- werkt uit de al geladen urenData/kmData, geen
+   aparte databasevraag nodig. */
+function laadProjectUren(projectId){
+  const body = $("prUrenBody");
+  const lijst = urenData.filter(u => u.project_id === projectId)
+    .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  body.innerHTML = !lijst.length
+    ? '<tr><td colspan="4" class="leeg">Nog geen uren op dit project.</td></tr>'
+    : lijst.map(u =>
+        '<tr class="klik" data-prueid="' + u.id + '"><td>' + fmtDatum(u.datum) + '</td>' +
+        '<td><span class="chip ' + (u.soort === "werk" ? "groen" : "grijs") + '">' + (u.soort === "werk" ? "WERK" : "KANTOOR") + '</span>' +
+          (u.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
+        '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
+        '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td></tr>').join("");
+  body.querySelectorAll("[data-prueid]").forEach(r =>
+    r.addEventListener("click", () => startUrenBewerken(r.dataset.prueid)));
+}
+function laadProjectKm(projectId){
+  const body = $("prKmBody");
+  const lijst = kmData.filter(k => k.project_id === projectId && k.zakelijk && k.gereden > 0)
+    .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  body.innerHTML = !lijst.length
+    ? '<tr><td colspan="4" class="leeg">Nog geen kilometers op dit project.</td></tr>'
+    : lijst.map(k =>
+        '<tr class="klik" data-prkeid="' + k.id + '"><td>' + fmtDatum(k.datum) + '</td>' +
+        '<td class="tekst">' + esc(k.omschrijving || "—") + (k.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
+        '<td class="r">' + Number(k.gereden).toLocaleString("nl-NL") + '</td>' +
+        '<td class="r">' + eur2(Number(k.gereden) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0))) + '</td></tr>').join("");
+  body.querySelectorAll("[data-prkeid]").forEach(r =>
+    r.addEventListener("click", () => startKmBewerken(r.dataset.prkeid)));
+}
+
 async function laadProjectGebruik(projectId){
   const body = $("prGebruikBody");
   body.innerHTML = '<tr><td colspan="4" class="leeg">Laden…</td></tr>';
@@ -2317,6 +2366,8 @@ $("projNieuw").addEventListener("click", () => {
   bewerkProjectId = null;
   $("prNaam").value = ""; $("prKlant").value = ""; $("prOmschrijving").value = "";
   projStatus = "open"; schakel("prOpen","prAfgerond");
+  $("prUrenBlok").style.display = "none";
+  $("prKmBlok").style.display = "none";
   $("prGebruikBlok").style.display = "none";
   $("prFacturenBlok").style.display = "none";
   $("prFactureer").style.display = "none";
@@ -2386,6 +2437,10 @@ function renderProjecten(){
     $("prOmschrijving").value = p.omschrijving || "";
     projStatus = p.status;
     if (p.status === "open") schakel("prOpen","prAfgerond"); else schakel("prAfgerond","prOpen");
+    $("prUrenBlok").style.display = "block";
+    laadProjectUren(p.id);
+    $("prKmBlok").style.display = "block";
+    laadProjectKm(p.id);
     $("prGebruikBlok").style.display = "block";
     laadProjectGebruik(p.id);
     $("prFacturenBlok").style.display = "block";
