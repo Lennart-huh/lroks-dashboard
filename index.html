@@ -2278,7 +2278,7 @@ function bijwerkKmHint(){
     : "Eerste invulling — deze stand wordt je startpunt.";
   if (vorige && stand > vorige.km_stand){
     const diff = stand - vorige.km_stand;
-    const prijs = parseFloat($("kPrijs").value) || Number(cache.inst.km_prijs || 0);
+    const prijs = $("kPrijs").value !== "" ? (parseFloat($("kPrijs").value) || 0) : Number(cache.inst.km_prijs || 0);
     tekst += " · gereden sinds die stand: <b>" + diff.toLocaleString("nl-NL") + " km</b>" +
       (kmZakelijk ? " = <b>" + eur2(diff * prijs) + "</b>" : "");
   }
@@ -2321,7 +2321,7 @@ $("kOpslaan").addEventListener("click", async () => {
     klant_id: $("kKlant").value || null,
     project_id: $("kProject").value || null,
     klus_id: $("kKlus").value || null,
-    km_prijs: (parseFloat($("kPrijs").value) > 0 ? parseFloat($("kPrijs").value) : null),
+    km_prijs: ($("kPrijs").value !== "" && parseFloat($("kPrijs").value) >= 0 ? parseFloat($("kPrijs").value) : null),
     zakelijk: kmZakelijk
   };
   $("kOpslaan").disabled = true;
