@@ -515,6 +515,7 @@ nav.onderbalk{display:none}
             </div>
             <div class="veld"><label>Eerste/volgende keer op</label><input type="date" id="vlStartDatum"></div>
           </div>
+          <div class="veld"><label>Kostensoort (optioneel)</label><select id="vlCategorie"></select></div>
           <div class="veld"><label>Notitie</label><input type="text" id="vlNotitie" placeholder="optioneel — bv. bij wie of waarvoor"></div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="knop" id="vlOpslaan">Opslaan</button>
@@ -1697,6 +1698,7 @@ function vulSelects(){
   /* kostensoort-selects */
   const kostOpties = KOSTEN.map(k => '<option value="' + k[0] + '">' + k[1] + '</option>').join("");
   ["ikCategorie","pfCategorie"].forEach(id => { $(id).innerHTML = kostOpties; });
+  $("vlCategorie").innerHTML = '<option value="">— geen —</option>' + kostOpties;
 
   /* project-selects op de inkoopkant (ook afgeronde projecten,
      want facturen komen vaak pas na afloop binnen) */
@@ -1817,7 +1819,8 @@ function renderVasteLasten(){
     : lijst.map(({ vl, volgende }) => {
         const dagen = Math.round((volgende - vandaag) / 86400000);
         const relatief = dagen <= 0 ? "vandaag" : dagen === 1 ? "morgen" : "over " + dagen + " dagen";
-        return '<tr class="klik" data-vlid="' + vl.id + '"><td class="tekst">' + esc(vl.naam) + '</td>' +
+        return '<tr class="klik" data-vlid="' + vl.id + '"><td class="tekst">' + esc(vl.naam) +
+          (vl.categorie ? ' <span class="chip grijs">' + esc(kostenNaam(vl.categorie)) + '</span>' : '') + '</td>' +
           '<td>' + fmtDatum(isoDatum(volgende)) + ' <span style="color:var(--ink3);font-size:.75rem">(' + relatief + ')</span></td>' +
           '<td class="r">' + eur2(vl.bedrag) + '</td></tr>';
       }).join("");
@@ -1829,6 +1832,7 @@ function vlFormLeeg(){
   $("vlNaam").value = ""; $("vlBedrag").value = "";
   $("vlIntervalAantal").value = 1; $("vlIntervalEenheid").value = "maand";
   $("vlStartDatum").value = vandaagISO();
+  $("vlCategorie").value = "";
   $("vlNotitie").value = "";
   $("vlOpslaan").textContent = "Opslaan";
   $("vlVerwijder").style.display = "none";
@@ -1851,6 +1855,7 @@ function startVasteLastBewerken(id){
   $("vlIntervalAantal").value = vl.interval_aantal || 1;
   $("vlIntervalEenheid").value = vl.interval_eenheid || "maand";
   $("vlStartDatum").value = vl.start_datum || "";
+  $("vlCategorie").value = vl.categorie || "";
   $("vlNotitie").value = vl.notitie || "";
   $("vlOpslaan").textContent = "Wijziging opslaan";
   $("vlVerwijder").style.display = "inline-block";
@@ -1869,6 +1874,7 @@ $("vlOpslaan").addEventListener("click", async () => {
     interval_aantal: Math.max(1, parseInt($("vlIntervalAantal").value, 10) || 1),
     interval_eenheid: $("vlIntervalEenheid").value,
     start_datum: startDatum,
+    categorie: $("vlCategorie").value || null,
     notitie: $("vlNotitie").value.trim() || null
   };
   $("vlOpslaan").disabled = true;
