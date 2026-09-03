@@ -452,6 +452,15 @@ nav.onderbalk{display:none}
                 </div>
               </div>
             </div>
+            <div class="rij2">
+              <div class="veld"><label>Vervaldatum</label><input type="date" id="pfVervaldatum"></div>
+              <div class="veld"><label>Betaald?</label>
+                <div class="schakel">
+                  <button type="button" id="pfStatusOpen" class="aan">Nog open</button>
+                  <button type="button" id="pfStatusBetaald">Betaald</button>
+                </div>
+              </div>
+            </div>
             <div class="veld"><label>Regels — kies per regel wat ermee moet gebeuren</label>
               <div id="pfRegels"></div>
             </div>
@@ -1544,7 +1553,7 @@ $("prAfgerond").addEventListener("click", () => { projStatus = "afgerond"; schak
 let ikInvestering = false, ikStatus = "open";
 let bewerkInkoopId = null;
 let inkoopStatus = "open";
-let pfInvestering = false;
+let pfInvestering = false, pfStatus = "open";
 
 $("ikInvNee").addEventListener("click", () => {
   ikInvestering = false; schakel("ikInvNee","ikInvJa");
@@ -1560,6 +1569,8 @@ $("ikStatusBetaald").addEventListener("click", () => { ikStatus = "betaald"; sch
 
 $("pfInvNee").addEventListener("click", () => { pfInvestering = false; schakel("pfInvNee","pfInvJa"); });
 $("pfInvJa").addEventListener("click", () => { pfInvestering = true; schakel("pfInvJa","pfInvNee"); });
+$("pfStatusOpen").addEventListener("click", () => { pfStatus = "open"; schakel("pfStatusOpen","pfStatusBetaald"); });
+$("pfStatusBetaald").addEventListener("click", () => { pfStatus = "betaald"; schakel("pfStatusBetaald","pfStatusOpen"); });
 
 /* btw automatisch uitrekenen */
 $("ikBedrag").addEventListener("input", () => {
@@ -3997,6 +4008,9 @@ $("pdfLees").addEventListener("click", async () => {
     $("pfProject").value = "";
     pfInvestering = !!pfParsed.is_investering;
     schakel(pfInvestering ? "pfInvJa" : "pfInvNee", pfInvestering ? "pfInvNee" : "pfInvJa");
+    $("pfVervaldatum").value = pfParsed.vervaldatum || "";
+    pfStatus = "open";
+    schakel("pfStatusOpen", "pfStatusBetaald");
     toonPfRegels(pfParsed.regels || []);
     $("pdfResultaat").style.display = "block";
     status.textContent = "Gelukt — controleer hieronder en klik op Verwerken.";
@@ -4077,7 +4091,7 @@ $("pfVerwerk").addEventListener("click", async () => {
   const { data: nieuweFactuur, error: fFout } = await db.from("facturen").insert({
     type: "inkoop", leverancier: lev,
     nummer: $("pfNummer").value.trim() || "-",
-    datum, status: "open",
+    datum, vervaldatum: $("pfVervaldatum").value || null, status: pfStatus,
     bedrag_excl: r2(bedrag), btw_bedrag: r2(btw), bedrag_incl: r2(bedrag + btw),
     categorie: $("pfCategorie").value || "materiaal",
     project_id: $("pfProject").value || null,
