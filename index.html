@@ -1175,7 +1175,10 @@ nav.onderbalk{display:none}
           <button class="knop klein stil" id="catSluit">Sluiten</button>
         </div>
 
-        <div class="veld" style="max-width:280px"><label>Filter op categorie</label><select id="vFilter"></select></div>
+        <div class="rij2" style="max-width:600px">
+          <div class="veld"><label>Zoeken</label><input type="text" id="vZoek" placeholder="Naam, volledige naam of leverancier"></div>
+          <div class="veld"><label>Filter op categorie</label><select id="vFilter"></select></div>
+        </div>
         <div id="vSelBalk" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:11px 14px;margin-bottom:12px">
           <span id="vSelAantal" style="font-size:.85rem"></span>
           <button class="knop klein" id="vSelNaarGw" style="margin-left:auto">→ Naar gereedschap</button>
@@ -3519,13 +3522,21 @@ async function herlaadProducten(){
 }
 
 $("vFilter").addEventListener("change", renderVoorraad);
+$("vZoek").addEventListener("input", renderVoorraad);
 
 function renderVoorraad(){
   const filter = $("vFilter").value;
-  const lijst = cache.producten.filter(p => !filter || p.categorie_id === filter);
+  const term = $("vZoek").value.trim().toLowerCase();
+  const lijst = cache.producten.filter(p => {
+    if (filter && p.categorie_id !== filter) return false;
+    if (!term) return true;
+    const hooi = [p.naam, p.volledige_naam, p.leverancier, catNaam(p.categorie_id)]
+      .filter(Boolean).join(" ").toLowerCase();
+    return term.split(/\s+/).every(woord => hooi.includes(woord));
+  });
   const body = $("vBody");
   if (!lijst.length){
-    body.innerHTML = '<tr><td colspan="8" class="leeg">Nog geen producten' + (filter ? " in deze categorie" : "") + ' — voeg je eerste product toe.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="leeg">Niets gevonden' + (filter || term ? " met dit filter" : " — voeg je eerste product toe") + '.</td></tr>';
     $("vSelBalk").style.display = "none";
     $("vAlles").checked = false;
     return;
