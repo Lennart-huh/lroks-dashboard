@@ -3511,8 +3511,7 @@ function renderVoorraad(){
     const g = goedkoopsteVoor(p.id);
     return '<tr class="klik" data-vid="' + p.id + '">' +
       '<td style="width:34px" data-geenklik="1"><input type="checkbox" class="vSel" data-sel="' + p.id + '"></td>' +
-      '<td class="tekst">' + esc(p.naam) +
-        (p.volledige_naam ? '<div class="m" style="margin-top:3px">' + esc(p.volledige_naam) + '</div>' : '') + '</td>' +
+      '<td class="tekst">' + esc(p.naam) + '</td>' +
       '<td class="tekst">' + esc(catNaam(p.categorie_id) || "—") + '</td>' +
       '<td class="r">' + (p.op_voorraad === false ? '<span class="chip grijs">DOORLOOP</span>' : Number(p.voorraad).toLocaleString("nl-NL") + ' ' + esc(p.eenheid || "") + verpakkingTekst(p)) + '</td>' +
       '<td class="r">' + eurP(p.inkoopprijs || 0) + '</td>' +
