@@ -276,12 +276,12 @@ nav.onderbalk{display:none}
 
         <div class="form-card" style="margin-top:18px">
           <div class="tab-kop" style="margin:0 0 12px">
-            <h3 style="font-size:.95rem;margin:0">Vaste lasten</h3>
-            <button class="knop klein stil" id="vlNaarInvullen">+ Vaste last</button>
+            <h3 style="font-size:.95rem;margin:0">Nog te betalen</h3>
+            <span class="hint" style="margin:0"><b id="tbAantal">0</b> openstaand · <b id="tbTotaal">€ 0,00</b></span>
           </div>
           <div class="tbl-wrap"><table>
-            <thead><tr><th>Wat</th><th>Volgende keer</th><th class="r">Bedrag</th></tr></thead>
-            <tbody id="vlBody"></tbody>
+            <thead><tr><th>Leverancier</th><th>Vervalt</th><th class="r">Bedrag</th></tr></thead>
+            <tbody id="tbBody"></tbody>
           </table></div>
         </div>
 
@@ -1328,6 +1328,17 @@ nav.onderbalk{display:none}
         </div>
         <div class="subtabs" id="ksSubtabs"></div>
         <div id="ksBlok"></div>
+
+        <div class="form-card" style="margin-top:18px">
+          <div class="tab-kop" style="margin:0 0 12px">
+            <h3 style="font-size:.95rem;margin:0">Vaste lasten</h3>
+            <button class="knop klein stil" id="vlNaarInvullen">+ Vaste last</button>
+          </div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Wat</th><th>Volgende keer</th><th class="r">Bedrag</th></tr></thead>
+            <tbody id="vlBody"></tbody>
+          </table></div>
+        </div>
       </div>
     </main>
   </div>
@@ -1872,7 +1883,32 @@ function renderHoofd(){
   $("cKlantenSub").textContent = cache.klanten.length + " klanten totaal";
 
   renderOmzetGrafiek();
-  renderVasteLasten();
+  renderTeBetalen();
+}
+
+/* Openstaande inkoopfacturen — wat je nog moet betalen, dichtstbijzijnde
+   vervaldatum eerst. Facturen zonder vervaldatum vallen terug op de factuurdatum. */
+function renderTeBetalen(){
+  const nu = new Date(); nu.setHours(0, 0, 0, 0);
+  const lijst = factData.filter(f => f.type === "inkoop" && f.status !== "betaald")
+    .sort((a, b) => String(a.vervaldatum || a.datum).localeCompare(String(b.vervaldatum || b.datum)));
+  const totaal = lijst.reduce((s, f) => s + Number(f.bedrag_excl || 0) + Number(f.btw_bedrag || 0), 0);
+  $("tbAantal").textContent = lijst.length;
+  $("tbTotaal").textContent = eur2(totaal);
+  $("tbBody").innerHTML = !lijst.length
+    ? '<tr><td colspan="3" class="leeg">Niets openstaand — helemaal bij.</td></tr>'
+    : lijst.map(f => {
+        const verval = f.vervaldatum ? new Date(f.vervaldatum + "T00:00:00") : null;
+        const teLaat = verval && verval < nu;
+        const bedrag = Number(f.bedrag_excl || 0) + Number(f.btw_bedrag || 0);
+        return '<tr class="klik" data-tbfid="' + f.id + '"><td class="tekst">' + esc(f.leverancier || "—") + '</td>' +
+          '<td>' + (f.vervaldatum ? fmtDatum(f.vervaldatum) : fmtDatum(f.datum)) +
+          (teLaat ? ' <span class="chip rood">VERLOPEN</span>' : '') + '</td>' +
+          '<td class="r">' + eur2(bedrag) + '</td></tr>';
+      }).join("");
+  $("tbBody").querySelectorAll("[data-tbfid]").forEach(r => r.addEventListener("click", () => {
+    toonTab("facturen"); kiesFSub("fIn"); openInkoop(r.dataset.tbfid);
+  }));
 }
 
 /* ---- vaste lasten ----
@@ -5072,6 +5108,7 @@ function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); rend
 let ksActief = KOSTEN[0][0];
 
 function renderKostensoorten(){
+  renderVasteLasten();
   const jaar = vulJaarKeuze("ksJaar");
   const inkoop = factData.filter(f => f.type === "inkoop" && new Date(f.datum).getFullYear() === jaar);
 
