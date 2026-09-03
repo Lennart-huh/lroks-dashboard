@@ -130,6 +130,15 @@ main{flex:1;padding:26px 22px 90px;min-width:0}
 #ogSvg .og-nul{stroke:var(--ink3)}
 #ogSvg rect.og-bar{cursor:pointer}
 
+.btw-vraag{width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--surface2);
+  color:var(--ink2);font-family:'IBM Plex Mono',monospace;font-size:.68rem;font-weight:600;cursor:pointer;
+  line-height:1;padding:0;margin-left:6px;vertical-align:middle}
+.btw-vraag:hover{border-color:var(--ink3);color:var(--ink)}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:none;
+  align-items:flex-start;justify-content:center;padding:60px 16px;overflow-y:auto}
+.overlay.open{display:flex}
+.overlay .form-card{max-width:640px;width:100%}
+
 .tbl-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);overflow-x:auto}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:.63rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink2);font-weight:600;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--surface2);white-space:nowrap}
@@ -1290,6 +1299,21 @@ nav.onderbalk{display:none}
             <thead><tr><th>Periode</th><th class="r">Btw uitgaand</th><th class="r">Voorbelasting</th><th class="r">Af te dragen</th><th></th></tr></thead>
             <tbody id="btKwartaalBody"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- pop-up: waar een btw-cijfer per kwartaal vandaan komt -->
+      <div class="overlay" id="btwUitlegOverlay">
+        <div class="form-card heeft-sluit">
+          <button type="button" class="knop klein stil sluitX" id="btwUitlegSluit" title="Sluiten">×</button>
+          <h3 style="font-size:.92rem;margin-bottom:4px" id="btwUitlegTitel">—</h3>
+          <div class="hint" style="margin-bottom:14px" id="btwUitlegSub">—</div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Datum</th><th>Omschrijving</th><th></th><th class="r">Bedrag excl.</th><th class="r">Btw</th></tr></thead>
+              <tbody id="btwUitlegBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -4960,18 +4984,74 @@ function renderBtw(){
   $("btKwartaal").textContent = ditJaar ? eur2(f.btwUit[kNu] - f.btwIn[kNu]) : "—";
   $("btKwartaalSub").textContent = ditJaar ? "K" + (kNu + 1) + " " + jaar : jaar + " is afgerond";
 
-  const rij = (naam, u, v, chip, extra) =>
+  const vraag = k => '<button type="button" class="btw-vraag" data-btwjaar="' + jaar + '" data-btwk="' + k +
+    '" title="Waar komt dit vandaan?">?</button>';
+  const rij = (naam, u, v, chip, extra, k) =>
     '<tr' + (extra || '') + '><td>' + naam + '</td><td class="r">' + eur2(u) + '</td>' +
     '<td class="r">' + eur2(v) + '</td><td class="r">' + eur2(u - v) + '</td>' +
-    '<td class="r">' + (chip || '') + '</td></tr>';
+    '<td class="r">' + (chip || '') + vraag(k) + '</td></tr>';
   $("btKwartaalBody").innerHTML =
     KWARTAAL_NAMEN.map((n, i) => {
       const chip = ditJaar && i === kNu ? '<span class="chip amber">LOOPT</span>'
         : (jaar < nu.getFullYear() || (ditJaar && i < kNu)) ? '<span class="chip grijs">AFGEROND</span>' : '';
-      return rij(n, f.btwUit[i], f.btwIn[i], chip);
+      return rij(n, f.btwUit[i], f.btwIn[i], chip, '', i);
     }).join("") +
-    rij("<b>Heel " + jaar + "</b>", uitJ, inJ, '', ' style="border-top:2px solid var(--line)"');
+    rij("<b>Heel " + jaar + "</b>", uitJ, inJ, '', ' style="border-top:2px solid var(--line)"', -1);
+  $("btKwartaalBody").querySelectorAll("[data-btwk]").forEach(b => b.addEventListener("click", () =>
+    toonBtwUitleg(Number(b.dataset.btwjaar), Number(b.dataset.btwk))));
 }
+
+/* Alle facturen en correcties die meetellen in een btw-cijfer, voor het
+   uitleg-pop-upje achter het vraagteken. k = kwartaalindex, of -1 voor heel het jaar. */
+function btwBronnenKwartaal(jaar, k){
+  const items = [];
+  factData.forEach(f => {
+    if (f.type !== "verkoop" && f.type !== "inkoop") return;
+    if (new Date(f.datum).getFullYear() !== jaar) return;
+    if (k !== -1 && kwartaalVan(f.datum) !== k) return;
+    items.push({
+      datum: f.datum,
+      omschrijving: f.type === "verkoop" ? (klantNaam(f.klant_id) || "—") : (f.leverancier || "—"),
+      nummer: f.nummer || "",
+      richting: f.type === "verkoop" ? "uit" : "in",
+      excl: Number(f.bedrag_excl || 0),
+      btw: Number(f.btw_bedrag || 0)
+    });
+  });
+  cache.correcties.forEach(c => {
+    if (new Date(c.datum).getFullYear() !== jaar) return;
+    if (k !== -1 && kwartaalVan(c.datum) !== k) return;
+    items.push({
+      datum: c.datum, omschrijving: c.omschrijving, nummer: "correctie",
+      richting: c.type === "omzet" ? "uit" : "in",
+      excl: Number(c.bedrag_excl || 0), btw: Number(c.btw || 0)
+    });
+  });
+  return items.sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+}
+
+function toonBtwUitleg(jaar, k){
+  const items = btwBronnenKwartaal(jaar, k);
+  const uit = items.filter(i => i.richting === "uit").reduce((s, i) => s + i.btw, 0);
+  const in_ = items.filter(i => i.richting === "in").reduce((s, i) => s + i.btw, 0);
+  const saldo = uit - in_;
+  $("btwUitlegTitel").textContent = k === -1 ? "Btw · heel " + jaar : "Btw · " + KWARTAAL_NAMEN[k] + " " + jaar;
+  $("btwUitlegSub").innerHTML = "Btw uitgaand " + eur2(uit) + " − voorbelasting " + eur2(in_) +
+    " = <b>" + eur2(Math.abs(saldo)) + "</b> " + (saldo >= 0 ? "af te dragen" : "terug te vragen");
+  $("btwUitlegBody").innerHTML = items.length
+    ? items.map(i =>
+        '<tr><td>' + fmtDatum(i.datum) + '</td>' +
+        '<td class="tekst">' + esc(i.omschrijving) + (i.nummer ? ' <span style="color:var(--ink3)">· ' + esc(i.nummer) + '</span>' : '') + '</td>' +
+        '<td>' + (i.richting === "uit" ? '<span class="chip groen">UITGAAND</span>' : '<span class="chip grijs">INKOMEND</span>') + '</td>' +
+        '<td class="r">' + eur2(i.excl) + '</td>' +
+        '<td class="r">' + eur2(i.btw) + '</td></tr>').join("")
+    : '<tr><td colspan="5" class="leeg">Niets gevonden voor deze periode.</td></tr>';
+  $("btwUitlegOverlay").classList.add("open");
+}
+$("btwUitlegSluit").addEventListener("click", () => $("btwUitlegOverlay").classList.remove("open"));
+$("btwUitlegOverlay").addEventListener("click", e => {
+  if (e.target === $("btwUitlegOverlay")) $("btwUitlegOverlay").classList.remove("open");
+});
 
 function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); renderKostensoorten(); }
 
