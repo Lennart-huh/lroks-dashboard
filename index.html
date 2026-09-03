@@ -662,6 +662,7 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Koppel aan klant (optioneel)</label><select id="ntKlant"><option value="">— geen —</option></select></div>
           </div>
           <button class="knop klein" id="ntToevoegen">Toevoegen</button>
+          <button class="knop klein stil" id="ntAnnuleer" style="display:none;margin-left:8px">Wijzigen annuleren</button>
         </div>
         <div class="rij2" style="margin-bottom:14px">
           <div class="veld" style="margin-bottom:0"><label>Filter op project</label><select id="ntFilterProject"><option value="">Alle</option></select></div>
@@ -5654,6 +5655,28 @@ function vulNotitieSelects(){
   $("ntFilterKlant").value = huidigKf;
 }
 
+let bewerkNotitieId = null;
+
+function ntFormLeeg(){
+  bewerkNotitieId = null;
+  $("ntTekst").value = ""; $("ntProject").value = ""; $("ntKlant").value = "";
+  $("ntToevoegen").textContent = "Toevoegen";
+  $("ntAnnuleer").style.display = "none";
+}
+$("ntAnnuleer").addEventListener("click", ntFormLeeg);
+
+function startNotitieBewerken(id){
+  const n = cache.notities.find(x => x.id === id);
+  if (!n) return;
+  bewerkNotitieId = id;
+  $("ntTekst").value = n.tekst || "";
+  $("ntProject").value = n.project_id || "";
+  $("ntKlant").value = n.klant_id || "";
+  $("ntToevoegen").textContent = "Wijziging opslaan";
+  $("ntAnnuleer").style.display = "inline-block";
+  $("ntTekst").focus();
+}
+
 function renderNotities(){
   const filterProject = $("ntFilterProject").value;
   const filterKlant = $("ntFilterKlant").value;
@@ -5668,14 +5691,19 @@ function renderNotities(){
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:10px">' +
           '<span class="hint" style="margin:0">' + fmtDatum(n.aangemaakt_op.slice(0, 10)) +
             (koppels.length ? ' · ' + koppels.map(esc).join(' · ') : '') + '</span>' +
+          '<span style="display:flex;gap:10px">' +
+          '<button class="knop klein stil" data-ntbewerk="' + n.id + '" style="padding:5px 12px;font-size:.76rem">Wijzigen</button>' +
           '<button class="verwijder" data-ntid="' + n.id + '" title="Verwijderen">✕</button>' +
-          '</div></div>';
+          '</span></div></div>';
       }).join("");
+  $("ntLijst").querySelectorAll("[data-ntbewerk]").forEach(k => k.addEventListener("click", () =>
+    startNotitieBewerken(k.dataset.ntbewerk)));
   $("ntLijst").querySelectorAll("[data-ntid]").forEach(k => k.addEventListener("click", async () => {
     if (!confirm("Deze notitie verwijderen?")) return;
     const { error } = await db.from("notities").delete().eq("id", k.dataset.ntid);
     if (error){ toast("Verwijderen mislukt"); return; }
     cache.notities = cache.notities.filter(n => n.id !== k.dataset.ntid);
+    if (bewerkNotitieId === k.dataset.ntid) ntFormLeeg();
     renderNotities();
   }));
 }
@@ -5683,15 +5711,23 @@ function renderNotities(){
 $("ntToevoegen").addEventListener("click", async () => {
   const tekst = $("ntTekst").value.trim();
   if (!tekst) { toast("Vul een tekst in"); return; }
+  const rij = { tekst, project_id: $("ntProject").value || null, klant_id: $("ntKlant").value || null };
   $("ntToevoegen").disabled = true;
-  const { data, error } = await db.from("notities").insert({
-    tekst, project_id: $("ntProject").value || null, klant_id: $("ntKlant").value || null
-  }).select().single();
-  $("ntToevoegen").disabled = false;
-  if (error){ console.error(error); toast("Opslaan mislukt"); return; }
-  cache.notities.unshift(data);
-  $("ntTekst").value = ""; $("ntProject").value = ""; $("ntKlant").value = "";
-  toast("Notitie toegevoegd");
+  if (bewerkNotitieId){
+    const { data, error } = await db.from("notities").update(rij).eq("id", bewerkNotitieId).select().single();
+    $("ntToevoegen").disabled = false;
+    if (error){ console.error(error); toast("Opslaan mislukt"); return; }
+    cache.notities = cache.notities.map(n => n.id === data.id ? data : n);
+    ntFormLeeg();
+    toast("Notitie bijgewerkt");
+  } else {
+    const { data, error } = await db.from("notities").insert(rij).select().single();
+    $("ntToevoegen").disabled = false;
+    if (error){ console.error(error); toast("Opslaan mislukt"); return; }
+    cache.notities.unshift(data);
+    ntFormLeeg();
+    toast("Notitie toegevoegd");
+  }
   renderNotities();
 });
 $("ntFilterProject").addEventListener("change", renderNotities);
