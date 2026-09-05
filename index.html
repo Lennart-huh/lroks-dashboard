@@ -952,7 +952,7 @@ nav.onderbalk{display:none}
                 <div class="veld"><label>Eenheid</label><input type="text" id="orEenheid" placeholder="leeg = vast bedrag"></div>
               </div>
               <div class="rij2">
-                <div class="veld"><label>Aantal</label><input type="number" id="orAantal" step="0.5" min="0" value="1"></div>
+                <div class="veld" id="orAantalVeld"><label>Aantal</label><input type="number" id="orAantal" step="0.5" min="0" value="1"></div>
                 <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="orPrijs" step="0.01" min="0" inputmode="decimal"></div>
               </div>
               <button type="button" class="knop klein stil" id="orToevoegen">Regel toevoegen</button>
@@ -2708,6 +2708,11 @@ function offProductZoekReset(){
   $("ofrAantal").value = 1;
   $("ofrPrijs").value = "";
   vulOffProductKeuze();
+  $("orOmschrijving").value = "";
+  $("orEenheid").value = "";
+  $("orAantal").value = 1;
+  $("orPrijs").value = "";
+  bijwerkOrAantalZichtbaarheid();
 }
 
 /* cm-hulpje: alleen zinvol bij producten die per meter gaan (draad, buis).
@@ -5624,6 +5629,16 @@ $("ofrToevoegen").addEventListener("click", () => {
   toonOffRegels();
 });
 
+/* Aantal is zinloos bij een vast bedrag (leeg eenheid) — verberg het veld dan
+   en zet het intern vast op 1, zodat het nooit per ongeluk op 0 blijft staan
+   waardoor de prijs excl. mee op 0 uitkomt (aantal × prijs). */
+function bijwerkOrAantalZichtbaarheid(){
+  const vastBedrag = !$("orEenheid").value.trim();
+  $("orAantalVeld").style.display = vastBedrag ? "none" : "block";
+  if (vastBedrag) $("orAantal").value = 1;
+}
+$("orEenheid").addEventListener("input", bijwerkOrAantalZichtbaarheid);
+
 $("orToevoegen").addEventListener("click", () => {
   const omschrijving = $("orOmschrijving").value.trim();
   const aantal = parseFloat($("orAantal").value);
@@ -5638,6 +5653,7 @@ $("orToevoegen").addEventListener("click", () => {
     product_id: match ? match.id : null
   });
   $("orOmschrijving").value = ""; $("orEenheid").value = ""; $("orAantal").value = 1; $("orPrijs").value = "";
+  bijwerkOrAantalZichtbaarheid();
   toonOffRegels();
   if (match) toast("Gekoppeld aan product: " + match.naam);
 });
