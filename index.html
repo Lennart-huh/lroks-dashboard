@@ -5466,7 +5466,7 @@ function genereerOffertePdf(o, k, I, regels){
     },
     head: [["Omschrijving", "Aantal", "Eenheid", "Prijs excl.", "Bedrag excl."]],
     body: regels.map(r => [
-      r.omschrijving, Number(r.aantal).toLocaleString("nl-NL"), r.eenheid || "—",
+      r.omschrijving, r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") : "—", r.eenheid || "—",
       eur2(r.prijs), eur2(Number(r.aantal) * Number(r.prijs))
     ])
   });
@@ -5591,7 +5591,7 @@ function toonOffRegels(){
     ? '<tr><td colspan="6" class="leeg">Nog geen regels.</td></tr>'
     : offerteRegels.map((r, i) =>
         '<tr><td class="tekst">' + esc(r.omschrijving) + (r.product_id ? ' <span class="chip grijs">PRODUCT</span>' : '') + '</td>' +
-        '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
+        '<td class="r">' + (r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") : "—") + '</td>' +
         '<td>' + esc(r.eenheid || "—") + '</td>' +
         '<td class="r">' + eur2(r.prijs) + '</td>' +
         '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td>' +
