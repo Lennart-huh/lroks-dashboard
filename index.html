@@ -928,15 +928,35 @@ nav.onderbalk{display:none}
               <thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th>Eenheid</th><th class="r">Prijs</th><th class="r">Bedrag</th><th></th></tr></thead>
               <tbody id="offRegelsBody"></tbody>
             </table></div>
-            <div class="rij2" style="margin-top:10px">
-              <div class="veld"><label>Omschrijving</label><input type="text" id="orOmschrijving" placeholder="bv. Aanleg groepenkast, of 'Project X — vaste prijs'"></div>
-              <div class="veld"><label>Eenheid</label><input type="text" id="orEenheid" placeholder="leeg = vast bedrag"></div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+              <div class="hint" style="margin-bottom:6px"><b>Product toevoegen</b> — uit voorraad, prijs komt uit de verkoopprijs</div>
+              <div class="rij2">
+                <div class="veld"><label>Zoek product</label>
+                  <input type="search" id="ofrZoek" placeholder="naam, omschrijving of artikelnummer" autocomplete="off"></div>
+                <div class="veld"><label>Categorie</label><select id="ofrZoekCategorie"></select></div>
+              </div>
+              <div class="rij2">
+                <div class="veld"><label>Product</label><select id="ofrProduct"></select>
+                  <div class="hint" id="ofrZoekHint"></div></div>
+                <div class="veld"><label>Aantal</label><input type="number" id="ofrAantal" step="0.5" min="0" value="1"></div>
+              </div>
+              <div class="rij2">
+                <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="ofrPrijs" step="0.01" min="0" inputmode="decimal"></div>
+                <div class="veld" style="align-self:flex-end"><button type="button" class="knop klein stil" id="ofrToevoegen" style="width:100%">+ Product toevoegen</button></div>
+              </div>
             </div>
-            <div class="rij2">
-              <div class="veld"><label>Aantal</label><input type="number" id="orAantal" step="0.5" min="0" value="1"></div>
-              <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="orPrijs" step="0.01" min="0" inputmode="decimal"></div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+              <div class="hint" style="margin-bottom:6px"><b>Vrije regel</b> — losse tekst, bv. arbeid of een vast bedrag</div>
+              <div class="rij2">
+                <div class="veld"><label>Omschrijving</label><input type="text" id="orOmschrijving" placeholder="bv. Aanleg groepenkast, of 'Project X — vaste prijs'"></div>
+                <div class="veld"><label>Eenheid</label><input type="text" id="orEenheid" placeholder="leeg = vast bedrag"></div>
+              </div>
+              <div class="rij2">
+                <div class="veld"><label>Aantal</label><input type="number" id="orAantal" step="0.5" min="0" value="1"></div>
+                <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="orPrijs" step="0.01" min="0" inputmode="decimal"></div>
+              </div>
+              <button type="button" class="knop klein stil" id="orToevoegen">Regel toevoegen</button>
             </div>
-            <button type="button" class="knop klein stil" id="orToevoegen">Regel toevoegen</button>
             <div class="hint" style="margin-top:8px">Excl: <b id="offExcl">—</b> · BTW: <b id="offBtw">—</b> · Incl: <b id="offIncl">—</b></div>
           </div>
           <div class="veld" id="offBestelBlok" style="display:none"><label>Wat moet ik bestellen?</label>
@@ -1803,6 +1823,10 @@ function vulSelects(){
     cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
   vulProductKeuze();
 
+  $("ofrZoekCategorie").innerHTML = '<option value="">Alle categorieën</option>' +
+    cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
+  vulOffProductKeuze();
+
   $("npCategorie").innerHTML = '<option value="">— geen —</option>' +
     cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
 
@@ -2633,6 +2657,58 @@ function vulProductKeuze(){
 }
 ["pZoek","pZoekCategorie"].forEach(id => $(id).addEventListener("input", vulProductKeuze));
 $("pZoekCategorie").addEventListener("change", vulProductKeuze);
+
+/* zelfde zoek/filter-patroon als hierboven, maar dan voor het kiezen van een
+   product op een offerteregel (los van voorraad-gebruik op een project) */
+function vulOffProductKeuze(){
+  const term = $("ofrZoek").value.trim().toLowerCase();
+  const cat = $("ofrZoekCategorie").value;
+  const huidig = $("ofrProduct").value;
+
+  const past = p => {
+    if (cat && p.categorie_id !== cat) return false;
+    if (!term) return true;
+    const hooi = [p.naam, p.volledige_naam, p.eenheid, catNaam(p.categorie_id)]
+      .filter(Boolean).join(" ").toLowerCase();
+    return term.split(/\s+/).every(woord => hooi.includes(woord));
+  };
+  const lijst = cache.producten.filter(past);
+
+  const label = p => {
+    const extra = (p.volledige_naam || "").trim();
+    if (!extra || extra.toLowerCase() === p.naam.toLowerCase()) return p.naam;
+    return p.naam + " — " + (extra.length > 70 ? extra.slice(0, 69) + "…" : extra);
+  };
+  $("ofrProduct").innerHTML = '<option value="">— kies product —</option>' +
+    lijst.map(p => '<option value="' + p.id + '">' + esc(label(p)) + '</option>').join("");
+
+  if (huidig && lijst.some(p => p.id === huidig)) $("ofrProduct").value = huidig;
+
+  const totaal = cache.producten.length;
+  $("ofrZoekHint").textContent = (term || cat)
+    ? lijst.length + " van " + totaal + " producten" + (lijst.length ? "" : " — niets gevonden, pas je zoekterm aan")
+    : totaal + " producten";
+
+  bijwerkOfrPrijs();
+}
+["ofrZoek","ofrZoekCategorie"].forEach(id => $(id).addEventListener("input", vulOffProductKeuze));
+$("ofrZoekCategorie").addEventListener("change", vulOffProductKeuze);
+
+/* verkoopprijs van het gekozen product invullen als startpunt — blijft
+   handmatig aan te passen voor deze ene offerteregel */
+function bijwerkOfrPrijs(){
+  const prod = cache.producten.find(p => p.id === $("ofrProduct").value);
+  if (prod) $("ofrPrijs").value = prod.verkoopprijs || 0;
+}
+$("ofrProduct").addEventListener("change", bijwerkOfrPrijs);
+
+function offProductZoekReset(){
+  $("ofrZoek").value = "";
+  $("ofrZoekCategorie").value = "";
+  $("ofrAantal").value = 1;
+  $("ofrPrijs").value = "";
+  vulOffProductKeuze();
+}
 
 /* cm-hulpje: alleen zinvol bij producten die per meter gaan (draad, buis).
    Rekent rechtstreeks om naar het Aantal-veld, dat in meter blijft staan. */
@@ -5533,6 +5609,21 @@ function toonOffRegels(){
   return { excl: r2(excl), btw, incl: r2(excl + btw) };
 }
 
+$("ofrToevoegen").addEventListener("click", () => {
+  const productId = $("ofrProduct").value;
+  const aantal = parseFloat($("ofrAantal").value);
+  const prijs = parseFloat($("ofrPrijs").value);
+  if (!productId) { toast("Kies een product"); return; }
+  if (!(aantal > 0) || !(prijs >= 0)) { toast("Vul aantal en prijs in"); return; }
+  const prod = cache.producten.find(p => p.id === productId);
+  offerteRegels.push({
+    omschrijving: prod ? prod.naam : "", eenheid: prod ? (prod.eenheid || "") : "",
+    aantal, prijs: r2(prijs), product_id: productId
+  });
+  $("ofrAantal").value = 1; $("ofrPrijs").value = prod ? (prod.verkoopprijs || 0) : "";
+  toonOffRegels();
+});
+
 $("orToevoegen").addEventListener("click", () => {
   const omschrijving = $("orOmschrijving").value.trim();
   const aantal = parseFloat($("orAantal").value);
@@ -5563,6 +5654,7 @@ function offerteFormLeeg(){
   $("offNotities").value = "";
   $("offVerwijder").style.display = "none";
   $("offAccepteren").style.display = "none";
+  offProductZoekReset();
   toonOffRegels();
 }
 $("offNieuw").addEventListener("click", () => {
@@ -5589,6 +5681,7 @@ async function openOfferte(id){
   offerteRegels = (data || []).map(r => ({
     omschrijving: r.omschrijving, eenheid: r.eenheid, aantal: Number(r.aantal), prijs: Number(r.prijs), product_id: r.product_id
   }));
+  offProductZoekReset();
   toonOffRegels();
   $("offDetail").style.display = "block";
   window.scrollTo(0, 0);
