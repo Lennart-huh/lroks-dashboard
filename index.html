@@ -1806,6 +1806,10 @@ function klantNaam(id){
   const k = cache.klanten.find(x => x.id === id);
   return k ? k.naam : "";
 }
+function klusNaam(id){
+  const k = cache.klussen.find(x => x.id === id);
+  return k ? k.naam : "";
+}
 function projectNaam(id){
   const p = cache.projecten.find(x => x.id === id);
   return p ? p.naam : "";
@@ -4591,11 +4595,14 @@ function vulFdKlanten(){
 
 function toonFdRegels(regels){
   const body = $("fdRegelsBody");
+  // alles op datum onder elkaar, niet gegroepeerd per soort (uren/materiaal/km/extra)
+  regels.sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")));
   if (!regels.length){
     body.innerHTML = '<tr><td colspan="5" class="leeg">Geen regels.</td></tr>';
   } else {
     body.innerHTML = regels.map(r =>
-      '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") + '</td>' +
+      '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") +
+      (r.klus_id ? ' <span class="chip grijs">' + esc(klusNaam(r.klus_id)) + '</span>' : '') + '</td>' +
       '<td class="tekst">' + esc(r.omschrijving) + '</td>' +
       '<td class="r">' + esc(fmtAantal(r)) + '</td>' +
       '<td class="r">' + esc(fmtPrijsPerEenheid(r)) + '</td>' +
@@ -4718,7 +4725,7 @@ async function startFacturering(projectId){
       omschrijving: "Arbeid" + (u.omschrijving ? " — " + u.omschrijving : ""),
       datum: u.datum, eenheid: "uur",
       aantal: Number(u.aantal), prijs: Number(u.tarief || 0),
-      uren_id: u.id, mutatie_id: null, km_id: null, extra_id: null
+      uren_id: u.id, mutatie_id: null, km_id: null, extra_id: null, klus_id: u.klus_id || null
     });
   });
   gebruik.forEach(g => {
@@ -4728,7 +4735,7 @@ async function startFacturering(projectId){
       datum: g.datum, eenheid: (prod && prod.eenheid) || "",
       aantal: Math.abs(Number(g.aantal)),
       prijs: Number(prod ? (prod.verkoopprijs || 0) : 0),
-      uren_id: null, mutatie_id: g.id, km_id: null, extra_id: null
+      uren_id: null, mutatie_id: g.id, km_id: null, extra_id: null, klus_id: g.klus_id || null
     });
   });
   kmVoor.forEach(r => {
@@ -4737,7 +4744,7 @@ async function startFacturering(projectId){
       datum: r.datum, eenheid: "km",
       aantal: r.gereden,
       prijs: Number(r.km_prijs ?? (cache.inst.km_prijs || 0)),
-      uren_id: null, mutatie_id: null, km_id: r.id, extra_id: null
+      uren_id: null, mutatie_id: null, km_id: r.id, extra_id: null, klus_id: r.klus_id || null
     });
   });
   // extra regels (bv. een afgesproken vaste prijs voor een deel van de klus,
@@ -4747,9 +4754,11 @@ async function startFacturering(projectId){
       omschrijving: r.omschrijving,
       datum: r.datum, eenheid: r.eenheid || "",
       aantal: Number(r.aantal), prijs: Number(r.prijs),
-      uren_id: null, mutatie_id: null, km_id: null, extra_id: r.id
+      uren_id: null, mutatie_id: null, km_id: null, extra_id: r.id, klus_id: r.klus_id || null
     });
   });
+  // alles door elkaar op datum, niet gegroepeerd per soort (uren/materiaal/km/extra)
+  regels.sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")));
   pendingFactuur = { projectId, regels };
   bewerkFactuurId = null;
   huidigeRegels = [];
@@ -4802,7 +4811,8 @@ async function maakFactuurAan(){
   const invoerRegels = pendingFactuur.regels.map(r => ({
     factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
     aantal: r.aantal, prijs: r.prijs,
-    uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null, extra_id: r.extra_id || null
+    uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null, extra_id: r.extra_id || null,
+    klus_id: r.klus_id || null
   }));
   const { error: e2 } = await db.from("factuur_regels").insert(invoerRegels);
   if (e2){
@@ -5428,13 +5438,15 @@ function genereerFactuurPdf(f, k, I, regels){
     styles: { font: "helvetica", fontSize: 9, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: { bottom: 0.2 } },
     headStyles: { fontStyle: "bold", fontSize: 8, textColor: 20, lineColor: [0, 0, 0], lineWidth: { bottom: 0.5 } },
     columnStyles: {
-      0: { cellWidth: 20 }, 2: { cellWidth: 22, halign: "right" },
+      0: { cellWidth: 26 }, 2: { cellWidth: 22, halign: "right" },
       3: { cellWidth: 28, halign: "right" }, 4: { cellWidth: 26, halign: "right" }
     },
     head: [["Datum", "Omschrijving", "Aantal", "Prijs per EX.", "Bedrag EX."]],
-    body: regels.map(r => [
-      r.datum ? fmtDatum(r.datum) : "—", r.omschrijving, fmtAantal(r),
-      fmtPrijsPerEenheid(r), eur2(Number(r.aantal) * Number(r.prijs))
+    // alles op datum onder elkaar, niet gegroepeerd per soort (uren/materiaal/km/extra),
+    // en de klus staat erbij in de datumkolom
+    body: regels.slice().sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || ""))).map(r => [
+      (r.datum ? fmtDatum(r.datum) : "—") + (r.klus_id ? "\n" + klusNaam(r.klus_id) : ""),
+      r.omschrijving, fmtAantal(r), fmtPrijsPerEenheid(r), eur2(Number(r.aantal) * Number(r.prijs))
     ])
   });
 
