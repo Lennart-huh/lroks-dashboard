@@ -4597,10 +4597,14 @@ function toonFdRegels(regels){
   const body = $("fdRegelsBody");
   // alles op datum onder elkaar, niet gegroepeerd per soort (uren/materiaal/km/extra)
   regels.sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")));
-  if (!regels.length){
+  // 'verborgen' regels zijn uren/producten/km die in de vaste prijs van een
+  // afgeronde klus zijn opgegaan — blijven gekoppeld voor het geval de
+  // factuur ooit verwijderd wordt, maar staan niet los op de factuur
+  const zichtbaar = regels.filter(r => !r.verborgen);
+  if (!zichtbaar.length){
     body.innerHTML = '<tr><td colspan="5" class="leeg">Geen regels.</td></tr>';
   } else {
-    body.innerHTML = regels.map(r =>
+    body.innerHTML = zichtbaar.map(r =>
       '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") +
       (r.klus_id ? ' <span class="chip grijs">' + esc(klusNaam(r.klus_id)) + '</span>' : '') + '</td>' +
       '<td class="tekst">' + esc(r.omschrijving) + '</td>' +
@@ -4608,7 +4612,7 @@ function toonFdRegels(regels){
       '<td class="r">' + esc(fmtPrijsPerEenheid(r)) + '</td>' +
       '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
   }
-  const excl = regels.reduce((s,r) => s + Number(r.aantal) * Number(r.prijs), 0);
+  const excl = zichtbaar.reduce((s,r) => s + Number(r.aantal) * Number(r.prijs), 0);
   const btw = r2(excl * btwPct() / 100);
   $("fdExcl").textContent = eur2(excl);
   $("fdBtw").textContent = eur2(btw);
@@ -4713,38 +4717,66 @@ async function startFacturering(projectId){
   const extra = extraRes.data || [];
   const kmVoor = kmRegels().filter(r =>
     r.project_id === projectId && !r.gefactureerd && r.zakelijk && r.gereden > 0);
-  if (!uren.length && !gebruik.length && !kmVoor.length && !extra.length){
+
+  // Klussen met een vaste prijs: de losse uren/producten/km eronder staan er
+  // alleen voor je eigen winstoverzicht (vaste prijs vs. werkelijke kosten) —
+  // die komen dus nooit los op de factuur. In plaats daarvan komt er, zodra
+  // zo'n klus is afgerond, één regel met de vaste prijs. Is die klus al
+  // eerder gefactureerd (er bestaat al een 'kale' klus-regel zonder
+  // gekoppelde uren/product/km), dan slaan we 'm over.
+  const vasteKlussen = cache.klussen.filter(k => k.project_id === projectId && k.prijstype === "vast");
+  const vasteKlusIdSet = new Set(vasteKlussen.map(k => k.id));
+  let algefactureerd = new Set();
+  if (vasteKlusIdSet.size){
+    const { data: klusRegels } = await db.from("factuur_regels")
+      .select("klus_id, uren_id, mutatie_id, km_id, extra_id").in("klus_id", [...vasteKlusIdSet]);
+    (klusRegels || []).forEach(r => {
+      if (!r.uren_id && !r.mutatie_id && !r.km_id && !r.extra_id) algefactureerd.add(r.klus_id);
+    });
+  }
+  const teFactureren = vasteKlussen.filter(k => k.status === "afgerond" && !algefactureerd.has(k.id));
+  const teFactIdSet = new Set(teFactureren.map(k => k.id));
+
+  if (!uren.length && !gebruik.length && !kmVoor.length && !extra.length && !teFactureren.length){
     toast("Niets te factureren bij dit project");
     return;
   }
   const regels = [];
   let zonderTarief = 0;
   uren.forEach(u => {
-    if (!u.tarief) zonderTarief++;
+    // hoort bij een vaste-prijs klus die nog niet (of al eerder) gefactureerd
+    // wordt — laat helemaal liggen tot die klus is afgerond
+    if (u.klus_id && vasteKlusIdSet.has(u.klus_id) && !teFactIdSet.has(u.klus_id)) return;
+    const verborgen = !!(u.klus_id && teFactIdSet.has(u.klus_id));
+    if (!u.tarief && !verborgen) zonderTarief++;
     regels.push({
       omschrijving: "Arbeid" + (u.omschrijving ? " — " + u.omschrijving : ""),
       datum: u.datum, eenheid: "uur",
-      aantal: Number(u.aantal), prijs: Number(u.tarief || 0),
-      uren_id: u.id, mutatie_id: null, km_id: null, extra_id: null, klus_id: u.klus_id || null
+      aantal: Number(u.aantal), prijs: verborgen ? 0 : Number(u.tarief || 0),
+      uren_id: u.id, mutatie_id: null, km_id: null, extra_id: null, klus_id: u.klus_id || null, verborgen
     });
   });
   gebruik.forEach(g => {
+    if (g.klus_id && vasteKlusIdSet.has(g.klus_id) && !teFactIdSet.has(g.klus_id)) return;
+    const verborgen = !!(g.klus_id && teFactIdSet.has(g.klus_id));
     const prod = cache.producten.find(p => p.id === g.product_id);
     regels.push({
       omschrijving: prod ? prod.naam : "Product",
       datum: g.datum, eenheid: (prod && prod.eenheid) || "",
       aantal: Math.abs(Number(g.aantal)),
-      prijs: Number(prod ? (prod.verkoopprijs || 0) : 0),
-      uren_id: null, mutatie_id: g.id, km_id: null, extra_id: null, klus_id: g.klus_id || null
+      prijs: verborgen ? 0 : Number(prod ? (prod.verkoopprijs || 0) : 0),
+      uren_id: null, mutatie_id: g.id, km_id: null, extra_id: null, klus_id: g.klus_id || null, verborgen
     });
   });
   kmVoor.forEach(r => {
+    if (r.klus_id && vasteKlusIdSet.has(r.klus_id) && !teFactIdSet.has(r.klus_id)) return;
+    const verborgen = !!(r.klus_id && teFactIdSet.has(r.klus_id));
     regels.push({
       omschrijving: "Kilometers" + (r.omschrijving ? " — " + r.omschrijving : ""),
       datum: r.datum, eenheid: "km",
       aantal: r.gereden,
-      prijs: Number(r.km_prijs ?? (cache.inst.km_prijs || 0)),
-      uren_id: null, mutatie_id: null, km_id: r.id, extra_id: null, klus_id: r.klus_id || null
+      prijs: verborgen ? 0 : Number(r.km_prijs ?? (cache.inst.km_prijs || 0)),
+      uren_id: null, mutatie_id: null, km_id: r.id, extra_id: null, klus_id: r.klus_id || null, verborgen
     });
   });
   // extra regels (bv. een afgesproken vaste prijs voor een deel van de klus,
@@ -4754,7 +4786,18 @@ async function startFacturering(projectId){
       omschrijving: r.omschrijving,
       datum: r.datum, eenheid: r.eenheid || "",
       aantal: Number(r.aantal), prijs: Number(r.prijs),
-      uren_id: null, mutatie_id: null, km_id: null, extra_id: r.id, klus_id: r.klus_id || null
+      uren_id: null, mutatie_id: null, km_id: null, extra_id: r.id, klus_id: r.klus_id || null, verborgen: false
+    });
+  });
+  // per afgeronde vaste-prijs klus: één regel met de vaste prijs, gedateerd
+  // op de laatste onderliggende activiteit (of vandaag als er niets aan hangt)
+  teFactureren.forEach(k => {
+    const datums = regels.filter(r => r.klus_id === k.id && r.verborgen).map(r => r.datum).filter(Boolean).sort();
+    regels.push({
+      omschrijving: "Klus: " + k.naam,
+      datum: datums.length ? datums[datums.length - 1] : vandaagISO(), eenheid: "",
+      aantal: 1, prijs: Number(k.vaste_prijs || 0),
+      uren_id: null, mutatie_id: null, km_id: null, extra_id: null, klus_id: k.id, verborgen: false
     });
   });
   // alles door elkaar op datum, niet gegroepeerd per soort (uren/materiaal/km/extra)
@@ -4812,7 +4855,7 @@ async function maakFactuurAan(){
     factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
     aantal: r.aantal, prijs: r.prijs,
     uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null, extra_id: r.extra_id || null,
-    klus_id: r.klus_id || null
+    klus_id: r.klus_id || null, verborgen: !!r.verborgen
   }));
   const { error: e2 } = await db.from("factuur_regels").insert(invoerRegels);
   if (e2){
@@ -5443,11 +5486,13 @@ function genereerFactuurPdf(f, k, I, regels){
     },
     head: [["Datum", "Omschrijving", "Aantal", "Prijs per EX.", "Bedrag EX."]],
     // alles op datum onder elkaar, niet gegroepeerd per soort (uren/materiaal/km/extra),
-    // en de klus staat erbij in de datumkolom
-    body: regels.slice().sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || ""))).map(r => [
-      (r.datum ? fmtDatum(r.datum) : "—") + (r.klus_id ? "\n" + klusNaam(r.klus_id) : ""),
-      r.omschrijving, fmtAantal(r), fmtPrijsPerEenheid(r), eur2(Number(r.aantal) * Number(r.prijs))
-    ])
+    // de klus staat erbij in de datumkolom, en 'verborgen' regels (opgegaan in
+    // de vaste prijs van een klus) blijven van de factuur zelf af
+    body: regels.filter(r => !r.verborgen)
+      .sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || ""))).map(r => [
+        (r.datum ? fmtDatum(r.datum) : "—") + (r.klus_id ? "\n" + klusNaam(r.klus_id) : ""),
+        r.omschrijving, fmtAantal(r), fmtPrijsPerEenheid(r), eur2(Number(r.aantal) * Number(r.prijs))
+      ])
   });
 
   y = doc.lastAutoTable.finalY + 8;
