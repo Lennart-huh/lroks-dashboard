@@ -1937,24 +1937,37 @@ function renderHoofd(){
    vervaldatum eerst. Facturen zonder vervaldatum vallen terug op de factuurdatum. */
 function renderTeBetalen(){
   const nu = new Date(); nu.setHours(0, 0, 0, 0);
-  const lijst = factData.filter(f => f.type === "inkoop" && f.status !== "betaald")
-    .sort((a, b) => String(a.vervaldatum || a.datum).localeCompare(String(b.vervaldatum || b.datum)));
-  const totaal = lijst.reduce((s, f) => s + Number(f.bedrag_excl || 0) + Number(f.btw_bedrag || 0), 0);
+  const facturen = factData.filter(f => f.type === "inkoop" && f.status !== "betaald").map(f => {
+    const verval = f.vervaldatum ? new Date(f.vervaldatum + "T00:00:00") : null;
+    return {
+      soort: "factuur", id: f.id, naam: f.leverancier || "—",
+      datum: f.vervaldatum || f.datum, teLaat: !!(verval && verval < nu),
+      bedrag: Number(f.bedrag_excl || 0) + Number(f.btw_bedrag || 0)
+    };
+  });
+  // vaste lasten (huur, verzekeringen...) hebben geen echte vervaldatum zoals
+  // een factuur — alleen een geschatte eerstvolgende afschrijving, vandaar
+  // "ca." ervoor in plaats van een harde datum
+  const vasteLasten = cache.vasteLasten.map(vl => ({
+    soort: "vast", id: vl.id, naam: vl.naam,
+    datum: isoDatum(volgendeAfschrijving(vl, new Date())), teLaat: false,
+    bedrag: Number(vl.bedrag || 0)
+  }));
+  const lijst = [...facturen, ...vasteLasten].sort((a, b) => a.datum.localeCompare(b.datum));
+  const totaal = lijst.reduce((s, r) => s + r.bedrag, 0);
   $("tbAantal").textContent = lijst.length;
   $("tbTotaal").textContent = eur2(totaal);
   $("tbBody").innerHTML = !lijst.length
     ? '<tr><td colspan="3" class="leeg">Niets openstaand — helemaal bij.</td></tr>'
-    : lijst.map(f => {
-        const verval = f.vervaldatum ? new Date(f.vervaldatum + "T00:00:00") : null;
-        const teLaat = verval && verval < nu;
-        const bedrag = Number(f.bedrag_excl || 0) + Number(f.btw_bedrag || 0);
-        return '<tr class="klik" data-tbfid="' + f.id + '"><td class="tekst">' + esc(f.leverancier || "—") + '</td>' +
-          '<td>' + (f.vervaldatum ? fmtDatum(f.vervaldatum) : fmtDatum(f.datum)) +
-          (teLaat ? ' <span class="chip rood">VERLOPEN</span>' : '') + '</td>' +
-          '<td class="r">' + eur2(bedrag) + '</td></tr>';
-      }).join("");
-  $("tbBody").querySelectorAll("[data-tbfid]").forEach(r => r.addEventListener("click", () => {
-    toonTab("facturen"); kiesFSub("fIn"); openInkoop(r.dataset.tbfid);
+    : lijst.map(r =>
+        '<tr class="klik" data-tbsoort="' + r.soort + '" data-tbid="' + r.id + '"><td class="tekst">' + esc(r.naam) +
+        (r.soort === "vast" ? ' <span class="chip grijs">VAST</span>' : '') + '</td>' +
+        '<td>' + (r.soort === "vast" ? "ca. " : "") + fmtDatum(r.datum) +
+        (r.teLaat ? ' <span class="chip rood">VERLOPEN</span>' : '') + '</td>' +
+        '<td class="r">' + eur2(r.bedrag) + '</td></tr>').join("");
+  $("tbBody").querySelectorAll("[data-tbid]").forEach(r => r.addEventListener("click", () => {
+    if (r.dataset.tbsoort === "vast") startVasteLastBewerken(r.dataset.tbid);
+    else { toonTab("facturen"); kiesFSub("fIn"); openInkoop(r.dataset.tbid); }
   }));
 }
 
