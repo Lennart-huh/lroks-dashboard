@@ -2150,6 +2150,13 @@ function omzetWinstPerMaand(jaar){
     if (c.type === "omzet") omzet[m] += Number(c.bedrag_excl || 0);
     else kosten[m] += Number(c.bedrag_excl || 0);
   });
+  // vaste lasten (huur, abonnementen...) tellen ook mee als kosten — geen
+  // factuur, dus geen btw, maar wel elke maand/kwartaal/jaar een kostenpost
+  cache.vasteLasten.forEach(vl => {
+    vasteLastDatumsInJaar(vl, jaar).forEach(datum => {
+      kosten[new Date(datum).getMonth()] += Number(vl.bedrag || 0);
+    });
+  });
   const winst = omzet.map((o, i) => o - kosten[i]);
   return { omzet, kosten, winst };
 }
@@ -5009,6 +5016,13 @@ function financieelJaar(jaar){
     const k = kwartaalVan(c.datum);
     if (c.type === "omzet"){ omzet[k] += Number(c.bedrag_excl || 0); btwUit[k] += Number(c.btw || 0); }
     else { kosten[k] += Number(c.bedrag_excl || 0); btwIn[k] += Number(c.btw || 0); }
+  });
+  // vaste lasten tellen mee als kosten (Omzet/winst, Belasting) maar niet bij
+  // de btw (BTW-tab) — daar zit geen factuur en dus geen btw achter
+  cache.vasteLasten.forEach(vl => {
+    vasteLastDatumsInJaar(vl, jaar).forEach(datum => {
+      kosten[kwartaalVan(datum)] += Number(vl.bedrag || 0);
+    });
   });
   return { omzet, kosten, btwUit, btwIn };
 }
