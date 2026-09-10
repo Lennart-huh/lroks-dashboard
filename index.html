@@ -885,6 +885,16 @@ nav.onderbalk{display:none}
             <tbody id="owMateriaalBody"></tbody>
           </table>
         </div>
+        <h3 style="font-size:.95rem;margin:0 0 10px">Winst per werk-per-stuk</h3>
+        <div class="hint" style="margin-bottom:10px">Klussen tegen een vaste vergoeding per stuk (bv. een ombouw), los van
+          gewone materiaalverkoop. Zet een product bij Producten in de categorie 'Werk per stuk' om 'm hier te laten
+          meetellen — het invulformulier waarmee je factureert blijft ongewijzigd.</div>
+        <div class="tbl-wrap" style="margin-bottom:20px">
+          <table>
+            <thead><tr><th>Klus</th><th class="r">Omzet</th><th class="r">Kostprijs</th><th class="r">Winst</th><th class="r">Marge</th></tr></thead>
+            <tbody id="owWerkStukBody"></tbody>
+          </table>
+        </div>
         <h3 style="font-size:.95rem;margin:0 0 10px">Overige boekingen (buiten facturen om)</h3>
         <div class="hint" style="margin-bottom:10px">Voor omzet of kosten die niet uit een factuur in de app komen — bv. omzet van voor je
           overstapte, of losse in-/uitgaande bedragen. Telt mee in alle bedragen hierboven en bij Belasting/BTW.</div>
@@ -5106,36 +5116,49 @@ function financieelJaar(jaar){
   return { omzet, kosten, btwUit, btwIn };
 }
 
+/* Een product telt als 'Werk per stuk' (vaste vergoeding voor een klus per
+   stuk, bv. de laadpaal Agri-Go-ombouw) i.p.v. gewone materiaalverkoop met
+   marge, als het bij Producten in de categorie 'Werk per stuk' zit. Zo blijft
+   het invulformulier (Product gebruikt) precies hetzelfde — dit stel je één
+   keer in bij het product zelf, niet elke keer dat je 'm factureert. */
+function isWerkPerStukProduct(p){
+  if (!p || !p.categorie_id) return false;
+  const c = cache.categorieen.find(x => x.id === p.categorie_id);
+  return !!c && (c.naam || "").trim().toLowerCase() === "werk per stuk";
+}
+
 /* Uitsplitsing van je gefactureerde regels naar waar de winst vandaan komt */
 function winstBronnen(jaar){
   const facturen = new Set(factData
     .filter(f => f.type === "verkoop" && new Date(f.datum).getFullYear() === jaar)
     .map(f => f.id));
   const bron = {
-    uren:      { naam: "Uren",           omzet: 0, kost: 0 },
-    materiaal: { naam: "Materiaal",      omzet: 0, kost: 0 },
-    km:        { naam: "Kilometers",     omzet: 0, kost: 0 },
-    overig:    { naam: "Overige regels", omzet: 0, kost: 0 }
+    uren:        { naam: "Uren",           omzet: 0, kost: 0 },
+    materiaal:   { naam: "Materiaal",      omzet: 0, kost: 0 },
+    werkperstuk: { naam: "Werk per stuk",  omzet: 0, kost: 0 },
+    km:          { naam: "Kilometers",     omzet: 0, kost: 0 },
+    overig:      { naam: "Overige regels", omzet: 0, kost: 0 }
   };
   (cache.regels || []).filter(r => facturen.has(r.factuur_id)).forEach(r => {
     const bedrag = Number(r.aantal || 0) * Number(r.prijs || 0);
     if (r.uren_id) bron.uren.omzet += bedrag;
     else if (r.km_id) bron.km.omzet += bedrag;
     else if (r.mutatie_id){
-      bron.materiaal.omzet += bedrag;
       const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
       const p = m && cache.producten.find(x => x.id === m.product_id);
-      if (p) bron.materiaal.kost += Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0);
+      const doel = isWerkPerStukProduct(p) ? bron.werkperstuk : bron.materiaal;
+      doel.omzet += bedrag;
+      if (p) doel.kost += Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0);
     }
     else bron.overig.omzet += bedrag;
   });
   return bron;
 }
 
-/* Zelfde regels als bron.materiaal in winstBronnen(), maar dan per product
-   i.p.v. opgeteld tot één 'Materiaal'-regel — zodat je ziet welk materiaal
-   echt winst oplevert. */
-function winstPerMateriaal(jaar){
+/* Zelfde regels als bron.materiaal / bron.werkperstuk in winstBronnen(), maar
+   dan per product i.p.v. opgeteld tot één regel — zodat je ziet welk
+   materiaal, of welke werk-per-stuk-klus, echt winst oplevert. */
+function winstPerProduct(jaar, werkPerStuk){
   const facturen = new Set(factData
     .filter(f => f.type === "verkoop" && new Date(f.datum).getFullYear() === jaar)
     .map(f => f.id));
@@ -5143,6 +5166,7 @@ function winstPerMateriaal(jaar){
   (cache.regels || []).filter(r => facturen.has(r.factuur_id) && r.mutatie_id).forEach(r => {
     const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
     const p = m && cache.producten.find(x => x.id === m.product_id);
+    if (isWerkPerStukProduct(p) !== werkPerStuk) return;
     const naam = p ? p.naam : "Onbekend product";
     if (!per[naam]) per[naam] = { naam, omzet: 0, kost: 0 };
     per[naam].omzet += Number(r.aantal || 0) * Number(r.prijs || 0);
@@ -5150,6 +5174,8 @@ function winstPerMateriaal(jaar){
   });
   return Object.values(per).sort((a, b) => (b.omzet - b.kost) - (a.omzet - a.kost));
 }
+function winstPerMateriaal(jaar){ return winstPerProduct(jaar, false); }
+function winstPerWerkStuk(jaar){ return winstPerProduct(jaar, true); }
 
 function renderOmzet(){
   const jaar = vulJaarKeuze("owJaar");
@@ -5198,6 +5224,11 @@ function renderOmzet(){
   $("owMateriaalBody").innerHTML = materiaalRijen.length
     ? materiaalRijen.map(b => rij(b.naam, b.omzet, b.kost)).join("")
     : '<tr><td colspan="5" class="leeg">Nog geen materiaal gefactureerd in ' + jaar + '.</td></tr>';
+
+  const werkStukRijen = winstPerWerkStuk(jaar).filter(b => b.omzet || b.kost);
+  $("owWerkStukBody").innerHTML = werkStukRijen.length
+    ? werkStukRijen.map(b => rij(b.naam, b.omzet, b.kost)).join("")
+    : '<tr><td colspan="5" class="leeg">Nog geen werk-per-stuk gefactureerd in ' + jaar + '.</td></tr>';
 
   renderCorrecties(jaar);
 }
