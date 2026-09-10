@@ -257,7 +257,7 @@ nav.onderbalk{display:none}
         <div class="grid">
           <div class="card"><div class="k">Omzet dit jaar</div><div class="v" id="cOmzet">—</div><div class="m">excl. btw</div></div>
           <div class="card amber"><div class="k">Openstaand</div><div class="v" id="cOpen">—</div><div class="m" id="cOpenSub">facturen</div></div>
-          <div class="card groen"><div class="k">Betaald dit jaar</div><div class="v" id="cBetaald">—</div><div class="m">excl. btw</div></div>
+          <div class="card"><div class="k">Winst deze maand</div><div class="v" id="cWinstMaand">—</div><div class="m" id="cWinstMaandSub">excl. btw</div></div>
           <div class="card"><div class="k">Uren deze week</div><div class="v" id="cUren">—</div><div class="m">werk + kantoor</div></div>
           <div class="card"><div class="k">KM dit jaar</div><div class="v" id="cKm">—</div><div class="m">zakelijk</div></div>
           <div class="card"><div class="k">Open projecten</div><div class="v" id="cProjecten">—</div><div class="m" id="cKlantenSub">klanten totaal</div></div>
@@ -874,6 +874,15 @@ nav.onderbalk{display:none}
           <table>
             <thead><tr><th>Bron</th><th class="r">Omzet</th><th class="r">Kostprijs</th><th class="r">Winst</th><th class="r">Marge</th></tr></thead>
             <tbody id="owBronBody"></tbody>
+          </table>
+        </div>
+        <h3 style="font-size:.95rem;margin:0 0 10px">Winst per materiaal</h3>
+        <div class="hint" style="margin-bottom:10px">Uitsplitsing van de regel 'Materiaal' hierboven, per product — zo zie je welke
+          artikelen echt winst opleveren en welke nauwelijks iets doen.</div>
+        <div class="tbl-wrap" style="margin-bottom:20px">
+          <table>
+            <thead><tr><th>Product</th><th class="r">Omzet</th><th class="r">Kostprijs</th><th class="r">Winst</th><th class="r">Marge</th></tr></thead>
+            <tbody id="owMateriaalBody"></tbody>
           </table>
         </div>
         <h3 style="font-size:.95rem;margin:0 0 10px">Overige boekingen (buiten facturen om)</h3>
@@ -1916,8 +1925,11 @@ function renderHoofd(){
   $("cOmzet").textContent = eur(omzet);
   $("cOpen").textContent = eur(openF.reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
   $("cOpenSub").textContent = openF.length + " facturen";
-  $("cBetaald").textContent = eur(verkoop.filter(f => f.status === "betaald")
-    .reduce((s,f) => s + Number(f.bedrag_excl || 0), 0));
+  const maandNu = new Date().getMonth();
+  const winstMaand = omzetWinstPerMaand(jaar).winst[maandNu];
+  $("cWinstMaand").textContent = eur(winstMaand);
+  $("cWinstMaand").style.color = winstMaand < 0 ? "var(--rood)" : "";
+  $("cWinstMaandSub").textContent = MAAND_NAMEN[maandNu] + " · excl. btw";
 
   const nu = new Date();
   const wd = (nu.getDay() + 6) % 7;
@@ -4126,7 +4138,8 @@ $("pdfLees").addEventListener("click", async () => {
         max_tokens: 32000,
         output_config: { effort: "max" },
         messages: [{ role: "user", content: [ blok, { type: "text", text:
-          'Lees deze inkoopfactuur van een leverancier van een elektrotechnisch installatiebedrijf. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","vervaldatum":"JJJJ-MM-DD of null","bedrag_excl":0,"btw_bedrag":0,"categorie":"","is_investering":false,"regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0}]} ' +
+          'Lees dit inkoopdocument van een elektrotechnisch installatiebedrijf — dit kan een inkoopfactuur van een leverancier zijn, of een kassabon/bonnetje van een winkel. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","vervaldatum":"JJJJ-MM-DD of null","bedrag_excl":0,"btw_bedrag":0,"categorie":"","is_investering":false,"regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0}]} ' +
+          '"datum" is de datum waarop er daadwerkelijk gekocht/afgerekend is (de bon- of transactiedatum, vaak bovenaan met een tijdstip erbij). Gebruik NOOIT een latere factuur-, verzend- of documentdatum als die afwijkt van de aankoopdatum — bij een kassabon staat meestal maar één datum en is die de juiste. ' +
           'Alle bedragen excl. btw met een punt als decimaalteken. prijs_per_stuk is de stukprijs, niet het regeltotaal. Neem ook verzendkosten en statiegeld op als regel. ' +
           'Bij verlegde btw: btw_bedrag 0. ' +
           'Kies categorie uit exact deze lijst: ' + KOSTEN.map(k => k[0]).join(", ") + '. ' +
@@ -5119,6 +5132,25 @@ function winstBronnen(jaar){
   return bron;
 }
 
+/* Zelfde regels als bron.materiaal in winstBronnen(), maar dan per product
+   i.p.v. opgeteld tot één 'Materiaal'-regel — zodat je ziet welk materiaal
+   echt winst oplevert. */
+function winstPerMateriaal(jaar){
+  const facturen = new Set(factData
+    .filter(f => f.type === "verkoop" && new Date(f.datum).getFullYear() === jaar)
+    .map(f => f.id));
+  const per = {};
+  (cache.regels || []).filter(r => facturen.has(r.factuur_id) && r.mutatie_id).forEach(r => {
+    const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
+    const p = m && cache.producten.find(x => x.id === m.product_id);
+    const naam = p ? p.naam : "Onbekend product";
+    if (!per[naam]) per[naam] = { naam, omzet: 0, kost: 0 };
+    per[naam].omzet += Number(r.aantal || 0) * Number(r.prijs || 0);
+    if (p) per[naam].kost += Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0);
+  });
+  return Object.values(per).sort((a, b) => (b.omzet - b.kost) - (a.omzet - a.kost));
+}
+
 function renderOmzet(){
   const jaar = vulJaarKeuze("owJaar");
   const f = financieelJaar(jaar);
@@ -5161,6 +5193,11 @@ function renderOmzet(){
   $("owBronBody").innerHTML = rijen.length
     ? rijen.map(b => rij(b.naam, b.omzet, b.kost)).join("")
     : '<tr><td colspan="5" class="leeg">Nog geen gefactureerde regels in ' + jaar + '.</td></tr>';
+
+  const materiaalRijen = winstPerMateriaal(jaar).filter(b => b.omzet || b.kost);
+  $("owMateriaalBody").innerHTML = materiaalRijen.length
+    ? materiaalRijen.map(b => rij(b.naam, b.omzet, b.kost)).join("")
+    : '<tr><td colspan="5" class="leeg">Nog geen materiaal gefactureerd in ' + jaar + '.</td></tr>';
 
   renderCorrecties(jaar);
 }
