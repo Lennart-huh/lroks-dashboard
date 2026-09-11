@@ -6094,6 +6094,12 @@ $("offOpslaan").addEventListener("click", async () => {
   $("offVerwijder").style.display = "inline-block";
   $("offAccepteren").style.display = bestaandProjectId ? "none" : "inline-block";
   await herlaadOffertes();
+  // status hier op Geaccepteerd gezet (i.p.v. via de aparte knop)? Dan het
+  // project meteen aanmaken, geen tweede klik nodig
+  if (offerteStatus === "geaccepteerd" && !bestaandProjectId){
+    const opgeslagen = offerteData.find(x => x.id === offerteId);
+    if (opgeslagen) await accepteerOfferte(opgeslagen);
+  }
 });
 
 $("offVerwijder").addEventListener("click", async () => {
@@ -6113,11 +6119,11 @@ $("offKlantKopieer").addEventListener("click", async () => {
   catch (e) { console.error(e); toast("Kopiëren mislukt"); }
 });
 
-$("offAccepteren").addEventListener("click", async () => {
-  if (!bewerkOfferteId) return;
-  const o = offerteData.find(x => x.id === bewerkOfferteId);
-  if (!o) return;
-  if (!confirm("Offerte accepteren en een nieuw project aanmaken? Alles is daarna nog aan te passen in het project zelf.")) return;
+/* Maakt het project van een geaccepteerde offerte — gedeeld door de knop
+   'Accepteren' hieronder én door offOpslaan, dat dit vanzelf aanroept zodra
+   je Status boven in het formulier op Geaccepteerd zet en opslaat (dan hoef
+   je niet ook nog apart op deze knop te drukken). */
+async function accepteerOfferte(o){
   const naam = (klantNaam(o.klant_id) || "Nieuw project") + " — " + (o.nummer || "offerte");
   // offerte-prijstype bepaalt het project: 'vast' wordt een vaste-prijs
   // project met de offertetotaal als vaste prijs, 'product' een gewoon
@@ -6148,7 +6154,7 @@ $("offAccepteren").addEventListener("click", async () => {
       project_id: nieuw.id, product_id: r.product_id, naam: r.omschrijving, aantal: r.aantal
     })));
   }
-  await db.from("offertes").update({ status: "geaccepteerd", project_id: nieuw.id }).eq("id", bewerkOfferteId);
+  await db.from("offertes").update({ status: "geaccepteerd", project_id: nieuw.id }).eq("id", o.id);
   cache.projecten.push(nieuw);
   vulSelects();
   toast("Project '" + naam + "' aangemaakt");
@@ -6156,6 +6162,14 @@ $("offAccepteren").addEventListener("click", async () => {
   await herlaadOffertes();
   toonTab("projecten");
   renderProjecten();
+}
+
+$("offAccepteren").addEventListener("click", async () => {
+  if (!bewerkOfferteId) return;
+  const o = offerteData.find(x => x.id === bewerkOfferteId);
+  if (!o) return;
+  if (!confirm("Offerte accepteren en een nieuw project aanmaken? Alles is daarna nog aan te passen in het project zelf.")) return;
+  await accepteerOfferte(o);
 });
 
 $("offPdf").addEventListener("click", () => {
