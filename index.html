@@ -5123,12 +5123,18 @@ function isWerkPerStukProduct(p){
   return !!c && (c.naam || "").trim().toLowerCase() === "werk per stuk";
 }
 
-/* Uitsplitsing van je gefactureerde regels naar waar de winst vandaan komt.
-   'verborgen' regels tellen niet mee: dat zijn uren/producten/km die zijn
-   opgegaan in de vaste prijs van een afgeronde klus (zie startFacturering) —
-   die staan zelf op € 0,00 en zouden anders als verlies lijken, terwijl de
-   echte opbrengst al in de klusprijs zit. Die vergelijking (vaste prijs vs.
-   werkelijke kosten) staat bij de klus zelf, onder Projecten/Klussen. */
+/* Omzet van een gefactureerde regel voor de winstoverzichten hieronder.
+   'verborgen' materiaalregels (mutatie_id) horen bij een vaste-prijs klus:
+   ze staan zelf op € 0,00 op de factuur omdat de opbrengst al in de
+   klusprijs zit (zie startFacturering). Voor dit overzicht rekenen we ze
+   toch tegen de normale verkoopprijs van het product, zodat je ziet wat je
+   er normaal aan verdient — ook al is dat bedrag niet apart gefactureerd. */
+function bronOmzet(r, p){
+  if (r.verborgen && p) return Number(p.verkoopprijs || 0) * Number(r.aantal || 0);
+  return Number(r.aantal || 0) * Number(r.prijs || 0);
+}
+
+/* Uitsplitsing van je gefactureerde regels naar waar de winst vandaan komt. */
 function winstBronnen(jaar){
   const facturen = new Set(factData
     .filter(f => f.type === "verkoop" && new Date(f.datum).getFullYear() === jaar)
@@ -5140,17 +5146,22 @@ function winstBronnen(jaar){
     km:          { naam: "Kilometers",     omzet: 0, kost: 0 },
     overig:      { naam: "Overige regels", omzet: 0, kost: 0 }
   };
-  (cache.regels || []).filter(r => facturen.has(r.factuur_id) && !r.verborgen).forEach(r => {
-    const bedrag = Number(r.aantal || 0) * Number(r.prijs || 0);
-    if (r.uren_id) bron.uren.omzet += bedrag;
-    else if (r.km_id) bron.km.omzet += bedrag;
-    else if (r.mutatie_id){
+  (cache.regels || []).filter(r => facturen.has(r.factuur_id)).forEach(r => {
+    if (r.mutatie_id){
       const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
       const p = m && cache.producten.find(x => x.id === m.product_id);
       const doel = isWerkPerStukProduct(p) ? bron.werkperstuk : bron.materiaal;
-      doel.omzet += bedrag;
+      doel.omzet += bronOmzet(r, p);
       if (p) doel.kost += Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0);
+      return;
     }
+    // uren/km/extra binnen een vaste-prijs klus: geen kostprijs om ertegenover
+    // te zetten (dat is geen voorraadproduct), dus die laten we buiten deze
+    // uitsplitsing — hun opbrengst zit al in de klusprijs (bron.overig).
+    if (r.verborgen) return;
+    const bedrag = Number(r.aantal || 0) * Number(r.prijs || 0);
+    if (r.uren_id) bron.uren.omzet += bedrag;
+    else if (r.km_id) bron.km.omzet += bedrag;
     else bron.overig.omzet += bedrag;
   });
   return bron;
@@ -5164,13 +5175,13 @@ function winstPerProduct(jaar, werkPerStuk){
     .filter(f => f.type === "verkoop" && new Date(f.datum).getFullYear() === jaar)
     .map(f => f.id));
   const per = {};
-  (cache.regels || []).filter(r => facturen.has(r.factuur_id) && r.mutatie_id && !r.verborgen).forEach(r => {
+  (cache.regels || []).filter(r => facturen.has(r.factuur_id) && r.mutatie_id).forEach(r => {
     const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
     const p = m && cache.producten.find(x => x.id === m.product_id);
     if (isWerkPerStukProduct(p) !== werkPerStuk) return;
     const naam = p ? p.naam : "Onbekend product";
     if (!per[naam]) per[naam] = { naam, omzet: 0, kost: 0 };
-    per[naam].omzet += Number(r.aantal || 0) * Number(r.prijs || 0);
+    per[naam].omzet += bronOmzet(r, p);
     if (p) per[naam].kost += Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0);
   });
   return Object.values(per).sort((a, b) => (b.omzet - b.kost) - (a.omzet - a.kost));
