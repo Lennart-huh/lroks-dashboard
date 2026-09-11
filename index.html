@@ -876,27 +876,6 @@ nav.onderbalk{display:none}
             <tbody id="owBronBody"></tbody>
           </table>
         </div>
-        <h3 style="font-size:.95rem;margin:0 0 10px">Winst per materiaal
-          <button type="button" class="info-vraag" id="owMateriaalVraag" title="Uitleg">?</button></h3>
-        <div class="hint" id="owMateriaalHint" style="margin-bottom:10px;display:none">Uitsplitsing van de regel 'Materiaal' hierboven, per product — zo zie je welke
-          artikelen echt winst opleveren en welke nauwelijks iets doen.</div>
-        <div class="tbl-wrap" style="margin-bottom:20px">
-          <table>
-            <thead><tr><th>Product</th><th class="r">Omzet</th><th class="r">Kostprijs</th><th class="r">Winst</th><th class="r">Marge</th></tr></thead>
-            <tbody id="owMateriaalBody"></tbody>
-          </table>
-        </div>
-        <h3 style="font-size:.95rem;margin:0 0 10px">Winst per werk-per-stuk
-          <button type="button" class="info-vraag" id="owWerkStukVraag" title="Uitleg">?</button></h3>
-        <div class="hint" id="owWerkStukHint" style="margin-bottom:10px;display:none">Klussen tegen een vaste vergoeding per stuk (bv. een ombouw), los van
-          gewone materiaalverkoop. Zet een product bij Producten in de categorie 'Werk per stuk' om 'm hier te laten
-          meetellen — het invulformulier waarmee je factureert blijft ongewijzigd.</div>
-        <div class="tbl-wrap" style="margin-bottom:20px">
-          <table>
-            <thead><tr><th>Klus</th><th class="r">Omzet</th><th class="r">Kostprijs</th><th class="r">Winst</th><th class="r">Marge</th></tr></thead>
-            <tbody id="owWerkStukBody"></tbody>
-          </table>
-        </div>
         <h3 style="font-size:.95rem;margin:0 0 10px">Overige boekingen (buiten facturen om)
           <button type="button" class="info-vraag" id="owCorrectiesVraag" title="Uitleg">?</button></h3>
         <div class="hint" id="owCorrectiesHint" style="margin-bottom:10px;display:none">Voor omzet of kosten die niet uit een factuur in de app komen — bv. omzet van voor je
@@ -1365,6 +1344,20 @@ nav.onderbalk{display:none}
             <thead><tr><th>Periode</th><th class="r">Btw uitgaand</th><th class="r">Voorbelasting</th><th class="r">Af te dragen</th><th></th></tr></thead>
             <tbody id="btKwartaalBody"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- pop-up: uitsplitsing per product/klus achter een regel in 'Waar je winst vandaan komt' -->
+      <div class="overlay" id="bronUitlegOverlay">
+        <div class="form-card heeft-sluit">
+          <button type="button" class="knop klein stil sluitX" id="bronUitlegSluit" title="Sluiten">×</button>
+          <h3 style="font-size:.92rem;margin-bottom:4px" id="bronUitlegTitel">—</h3>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th id="bronUitlegKolom">Product</th><th class="r">Omzet</th><th class="r">Kostprijs</th><th class="r">Winst</th><th class="r">Marge</th></tr></thead>
+              <tbody id="bronUitlegBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -5180,6 +5173,29 @@ function winstPerProduct(jaar, werkPerStuk){
 function winstPerMateriaal(jaar){ return winstPerProduct(jaar, false); }
 function winstPerWerkStuk(jaar){ return winstPerProduct(jaar, true); }
 
+/* Pop-up bij het vraagteken achter 'Materiaal' of 'Werk per stuk' in 'Waar je
+   winst vandaan komt' — zelfde soort uitsplitsing als bij de btw-pop-up. */
+function toonBronUitleg(jaar, sleutel){
+  const werkPerStuk = sleutel === "werkperstuk";
+  const rijen = winstPerProduct(jaar, werkPerStuk).filter(b => b.omzet || b.kost);
+  $("bronUitlegTitel").textContent = (werkPerStuk ? "Winst per werk-per-stuk" : "Winst per materiaal") + " · " + jaar;
+  $("bronUitlegKolom").textContent = werkPerStuk ? "Klus" : "Product";
+  $("bronUitlegBody").innerHTML = rijen.length
+    ? rijen.map(b => {
+        const w = b.omzet - b.kost;
+        return '<tr><td class="tekst">' + esc(b.naam) + '</td>' +
+          '<td class="r">' + eur2(b.omzet) + '</td><td class="r">' + eur2(b.kost) + '</td>' +
+          '<td class="r">' + eur2(w) + '</td>' +
+          '<td class="r">' + (b.omzet > 0 ? Math.round(w / b.omzet * 100) + "%" : "—") + '</td></tr>';
+      }).join("")
+    : '<tr><td colspan="5" class="leeg">Niets gevonden voor ' + jaar + '.</td></tr>';
+  $("bronUitlegOverlay").classList.add("open");
+}
+$("bronUitlegSluit").addEventListener("click", () => $("bronUitlegOverlay").classList.remove("open"));
+$("bronUitlegOverlay").addEventListener("click", e => {
+  if (e.target === $("bronUitlegOverlay")) $("bronUitlegOverlay").classList.remove("open");
+});
+
 function renderOmzet(){
   const jaar = vulJaarKeuze("owJaar");
   const f = financieelJaar(jaar);
@@ -5218,20 +5234,22 @@ function renderOmzet(){
     MAAND_NAMEN.map((n, i) => rij(n, fm.omzet[i], fm.kosten[i])).join("") +
     rij("<b>Heel " + jaar + "</b>", omzetJ, kostenJ, ' style="border-top:2px solid var(--line)"');
 
-  const rijen = Object.values(winstBronnen(jaar)).filter(b => b.omzet || b.kost);
-  $("owBronBody").innerHTML = rijen.length
-    ? rijen.map(b => rij(b.naam, b.omzet, b.kost)).join("")
+  const heeftDetail = { materiaal: "product", werkperstuk: "klus" };
+  const bronRijen = Object.entries(winstBronnen(jaar)).filter(([, b]) => b.omzet || b.kost);
+  $("owBronBody").innerHTML = bronRijen.length
+    ? bronRijen.map(([sleutel, b]) => {
+        const w = b.omzet - b.kost;
+        const vraag = heeftDetail[sleutel]
+          ? ' <button type="button" class="info-vraag" data-bron="' + sleutel +
+            '" title="Uitsplitsing per ' + heeftDetail[sleutel] + '">?</button>' : '';
+        return '<tr><td>' + b.naam + '</td>' +
+          '<td class="r">' + eur2(b.omzet) + '</td><td class="r">' + eur2(b.kost) + '</td>' +
+          '<td class="r">' + eur2(w) + '</td>' +
+          '<td class="r">' + (b.omzet > 0 ? Math.round(w / b.omzet * 100) + "%" : "—") + vraag + '</td></tr>';
+      }).join("")
     : '<tr><td colspan="5" class="leeg">Nog geen gefactureerde regels in ' + jaar + '.</td></tr>';
-
-  const materiaalRijen = winstPerMateriaal(jaar).filter(b => b.omzet || b.kost);
-  $("owMateriaalBody").innerHTML = materiaalRijen.length
-    ? materiaalRijen.map(b => rij(b.naam, b.omzet, b.kost)).join("")
-    : '<tr><td colspan="5" class="leeg">Nog geen materiaal gefactureerd in ' + jaar + '.</td></tr>';
-
-  const werkStukRijen = winstPerWerkStuk(jaar).filter(b => b.omzet || b.kost);
-  $("owWerkStukBody").innerHTML = werkStukRijen.length
-    ? werkStukRijen.map(b => rij(b.naam, b.omzet, b.kost)).join("")
-    : '<tr><td colspan="5" class="leeg">Nog geen werk-per-stuk gefactureerd in ' + jaar + '.</td></tr>';
+  $("owBronBody").querySelectorAll("[data-bron]").forEach(b =>
+    b.addEventListener("click", () => toonBronUitleg(jaar, b.dataset.bron)));
 
   renderCorrecties(jaar);
 }
@@ -5390,7 +5408,7 @@ function toggleHint(id){
   const el = $(id);
   el.style.display = el.style.display === "none" ? "" : "none";
 }
-[["owMateriaalVraag", "owMateriaalHint"], ["owWerkStukVraag", "owWerkStukHint"], ["owCorrectiesVraag", "owCorrectiesHint"]]
+[["owCorrectiesVraag", "owCorrectiesHint"]]
   .forEach(([knopId, hintId]) => $(knopId).addEventListener("click", () => toggleHint(hintId)));
 
 function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); renderKostensoorten(); }
