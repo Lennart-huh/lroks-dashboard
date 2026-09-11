@@ -6034,7 +6034,10 @@ async function openOfferte(id){
   $("offVastePrijs").value = o.prijstype === "vast" ? (o.bedrag_excl ?? "") : "";
   $("offNotities").value = o.notities || "";
   $("offVerwijder").style.display = "inline-block";
-  $("offAccepteren").style.display = o.status === "geaccepteerd" ? "none" : "inline-block";
+  // status 'geaccepteerd' zegt niets over of er al een project bestaat (dat
+  // zet je apart via de knop hieronder) — dus die blijft zichtbaar tot er
+  // echt een project aan hangt, anders kom je vast te zitten
+  $("offAccepteren").style.display = o.project_id ? "none" : "inline-block";
   const { data } = await db.from("offerte_regels").select("*").eq("offerte_id", id).order("aangemaakt_op");
   offerteRegels = (data || []).map(r => ({
     omschrijving: r.omschrijving, eenheid: r.eenheid, aantal: Number(r.aantal), prijs: Number(r.prijs), product_id: r.product_id
@@ -6046,6 +6049,12 @@ async function openOfferte(id){
 }
 
 $("offOpslaan").addEventListener("click", async () => {
+  // status 'geaccepteerd' zegt niets over of er al een project bestaat —
+  // dat gebeurt alleen via de aparte 'Accepteren'-knop. Onthoud dat hier
+  // (opslaan zelf raakt project_id nooit aan) zodat die knop na het
+  // opslaan niet per ongeluk verdwijnt zonder dat er een project is.
+  const bestaandProjectId = bewerkOfferteId
+    ? (offerteData.find(x => x.id === bewerkOfferteId) || {}).project_id || null : null;
   const nummer = $("offNummer").value.trim();
   const vast = offertePrijstype === "vast";
   if (!vast && !offerteRegels.length) { toast("Voeg minstens 1 regel toe"); return; }
@@ -6083,7 +6092,7 @@ $("offOpslaan").addEventListener("click", async () => {
   toast("Offerte opgeslagen");
   bewerkOfferteId = offerteId;
   $("offVerwijder").style.display = "inline-block";
-  $("offAccepteren").style.display = offerteStatus === "geaccepteerd" ? "none" : "inline-block";
+  $("offAccepteren").style.display = bestaandProjectId ? "none" : "inline-block";
   await herlaadOffertes();
 });
 
