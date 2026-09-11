@@ -130,10 +130,10 @@ main{flex:1;padding:26px 22px 90px;min-width:0}
 #ogSvg .og-nul{stroke:var(--ink3)}
 #ogSvg rect.og-bar{cursor:pointer}
 
-.btw-vraag{width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--surface2);
+.info-vraag{width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--surface2);
   color:var(--ink2);font-family:'IBM Plex Mono',monospace;font-size:.68rem;font-weight:600;cursor:pointer;
   line-height:1;padding:0;margin-left:6px;vertical-align:middle}
-.btw-vraag:hover{border-color:var(--ink3);color:var(--ink)}
+.info-vraag:hover{border-color:var(--ink3);color:var(--ink)}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:none;
   align-items:flex-start;justify-content:center;padding:60px 16px;overflow-y:auto}
 .overlay.open{display:flex}
@@ -876,8 +876,9 @@ nav.onderbalk{display:none}
             <tbody id="owBronBody"></tbody>
           </table>
         </div>
-        <h3 style="font-size:.95rem;margin:0 0 10px">Winst per materiaal</h3>
-        <div class="hint" style="margin-bottom:10px">Uitsplitsing van de regel 'Materiaal' hierboven, per product — zo zie je welke
+        <h3 style="font-size:.95rem;margin:0 0 10px">Winst per materiaal
+          <button type="button" class="info-vraag" id="owMateriaalVraag" title="Uitleg">?</button></h3>
+        <div class="hint" id="owMateriaalHint" style="margin-bottom:10px;display:none">Uitsplitsing van de regel 'Materiaal' hierboven, per product — zo zie je welke
           artikelen echt winst opleveren en welke nauwelijks iets doen.</div>
         <div class="tbl-wrap" style="margin-bottom:20px">
           <table>
@@ -885,8 +886,9 @@ nav.onderbalk{display:none}
             <tbody id="owMateriaalBody"></tbody>
           </table>
         </div>
-        <h3 style="font-size:.95rem;margin:0 0 10px">Winst per werk-per-stuk</h3>
-        <div class="hint" style="margin-bottom:10px">Klussen tegen een vaste vergoeding per stuk (bv. een ombouw), los van
+        <h3 style="font-size:.95rem;margin:0 0 10px">Winst per werk-per-stuk
+          <button type="button" class="info-vraag" id="owWerkStukVraag" title="Uitleg">?</button></h3>
+        <div class="hint" id="owWerkStukHint" style="margin-bottom:10px;display:none">Klussen tegen een vaste vergoeding per stuk (bv. een ombouw), los van
           gewone materiaalverkoop. Zet een product bij Producten in de categorie 'Werk per stuk' om 'm hier te laten
           meetellen — het invulformulier waarmee je factureert blijft ongewijzigd.</div>
         <div class="tbl-wrap" style="margin-bottom:20px">
@@ -895,8 +897,9 @@ nav.onderbalk{display:none}
             <tbody id="owWerkStukBody"></tbody>
           </table>
         </div>
-        <h3 style="font-size:.95rem;margin:0 0 10px">Overige boekingen (buiten facturen om)</h3>
-        <div class="hint" style="margin-bottom:10px">Voor omzet of kosten die niet uit een factuur in de app komen — bv. omzet van voor je
+        <h3 style="font-size:.95rem;margin:0 0 10px">Overige boekingen (buiten facturen om)
+          <button type="button" class="info-vraag" id="owCorrectiesVraag" title="Uitleg">?</button></h3>
+        <div class="hint" id="owCorrectiesHint" style="margin-bottom:10px;display:none">Voor omzet of kosten die niet uit een factuur in de app komen — bv. omzet van voor je
           overstapte, of losse in-/uitgaande bedragen. Telt mee in alle bedragen hierboven en bij Belasting/BTW.</div>
         <div class="tbl-wrap" style="margin-bottom:14px">
           <table>
@@ -5313,7 +5316,7 @@ function renderBtw(){
   $("btKwartaal").textContent = ditJaar ? eur2(f.btwUit[kNu] - f.btwIn[kNu]) : "—";
   $("btKwartaalSub").textContent = ditJaar ? "K" + (kNu + 1) + " " + jaar : jaar + " is afgerond";
 
-  const vraag = k => '<button type="button" class="btw-vraag" data-btwjaar="' + jaar + '" data-btwk="' + k +
+  const vraag = k => '<button type="button" class="info-vraag" data-btwjaar="' + jaar + '" data-btwk="' + k +
     '" title="Waar komt dit vandaan?">?</button>';
   const rij = (naam, u, v, chip, extra, k) =>
     '<tr' + (extra || '') + '><td>' + naam + '</td><td class="r">' + eur2(u) + '</td>' +
@@ -5381,6 +5384,14 @@ $("btwUitlegSluit").addEventListener("click", () => $("btwUitlegOverlay").classL
 $("btwUitlegOverlay").addEventListener("click", e => {
   if (e.target === $("btwUitlegOverlay")) $("btwUitlegOverlay").classList.remove("open");
 });
+
+/* Uitlegtekst onder een kop, verborgen tot je op het vraagteken ernaast klikt. */
+function toggleHint(id){
+  const el = $(id);
+  el.style.display = el.style.display === "none" ? "" : "none";
+}
+[["owMateriaalVraag", "owMateriaalHint"], ["owWerkStukVraag", "owWerkStukHint"], ["owCorrectiesVraag", "owCorrectiesHint"]]
+  .forEach(([knopId, hintId]) => $(knopId).addEventListener("click", () => toggleHint(hintId)));
 
 function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); renderKostensoorten(); }
 
