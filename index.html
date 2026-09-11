@@ -759,6 +759,14 @@ nav.onderbalk{display:none}
               </table>
             </div>
           </div>
+          <div class="veld" id="prVerwachtBlok" style="display:none"><label>Nog te gebruiken (uit offerte)</label>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>Product</th><th class="r">Verwacht aantal</th></tr></thead>
+                <tbody id="prVerwachtBody"></tbody>
+              </table>
+            </div>
+          </div>
           <div class="veld" id="prGebruikBlok" style="display:none"><label>Gebruikte producten (per dag)</label>
             <div class="tbl-wrap">
               <table>
@@ -943,11 +951,11 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Regels</label>
             <div class="tbl-wrap"><table>
-              <thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th>Eenheid</th><th class="r">Prijs</th><th class="r">Bedrag</th><th></th></tr></thead>
+              <thead id="offRegelsHead"><tr><th>Omschrijving</th><th class="r">Aantal</th><th>Eenheid</th><th class="r">Prijs</th><th class="r">Bedrag</th><th></th></tr></thead>
               <tbody id="offRegelsBody"></tbody>
             </table></div>
             <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
-              <div class="hint" style="margin-bottom:6px"><b>Product toevoegen</b> — uit voorraad, prijs komt uit de verkoopprijs</div>
+              <div class="hint" style="margin-bottom:6px"><b>Product toevoegen</b> — uit voorraad</div>
               <div class="rij2">
                 <div class="veld"><label>Zoek product</label>
                   <input type="search" id="ofrZoek" placeholder="naam, omschrijving of artikelnummer" autocomplete="off"></div>
@@ -958,12 +966,12 @@ nav.onderbalk{display:none}
                   <div class="hint" id="ofrZoekHint"></div></div>
                 <div class="veld"><label>Aantal</label><input type="number" id="ofrAantal" step="0.5" min="0" value="1"></div>
               </div>
-              <div class="rij2">
+              <div class="rij2" id="ofrPrijsRij">
                 <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="ofrPrijs" step="0.01" min="0" inputmode="decimal"></div>
-                <div class="veld" style="align-self:flex-end"><button type="button" class="knop klein stil" id="ofrToevoegen" style="width:100%">+ Product toevoegen</button></div>
               </div>
+              <button type="button" class="knop klein stil" id="ofrToevoegen" style="width:100%">+ Product toevoegen</button>
             </div>
-            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+            <div id="offVrijeRegelBlok" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
               <div class="hint" style="margin-bottom:6px"><b>Vrije regel</b> — losse tekst, bv. arbeid of een vast bedrag</div>
               <div class="rij2">
                 <div class="veld"><label>Omschrijving</label><input type="text" id="orOmschrijving" placeholder="bv. Aanleg groepenkast, of 'Project X — vaste prijs'"></div>
@@ -974,6 +982,13 @@ nav.onderbalk{display:none}
                 <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="orPrijs" step="0.01" min="0" inputmode="decimal"></div>
               </div>
               <button type="button" class="knop klein stil" id="orToevoegen">Regel toevoegen</button>
+            </div>
+            <div id="offVastBlok" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+              <div class="rij2">
+                <div class="veld"><label>Geschatte uren</label><input type="number" id="offGeschatUren" step="0.5" min="0" inputmode="decimal"></div>
+                <div class="veld"><label>Geschatte km</label><input type="number" id="offGeschatKm" step="1" min="0" inputmode="decimal"></div>
+              </div>
+              <div class="veld"><label>Vaste prijs (excl. btw, €)</label><input type="number" id="offVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
             </div>
             <div class="hint" style="margin-top:8px">Excl: <b id="offExcl">—</b> · BTW: <b id="offBtw">—</b> · Incl: <b id="offIncl">—</b></div>
           </div>
@@ -3334,6 +3349,22 @@ function laadKlusRegels(klusId){
   }));
 }
 
+/* Verwachte materialen uit de offerte waaruit dit project is ontstaan — puur
+   ter referentie, geen voorraad-koppeling. Wat je echt gebruikt, log je zoals
+   altijd los via het Invulformulier (kan meer of minder zijn dan verwacht). */
+async function laadProjectVerwacht(projectId){
+  const body = $("prVerwachtBody");
+  const { data, error } = await db.from("project_verwacht_materiaal")
+    .select("*").eq("project_id", projectId).order("naam");
+  if (error){ console.error(error); $("prVerwachtBlok").style.display = "none"; return; }
+  const lijst = data || [];
+  if (!lijst.length){ $("prVerwachtBlok").style.display = "none"; return; }
+  $("prVerwachtBlok").style.display = "block";
+  body.innerHTML = lijst.map(r =>
+    '<tr><td class="tekst">' + esc(r.naam) + '</td>' +
+    '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td></tr>').join("");
+}
+
 async function laadProjectGebruik(projectId){
   const body = $("prGebruikBody");
   body.innerHTML = '<tr><td colspan="4" class="leeg">Laden…</td></tr>';
@@ -3479,6 +3510,7 @@ $("projNieuw").addEventListener("click", () => {
   $("prKlussenBlok").style.display = "none";
   $("prUrenBlok").style.display = "none";
   $("prKmBlok").style.display = "none";
+  $("prVerwachtBlok").style.display = "none";
   $("prGebruikBlok").style.display = "none";
   $("prExtraBlok").style.display = "none";
   $("prFacturenBlok").style.display = "none";
@@ -3576,6 +3608,7 @@ function openProjectDetail(id){
     laadProjectUren(p.id);
     $("prKmBlok").style.display = "block";
     laadProjectKm(p.id);
+    laadProjectVerwacht(p.id);
     $("prGebruikBlok").style.display = "block";
     laadProjectGebruik(p.id);
     $("prExtraBlok").style.display = "block";
@@ -5700,28 +5733,47 @@ function genereerOffertePdf(o, k, I, regels){
   doc.text("Datum: " + fmtDatum(o.datum), R, y, { align: "right" });
   doc.text("Geldig tot: " + (o.geldig_tot ? fmtDatum(o.geldig_tot) : "-"), R, y + 4.5, { align: "right" });
 
+  const vast = o.prijstype === "vast";
   y = Math.max(ky, y + 9) + 6;
-  doc.autoTable({
-    startY: y,
-    margin: { left: L, right: 210 - R },
-    theme: "plain",
-    styles: { font: "helvetica", fontSize: 9, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: { bottom: 0.2 } },
-    headStyles: { fontStyle: "bold", fontSize: 8, textColor: 20, lineColor: [0, 0, 0], lineWidth: { bottom: 0.5 } },
-    columnStyles: {
-      1: { cellWidth: 22, halign: "right" }, 3: { cellWidth: 28, halign: "right" }, 4: { cellWidth: 28, halign: "right" }
-    },
-    head: [["Omschrijving", "Aantal", "Eenheid", "Prijs excl.", "Bedrag excl."]],
-    body: regels.map(r => [
-      r.omschrijving, r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") : "—", r.eenheid || "—",
-      eur2(r.prijs), eur2(Number(r.aantal) * Number(r.prijs))
-    ])
-  });
+  if (vast){
+    // vaste prijs: geen prijs per regel — alleen wat er verwacht wordt
+    // (producten/uren/km), de vaste prijs staat los eronder
+    const vasteRegels = regels.map(r => [r.omschrijving, r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") : "—", r.eenheid || "—"]);
+    if (o.geschat_uren) vasteRegels.push(["Arbeid", Number(o.geschat_uren).toLocaleString("nl-NL"), "uur"]);
+    if (o.geschat_km) vasteRegels.push(["Kilometers", Number(o.geschat_km).toLocaleString("nl-NL"), "km"]);
+    doc.autoTable({
+      startY: y,
+      margin: { left: L, right: 210 - R },
+      theme: "plain",
+      styles: { font: "helvetica", fontSize: 9, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: { bottom: 0.2 } },
+      headStyles: { fontStyle: "bold", fontSize: 8, textColor: 20, lineColor: [0, 0, 0], lineWidth: { bottom: 0.5 } },
+      columnStyles: { 1: { cellWidth: 22, halign: "right" } },
+      head: [["Omschrijving", "Aantal", "Eenheid"]],
+      body: vasteRegels
+    });
+  } else {
+    doc.autoTable({
+      startY: y,
+      margin: { left: L, right: 210 - R },
+      theme: "plain",
+      styles: { font: "helvetica", fontSize: 9, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: { bottom: 0.2 } },
+      headStyles: { fontStyle: "bold", fontSize: 8, textColor: 20, lineColor: [0, 0, 0], lineWidth: { bottom: 0.5 } },
+      columnStyles: {
+        1: { cellWidth: 22, halign: "right" }, 3: { cellWidth: 28, halign: "right" }, 4: { cellWidth: 28, halign: "right" }
+      },
+      head: [["Omschrijving", "Aantal", "Eenheid", "Prijs excl.", "Bedrag excl."]],
+      body: regels.map(r => [
+        r.omschrijving, r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") : "—", r.eenheid || "—",
+        eur2(r.prijs), eur2(Number(r.aantal) * Number(r.prijs))
+      ])
+    });
+  }
 
   y = doc.lastAutoTable.finalY + 8;
   if (y > 255) { doc.addPage(); y = 20; }
   const totX = R - 60;
   doc.setFontSize(9);
-  doc.text("Subtotaal ex. BTW", totX, y); doc.text(eur2(o.bedrag_excl || 0), R, y, { align: "right" });
+  doc.text(vast ? "Vaste prijs ex. BTW" : "Subtotaal ex. BTW", totX, y); doc.text(eur2(o.bedrag_excl || 0), R, y, { align: "right" });
   y += 5;
   doc.text("BTW " + btwPct() + "%", totX, y); doc.text(eur2(o.btw_bedrag || 0), R, y, { align: "right" });
   y += 3;
@@ -5814,17 +5866,28 @@ function zetOfferteStatus(s){
 ["Concept","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
   $("offStatus" + n).addEventListener("click", () => zetOfferteStatus(n.toLowerCase())));
 
-/* Bepaalt wat er gebeurt als de offerte geaccepteerd wordt: 'product' wordt
-   een gewoon project (per regel factureren), 'vast' wordt een vaste-prijs
-   project met de offertetotaal als vaste prijs — zie offAccepteren. */
+/* Bepaalt hoe de offerte zelf werkt én wat er gebeurt bij accepteren — zie
+   offAccepteren. 'product': regels met prijs per stuk, zoals nu, opgeteld
+   tot de offertetotaal; wordt een gewoon project waar je per regel/product
+   factureert. 'vast': geen prijzen per regel — je kiest verwachte producten
+   (alleen aantal) en vult geschatte uren/km in, en bepaalt zelf de vaste
+   prijs; wordt een vaste-prijs project met die prijs, gevuld met dezelfde
+   schatting voor de vergelijking 'vaste prijs vs. werkelijk'. In beide
+   gevallen komen gekoppelde producten in het project te staan als 'nog te
+   gebruiken' (zie laadProjectVerwacht) — puur ter referentie. */
 let offertePrijstype = "product";
 function zetOffertePrijstype(t){
   offertePrijstype = t;
   $("offPrijstypeProduct").classList.toggle("aan", t === "product");
   $("offPrijstypeVast").classList.toggle("aan", t === "vast");
+  $("ofrPrijsRij").style.display = t === "vast" ? "none" : "";
+  $("offVrijeRegelBlok").style.display = t === "vast" ? "none" : "";
+  $("offVastBlok").style.display = t === "vast" ? "block" : "none";
+  toonOffRegels();
 }
 $("offPrijstypeProduct").addEventListener("click", () => zetOffertePrijstype("product"));
 $("offPrijstypeVast").addEventListener("click", () => zetOffertePrijstype("vast"));
+$("offVastePrijs").addEventListener("input", () => { if (offertePrijstype === "vast") toonOffRegels(); });
 
 /* Na acceptatie: welke gekoppelde producten heb je niet genoeg op voorraad,
    zodat je niet zelf hoeft na te zoeken wat je moet bijbestellen. */
@@ -5850,21 +5913,30 @@ function renderOffBestellijst(){
 }
 
 function toonOffRegels(){
+  const vast = offertePrijstype === "vast";
+  $("offRegelsHead").innerHTML = vast
+    ? '<tr><th>Product</th><th class="r">Aantal</th><th>Eenheid</th><th></th></tr>'
+    : '<tr><th>Omschrijving</th><th class="r">Aantal</th><th>Eenheid</th><th class="r">Prijs</th><th class="r">Bedrag</th><th></th></tr>';
   const body = $("offRegelsBody");
   body.innerHTML = !offerteRegels.length
-    ? '<tr><td colspan="6" class="leeg">Nog geen regels.</td></tr>'
-    : offerteRegels.map((r, i) =>
-        '<tr><td class="tekst">' + esc(r.omschrijving) + (r.product_id ? ' <span class="chip grijs">PRODUCT</span>' : '') + '</td>' +
-        '<td class="r">' + (r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") : "—") + '</td>' +
-        '<td>' + esc(r.eenheid || "—") + '</td>' +
-        '<td class="r">' + eur2(r.prijs) + '</td>' +
-        '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td>' +
-        '<td class="r"><button class="verwijder" data-ori="' + i + '">✕</button></td></tr>').join("");
+    ? '<tr><td colspan="' + (vast ? 4 : 6) + '" class="leeg">Nog geen regels.</td></tr>'
+    : offerteRegels.map((r, i) => vast
+        ? '<tr><td class="tekst">' + esc(r.omschrijving) + '</td>' +
+          '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
+          '<td>' + esc(r.eenheid || "—") + '</td>' +
+          '<td class="r"><button class="verwijder" data-ori="' + i + '">✕</button></td></tr>'
+        : '<tr><td class="tekst">' + esc(r.omschrijving) + (r.product_id ? ' <span class="chip grijs">PRODUCT</span>' : '') + '</td>' +
+          '<td class="r">' + (r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") : "—") + '</td>' +
+          '<td>' + esc(r.eenheid || "—") + '</td>' +
+          '<td class="r">' + eur2(r.prijs) + '</td>' +
+          '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td>' +
+          '<td class="r"><button class="verwijder" data-ori="' + i + '">✕</button></td></tr>').join("");
   body.querySelectorAll("[data-ori]").forEach(k => k.addEventListener("click", () => {
     offerteRegels.splice(Number(k.dataset.ori), 1);
     toonOffRegels();
   }));
-  const excl = offerteRegels.reduce((s, r) => s + Number(r.aantal) * Number(r.prijs), 0);
+  const excl = vast ? (parseFloat($("offVastePrijs").value) || 0)
+    : offerteRegels.reduce((s, r) => s + Number(r.aantal) * Number(r.prijs), 0);
   const btw = r2(excl * btwPct() / 100);
   $("offExcl").textContent = eur2(excl);
   $("offBtw").textContent = eur2(btw);
@@ -5874,17 +5946,19 @@ function toonOffRegels(){
 }
 
 $("ofrToevoegen").addEventListener("click", () => {
+  const vast = offertePrijstype === "vast";
   const productId = $("ofrProduct").value;
   const aantal = parseFloat($("ofrAantal").value);
-  const prijs = parseFloat($("ofrPrijs").value);
+  const prijs = vast ? 0 : parseFloat($("ofrPrijs").value);
   if (!productId) { toast("Kies een product"); return; }
-  if (!(aantal > 0) || !(prijs >= 0)) { toast("Vul aantal en prijs in"); return; }
+  if (!(aantal > 0) || (!vast && !(prijs >= 0))) { toast("Vul aantal" + (vast ? "" : " en prijs") + " in"); return; }
   const prod = cache.producten.find(p => p.id === productId);
   offerteRegels.push({
     omschrijving: prod ? prod.naam : "", eenheid: prod ? (prod.eenheid || "") : "",
     aantal, prijs: r2(prijs), product_id: productId
   });
-  $("ofrAantal").value = 1; $("ofrPrijs").value = prod ? (prod.verkoopprijs || 0) : "";
+  $("ofrAantal").value = 1;
+  if (!vast) $("ofrPrijs").value = prod ? (prod.verkoopprijs || 0) : "";
   toonOffRegels();
 });
 
@@ -5930,6 +6004,7 @@ function offerteFormLeeg(){
     String(geldigTot.getMonth() + 1).padStart(2, "0") + "-" + String(geldigTot.getDate()).padStart(2, "0");
   zetOfferteStatus("concept");
   zetOffertePrijstype("product");
+  $("offGeschatUren").value = ""; $("offGeschatKm").value = ""; $("offVastePrijs").value = "";
   $("offNotities").value = "";
   $("offVerwijder").style.display = "none";
   $("offAccepteren").style.display = "none";
@@ -5954,6 +6029,9 @@ async function openOfferte(id){
   $("offGeldigTot").value = o.geldig_tot || "";
   zetOfferteStatus(o.status || "concept");
   zetOffertePrijstype(o.prijstype || "product");
+  $("offGeschatUren").value = o.geschat_uren ?? "";
+  $("offGeschatKm").value = o.geschat_km ?? "";
+  $("offVastePrijs").value = o.prijstype === "vast" ? (o.bedrag_excl ?? "") : "";
   $("offNotities").value = o.notities || "";
   $("offVerwijder").style.display = "inline-block";
   $("offAccepteren").style.display = o.status === "geaccepteerd" ? "none" : "inline-block";
@@ -5969,7 +6047,9 @@ async function openOfferte(id){
 
 $("offOpslaan").addEventListener("click", async () => {
   const nummer = $("offNummer").value.trim();
-  if (!offerteRegels.length) { toast("Voeg minstens 1 regel toe"); return; }
+  const vast = offertePrijstype === "vast";
+  if (!vast && !offerteRegels.length) { toast("Voeg minstens 1 regel toe"); return; }
+  if (vast && !(parseFloat($("offVastePrijs").value) > 0)) { toast("Vul de vaste prijs in"); return; }
   const tot = toonOffRegels();
   const rij = {
     nummer: nummer || null,
@@ -5978,6 +6058,8 @@ $("offOpslaan").addEventListener("click", async () => {
     geldig_tot: $("offGeldigTot").value || null,
     status: offerteStatus,
     prijstype: offertePrijstype,
+    geschat_uren: vast ? (parseFloat($("offGeschatUren").value) || null) : null,
+    geschat_km: vast ? (parseFloat($("offGeschatKm").value) || null) : null,
     bedrag_excl: tot.excl, btw_bedrag: tot.btw, bedrag_incl: tot.incl,
     notities: $("offNotities").value.trim() || null
   };
@@ -6030,14 +6112,33 @@ $("offAccepteren").addEventListener("click", async () => {
   const naam = (klantNaam(o.klant_id) || "Nieuw project") + " — " + (o.nummer || "offerte");
   // offerte-prijstype bepaalt het project: 'vast' wordt een vaste-prijs
   // project met de offertetotaal als vaste prijs, 'product' een gewoon
-  // project waar je (net als de offerte zelf) per regel/product factureert
+  // project waar je (net als de offerte zelf) per regel/product factureert.
+  // In beide gevallen gaan de gekoppelde producten mee als 'nog te
+  // gebruiken'-lijstje in het project (puur ter referentie, geen
+  // voorraad-koppeling) — bij 'vast' voeden ze ook de geschatte
+  // materiaalkosten (kostprijs) voor de vergelijking 'vaste prijs vs. werkelijk'.
   const vast = o.prijstype === "vast";
+  const { data: regelsData } = await db.from("offerte_regels").select("*").eq("offerte_id", o.id);
+  const producten = (regelsData || []).filter(r => r.product_id);
+  const geschatKosten = producten.reduce((s, r) => {
+    const p = cache.producten.find(x => x.id === r.product_id);
+    return s + Number(r.aantal || 0) * Number(p ? (p.inkoopprijs || 0) : 0);
+  }, 0);
   const { data: nieuw, error } = await db.from("projecten").insert({
     naam, klant_id: o.klant_id || null, status: "open",
     omschrijving: "Ontstaan uit offerte " + (o.nummer || ""),
-    prijstype: vast ? "vast" : "uurbasis", vaste_prijs: vast ? (o.bedrag_excl || 0) : null
+    prijstype: vast ? "vast" : "uurbasis",
+    vaste_prijs: vast ? (o.bedrag_excl || 0) : null,
+    geschat_uren: vast ? (o.geschat_uren || null) : null,
+    geschat_kosten: vast ? r2(geschatKosten) : null,
+    geschat_km: vast ? (o.geschat_km || null) : null
   }).select().single();
   if (error || !nieuw){ console.error(error); toast("Project aanmaken mislukt"); return; }
+  if (producten.length){
+    await db.from("project_verwacht_materiaal").insert(producten.map(r => ({
+      project_id: nieuw.id, product_id: r.product_id, naam: r.omschrijving, aantal: r.aantal
+    })));
+  }
   await db.from("offertes").update({ status: "geaccepteerd", project_id: nieuw.id }).eq("id", bewerkOfferteId);
   cache.projecten.push(nieuw);
   vulSelects();
