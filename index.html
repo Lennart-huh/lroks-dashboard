@@ -6124,19 +6124,23 @@ $("offKlantKopieer").addEventListener("click", async () => {
   catch (e) { console.error(e); toast("Kopiëren mislukt"); }
 });
 
-/* Maakt het project van een geaccepteerde offerte — gedeeld door de knop
-   'Accepteren' hieronder én door offOpslaan, dat dit vanzelf aanroept zodra
-   je Status boven in het formulier op Geaccepteerd zet en opslaat (dan hoef
-   je niet ook nog apart op deze knop te drukken). */
+/* Maakt het project (en bij vaste prijs: de klus) van een geaccepteerde
+   offerte — gedeeld door de knop 'Accepteren' hieronder én door offOpslaan,
+   dat dit vanzelf aanroept zodra je Status boven in het formulier op
+   Geaccepteerd zet en opslaat (dan hoef je niet ook nog apart op deze knop
+   te drukken).
+   Offerte-prijstype bepaalt wat er ontstaat: 'product' wordt een gewoon
+   project waar je per regel/product factureert. 'vast' wordt een klus met
+   de offertetotaal als vaste prijs — die klus moet ergens in een project
+   hangen, dus er komt (voorlopig) een eigen nieuw project met dezelfde naam
+   omheen; versleep 'm later gerust naar een bestaand project via het
+   Project-veld bij de klus zelf (Invulformulier > Klus, of Klussen-tabblad).
+   In beide gevallen gaan gekoppelde producten mee als 'nog te gebruiken'-
+   lijstje in het project (puur ter referentie, geen voorraad-koppeling) —
+   bij 'vast' voeden ze ook de geschatte materiaalkosten (kostprijs) voor de
+   vergelijking 'vaste prijs vs. werkelijk' bij de klus. */
 async function accepteerOfferte(o){
   const naam = o.nummer || "Nieuw project";
-  // offerte-prijstype bepaalt het project: 'vast' wordt een vaste-prijs
-  // project met de offertetotaal als vaste prijs, 'product' een gewoon
-  // project waar je (net als de offerte zelf) per regel/product factureert.
-  // In beide gevallen gaan de gekoppelde producten mee als 'nog te
-  // gebruiken'-lijstje in het project (puur ter referentie, geen
-  // voorraad-koppeling) — bij 'vast' voeden ze ook de geschatte
-  // materiaalkosten (kostprijs) voor de vergelijking 'vaste prijs vs. werkelijk'.
   const vast = o.prijstype === "vast";
   const { data: regelsData } = await db.from("offerte_regels").select("*").eq("offerte_id", o.id);
   const producten = (regelsData || []).filter(r => r.product_id);
@@ -6146,14 +6150,19 @@ async function accepteerOfferte(o){
   }, 0);
   const { data: nieuw, error } = await db.from("projecten").insert({
     naam, klant_id: o.klant_id || null, status: "open",
-    omschrijving: "Ontstaan uit offerte " + (o.nummer || ""),
-    prijstype: vast ? "vast" : "uurbasis",
-    vaste_prijs: vast ? (o.bedrag_excl || 0) : null,
-    geschat_uren: vast ? (o.geschat_uren || null) : null,
-    geschat_kosten: vast ? r2(geschatKosten) : null,
-    geschat_km: vast ? (o.geschat_km || null) : null
+    omschrijving: "Ontstaan uit offerte " + (o.nummer || "")
   }).select().single();
   if (error || !nieuw){ console.error(error); toast("Project aanmaken mislukt"); return; }
+  if (vast){
+    const { error: klusFout } = await db.from("klussen").insert({
+      project_id: nieuw.id, naam, prijstype: "vast", status: "open",
+      vaste_prijs: o.bedrag_excl || 0,
+      geschat_uren: o.geschat_uren || null,
+      geschat_kosten: r2(geschatKosten),
+      geschat_km: o.geschat_km || null
+    });
+    if (klusFout) console.error(klusFout);
+  }
   if (producten.length){
     await db.from("project_verwacht_materiaal").insert(producten.map(r => ({
       project_id: nieuw.id, product_id: r.product_id, naam: r.omschrijving, aantal: r.aantal
@@ -6161,12 +6170,19 @@ async function accepteerOfferte(o){
   }
   await db.from("offertes").update({ status: "geaccepteerd", project_id: nieuw.id }).eq("id", o.id);
   cache.projecten.push(nieuw);
+  if (vast){
+    const { data: klussenData } = await db.from("klussen").select("*").eq("project_id", nieuw.id);
+    cache.klussen.push(...(klussenData || []));
+  }
   vulSelects();
-  toast("Project '" + naam + "' aangemaakt");
+  ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
+    vulKlusSelect(projId, ["uKlus","kKlus","pKlus","erKlus"][i]));
+  toast(vast ? "Klus '" + naam + "' aangemaakt" : "Project '" + naam + "' aangemaakt");
   $("offDetail").style.display = "none";
   await herlaadOffertes();
   toonTab("projecten");
   renderProjecten();
+  renderKlussenTab();
 }
 
 $("offAccepteren").addEventListener("click", async () => {
