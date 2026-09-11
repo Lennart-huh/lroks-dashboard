@@ -5906,7 +5906,10 @@ function offerteFormLeeg(){
   $("offNummer").value = volgendOfferteNummer();
   $("offKlant").value = "";
   $("offDatum").value = vandaagISO();
-  $("offGeldigTot").value = "";
+  const geldigTot = new Date();
+  geldigTot.setDate(geldigTot.getDate() + 14);
+  $("offGeldigTot").value = geldigTot.getFullYear() + "-" +
+    String(geldigTot.getMonth() + 1).padStart(2, "0") + "-" + String(geldigTot.getDate()).padStart(2, "0");
   zetOfferteStatus("concept");
   $("offNotities").value = "";
   $("offVerwijder").style.display = "none";
