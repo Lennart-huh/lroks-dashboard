@@ -6124,7 +6124,7 @@ $("offKlantKopieer").addEventListener("click", async () => {
    je Status boven in het formulier op Geaccepteerd zet en opslaat (dan hoef
    je niet ook nog apart op deze knop te drukken). */
 async function accepteerOfferte(o){
-  const naam = (klantNaam(o.klant_id) || "Nieuw project") + " — " + (o.nummer || "offerte");
+  const naam = o.nummer || "Nieuw project";
   // offerte-prijstype bepaalt het project: 'vast' wordt een vaste-prijs
   // project met de offertetotaal als vaste prijs, 'product' een gewoon
   // project waar je (net als de offerte zelf) per regel/product factureert.
