@@ -935,6 +935,15 @@ nav.onderbalk{display:none}
               <button type="button" id="offStatusAfgewezen">Afgewezen</button>
             </div>
           </div>
+          <div class="veld"><label>Prijstype</label>
+            <div class="schakel">
+              <button type="button" id="offPrijstypeProduct" class="aan">Prijs per product</button>
+              <button type="button" id="offPrijstypeVast">Vaste prijs</button>
+            </div>
+            <div class="hint" style="margin-top:6px">Bepaalt wat er gebeurt als je deze offerte accepteert: bij 'Prijs per
+              product' wordt het een gewoon project waar je per regel factureert; bij 'Vaste prijs' wordt de totaalprijs
+              hieronder de vaste prijs van het project.</div>
+          </div>
           <div class="veld"><label>Regels</label>
             <div class="tbl-wrap"><table>
               <thead><tr><th>Omschrijving</th><th class="r">Aantal</th><th>Eenheid</th><th class="r">Prijs</th><th class="r">Bedrag</th><th></th></tr></thead>
@@ -5808,6 +5817,18 @@ function zetOfferteStatus(s){
 ["Concept","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
   $("offStatus" + n).addEventListener("click", () => zetOfferteStatus(n.toLowerCase())));
 
+/* Bepaalt wat er gebeurt als de offerte geaccepteerd wordt: 'product' wordt
+   een gewoon project (per regel factureren), 'vast' wordt een vaste-prijs
+   project met de offertetotaal als vaste prijs — zie offAccepteren. */
+let offertePrijstype = "product";
+function zetOffertePrijstype(t){
+  offertePrijstype = t;
+  $("offPrijstypeProduct").classList.toggle("aan", t === "product");
+  $("offPrijstypeVast").classList.toggle("aan", t === "vast");
+}
+$("offPrijstypeProduct").addEventListener("click", () => zetOffertePrijstype("product"));
+$("offPrijstypeVast").addEventListener("click", () => zetOffertePrijstype("vast"));
+
 /* Na acceptatie: welke gekoppelde producten heb je niet genoeg op voorraad,
    zodat je niet zelf hoeft na te zoeken wat je moet bijbestellen. */
 function renderOffBestellijst(){
@@ -5911,6 +5932,7 @@ function offerteFormLeeg(){
   $("offGeldigTot").value = geldigTot.getFullYear() + "-" +
     String(geldigTot.getMonth() + 1).padStart(2, "0") + "-" + String(geldigTot.getDate()).padStart(2, "0");
   zetOfferteStatus("concept");
+  zetOffertePrijstype("product");
   $("offNotities").value = "";
   $("offVerwijder").style.display = "none";
   $("offAccepteren").style.display = "none";
@@ -5934,6 +5956,7 @@ async function openOfferte(id){
   $("offDatum").value = o.datum || "";
   $("offGeldigTot").value = o.geldig_tot || "";
   zetOfferteStatus(o.status || "concept");
+  zetOffertePrijstype(o.prijstype || "product");
   $("offNotities").value = o.notities || "";
   $("offVerwijder").style.display = "inline-block";
   $("offAccepteren").style.display = o.status === "geaccepteerd" ? "none" : "inline-block";
@@ -5957,6 +5980,7 @@ $("offOpslaan").addEventListener("click", async () => {
     datum: $("offDatum").value || vandaagISO(),
     geldig_tot: $("offGeldigTot").value || null,
     status: offerteStatus,
+    prijstype: offertePrijstype,
     bedrag_excl: tot.excl, btw_bedrag: tot.btw, bedrag_incl: tot.incl,
     notities: $("offNotities").value.trim() || null
   };
@@ -6007,10 +6031,14 @@ $("offAccepteren").addEventListener("click", async () => {
   if (!o) return;
   if (!confirm("Offerte accepteren en een nieuw project aanmaken? Alles is daarna nog aan te passen in het project zelf.")) return;
   const naam = (klantNaam(o.klant_id) || "Nieuw project") + " — " + (o.nummer || "offerte");
+  // offerte-prijstype bepaalt het project: 'vast' wordt een vaste-prijs
+  // project met de offertetotaal als vaste prijs, 'product' een gewoon
+  // project waar je (net als de offerte zelf) per regel/product factureert
+  const vast = o.prijstype === "vast";
   const { data: nieuw, error } = await db.from("projecten").insert({
     naam, klant_id: o.klant_id || null, status: "open",
     omschrijving: "Ontstaan uit offerte " + (o.nummer || ""),
-    prijstype: "vast", vaste_prijs: o.bedrag_excl || 0
+    prijstype: vast ? "vast" : "uurbasis", vaste_prijs: vast ? (o.bedrag_excl || 0) : null
   }).select().single();
   if (error || !nieuw){ console.error(error); toast("Project aanmaken mislukt"); return; }
   await db.from("offertes").update({ status: "geaccepteerd", project_id: nieuw.id }).eq("id", bewerkOfferteId);
