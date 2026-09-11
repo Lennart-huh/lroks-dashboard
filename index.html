@@ -59,6 +59,7 @@ button{font-family:inherit}
 }
 .veld textarea{min-height:110px;resize:vertical;line-height:1.5}
 .veld input:focus,.veld select:focus,.veld textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.veld input[readonly]{color:var(--ink2);background:var(--surface2);cursor:default}
 .rij2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .knop{width:100%;padding:13px;border:none;border-radius:8px;background:var(--accent);color:var(--bg);font-weight:600;font-size:.95rem;cursor:pointer;letter-spacing:.03em;margin-top:4px}
 .knop:disabled{opacity:.55;cursor:wait}
@@ -988,8 +989,10 @@ nav.onderbalk{display:none}
                 <div class="veld"><label>Geschatte uren</label><input type="number" id="offGeschatUren" step="0.5" min="0" inputmode="decimal"></div>
                 <div class="veld"><label>Geschatte km</label><input type="number" id="offGeschatKm" step="1" min="0" inputmode="decimal"></div>
               </div>
-              <div class="veld"><label>Vaste prijs (excl. btw, €)</label><input type="number" id="offVastePrijs" step="0.01" min="0" inputmode="decimal">
-                <div class="hint" id="offGeschatProducten" style="margin-top:6px"></div></div>
+              <div class="rij2" style="margin-top:13px">
+                <div class="veld"><label>Geschatte prijs producten (€)</label><input type="text" id="offGeschatProducten" readonly></div>
+                <div class="veld"><label>Vaste prijs (excl. btw, €)</label><input type="number" id="offVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
+              </div>
             </div>
             <div class="hint" style="margin-top:8px">Excl: <b id="offExcl">—</b> · BTW: <b id="offBtw">—</b> · Incl: <b id="offIncl">—</b></div>
           </div>
@@ -5951,8 +5954,7 @@ function toonOffRegels(){
   // bij 'vast' is de prijs per regel alleen een hulpmiddel — de offertetotaal
   // is de vaste prijs die je zelf invult, niet de optelling hieronder
   const excl = vast ? (parseFloat($("offVastePrijs").value) || 0) : regelsTotaal;
-  $("offGeschatProducten").textContent = vast && offerteRegels.length
-    ? "Geschat op basis van producten hierboven: " + eur2(regelsTotaal) : "";
+  $("offGeschatProducten").value = eur2(regelsTotaal);
   const btw = r2(excl * btwPct() / 100);
   $("offExcl").textContent = eur2(excl);
   $("offBtw").textContent = eur2(btw);
