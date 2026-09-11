@@ -990,7 +990,7 @@ nav.onderbalk{display:none}
                 <div class="veld"><label>Geschatte km</label><input type="number" id="offGeschatKm" step="1" min="0" inputmode="decimal"></div>
               </div>
               <div class="rij2" style="margin-top:13px">
-                <div class="veld"><label>Geschatte prijs producten (€)</label><input type="text" id="offGeschatProducten" readonly></div>
+                <div class="veld"><label>Geschatte prijs producten (€)</label><input type="number" id="offGeschatProducten" step="0.01" min="0" inputmode="decimal"></div>
                 <div class="veld"><label>Vaste prijs (excl. btw, €)</label><input type="number" id="offVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
               </div>
             </div>
@@ -5954,7 +5954,9 @@ function toonOffRegels(){
   // bij 'vast' is de prijs per regel alleen een hulpmiddel — de offertetotaal
   // is de vaste prijs die je zelf invult, niet de optelling hieronder
   const excl = vast ? (parseFloat($("offVastePrijs").value) || 0) : regelsTotaal;
-  $("offGeschatProducten").value = eur2(regelsTotaal);
+  // suggestie op basis van de regels hierboven — pas 'm gerust zelf aan,
+  // die aanpassing blijft staan tot je weer een product toevoegt/verwijdert
+  $("offGeschatProducten").value = regelsTotaal ? r2(regelsTotaal) : "";
   const btw = r2(excl * btwPct() / 100);
   $("offExcl").textContent = eur2(excl);
   $("offBtw").textContent = eur2(btw);
