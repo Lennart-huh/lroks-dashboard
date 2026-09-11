@@ -3553,7 +3553,19 @@ $("prOpslaan").addEventListener("click", async () => {
 
 $("prVerwijder").addEventListener("click", async () => {
   if (!bewerkProjectId) return;
-  if (!confirm("Dit project verwijderen?")) return;
+  if (!confirm("Dit project verwijderen? Gebruikte producten (ook die van klussen binnen dit project) gaan terug de voorraad in.")) return;
+  // gebruikte producten eerst terugboeken naar voorraad — de database
+  // ontkoppelt deze mutaties bij het verwijderen (SET NULL) maar telt de
+  // voorraad zelf niet terug op, dat moet hier expliciet, net als bij het
+  // verwijderen van een losse gebruik-regel (zie laadProjectGebruik)
+  const { data: mutaties } = await db.from("voorraad_mutaties")
+    .select("*").eq("project_id", bewerkProjectId).eq("type", "gebruik");
+  if (mutaties && mutaties.length){
+    await db.from("voorraad_mutaties").delete().in("id", mutaties.map(m => m.id));
+    for (const m of mutaties) await boekVoorraadTerug(m.product_id, Math.abs(Number(m.aantal)));
+    cache.mutaties = cache.mutaties.filter(m => !mutaties.some(x => x.id === m.id));
+    renderVoorraad();
+  }
   // de koppeling offerte -> project wordt door de database losgemaakt
   // (project_id gaat op null, zie offertes_project_id_fkey), maar de status
   // 'Geaccepteerd' blijft anders gewoon staan — dan maakt de volgende keer
@@ -3562,7 +3574,7 @@ $("prVerwijder").addEventListener("click", async () => {
   const { error } = await db.from("projecten").delete().eq("id", bewerkProjectId);
   if (error) { toast("Verwijderen mislukt"); return; }
   $("projForm").style.display = "none";
-  toast("Project verwijderd");
+  toast("Project verwijderd" + (mutaties && mutaties.length ? " — voorraad bijgewerkt" : ""));
   const { data } = await db.from("projecten").select("*").order("aangemaakt_op", { ascending:false });
   cache.projecten = data || [];
   vulSelects(); renderProjecten(); renderHoofd();
