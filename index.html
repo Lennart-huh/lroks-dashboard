@@ -3554,6 +3554,11 @@ $("prOpslaan").addEventListener("click", async () => {
 $("prVerwijder").addEventListener("click", async () => {
   if (!bewerkProjectId) return;
   if (!confirm("Dit project verwijderen?")) return;
+  // de koppeling offerte -> project wordt door de database losgemaakt
+  // (project_id gaat op null, zie offertes_project_id_fkey), maar de status
+  // 'Geaccepteerd' blijft anders gewoon staan — dan maakt de volgende keer
+  // opslaan daar per ongeluk vanzelf weer een nieuw project van
+  await db.from("offertes").update({ status: "verstuurd" }).eq("project_id", bewerkProjectId);
   const { error } = await db.from("projecten").delete().eq("id", bewerkProjectId);
   if (error) { toast("Verwijderen mislukt"); return; }
   $("projForm").style.display = "none";
