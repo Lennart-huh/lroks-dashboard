@@ -5750,13 +5750,17 @@ let offerteRegels = [];
 let offerteStatus = "concept";
 
 function volgendOfferteNummer(){
+  // formaat: JJNNN (bv. 26005) — zelfde stijl als volgendNummer() bij facturen,
+  // geen "OFF"-prefix. Het eerste nummer in een reeks typ je zelf in dit veld
+  // (bv. 26005 om aan te sluiten op offertes van buiten de app); daarna telt
+  // deze functie vanzelf verder op basis van het hoogste bestaande nummer.
   const jaar2 = String(new Date().getFullYear()).slice(-2);
   let max = 0;
   offerteData.forEach(o => {
-    const m = String(o.nummer || "").match(new RegExp("^OFF" + jaar2 + "(\\d{3,})$"));
+    const m = String(o.nummer || "").match(new RegExp("^" + jaar2 + "(\\d{3,})$"));
     if (m) max = Math.max(max, parseInt(m[1], 10));
   });
-  return "OFF" + jaar2 + String(max + 1).padStart(3, "0");
+  return jaar2 + String(max + 1).padStart(3, "0");
 }
 
 async function herlaadOffertes(){
