@@ -1362,7 +1362,7 @@ nav.onderbalk{display:none}
           <div class="card"><div class="k">Btw ontvangen</div><div class="v" id="btOnt">—</div><div class="m">uitgaande facturen</div></div>
           <div class="card"><div class="k">Voorbelasting</div><div class="v" id="btVoor">—</div><div class="m">inkomende facturen</div></div>
           <div class="card amber"><div class="k">Saldo dit jaar</div><div class="v" id="btSaldo">—</div><div class="m" id="btSaldoSub"></div></div>
-          <div class="card"><div class="k">Lopend kwartaal</div><div class="v" id="btKwartaal">—</div><div class="m" id="btKwartaalSub"></div></div>
+          <div class="card"><div class="k" id="btKwartaalKop">Lopend kwartaal</div><div class="v" id="btKwartaal">—</div><div class="m" id="btKwartaalSub"></div></div>
         </div>
         <div class="tbl-wrap" style="margin-bottom:20px">
           <table>
@@ -5407,8 +5407,24 @@ function renderBtw(){
   $("btVoor").textContent = eur2(inJ);
   $("btSaldo").textContent = eur2(Math.abs(uitJ - inJ));
   $("btSaldoSub").textContent = (uitJ - inJ) >= 0 ? "af te dragen" : "terug te vragen";
-  $("btKwartaal").textContent = ditJaar ? eur2(f.btwUit[kNu] - f.btwIn[kNu]) : "—";
-  $("btKwartaalSub").textContent = ditJaar ? "K" + (kNu + 1) + " " + jaar : jaar + " is afgerond";
+  // in de eerste maand van een kwartaal loopt de aangifte over het vorige
+  // kwartaal (uiterlijk eind deze maand) — dan toont de kaart dát kwartaal,
+  // los van het gekozen jaar, want daar ben je dan mee bezig
+  const aangifte = nu.getMonth() % 3 === 0;
+  const aangifteK = (kNu + 3) % 4, aangifteJaar = kNu === 0 ? nu.getFullYear() - 1 : nu.getFullYear();
+  if (aangifte){
+    const fa = aangifteJaar === jaar ? f : financieelJaar(aangifteJaar);
+    const saldo = fa.btwUit[aangifteK] - fa.btwIn[aangifteK];
+    const uiterlijk = new Date(nu.getFullYear(), nu.getMonth() + 1, 0)
+      .toLocaleDateString("nl-NL", { day: "numeric", month: "long" });
+    $("btKwartaalKop").textContent = "Aangifte K" + (aangifteK + 1) + " " + aangifteJaar;
+    $("btKwartaal").textContent = eur2(Math.abs(saldo));
+    $("btKwartaalSub").textContent = (saldo >= 0 ? "af te dragen" : "terug te vragen") + " · uiterlijk " + uiterlijk;
+  } else {
+    $("btKwartaalKop").textContent = "Lopend kwartaal";
+    $("btKwartaal").textContent = ditJaar ? eur2(f.btwUit[kNu] - f.btwIn[kNu]) : "—";
+    $("btKwartaalSub").textContent = ditJaar ? "K" + (kNu + 1) + " " + jaar : jaar + " is afgerond";
+  }
 
   const vraag = k => '<button type="button" class="info-vraag" data-btwjaar="' + jaar + '" data-btwk="' + k +
     '" title="Waar komt dit vandaan?">?</button>';
@@ -5418,7 +5434,8 @@ function renderBtw(){
     '<td class="r">' + (chip || '') + vraag(k) + '</td></tr>';
   $("btKwartaalBody").innerHTML =
     KWARTAAL_NAMEN.map((n, i) => {
-      const chip = ditJaar && i === kNu ? '<span class="chip amber">LOOPT</span>'
+      const chip = aangifte && jaar === aangifteJaar && i === aangifteK ? '<span class="chip rood">AANGIFTE</span>'
+        : ditJaar && i === kNu ? '<span class="chip amber">LOOPT</span>'
         : (jaar < nu.getFullYear() || (ditJaar && i < kNu)) ? '<span class="chip grijs">AFGEROND</span>' : '';
       return rij(n, f.btwUit[i], f.btwIn[i], chip, '', i);
     }).join("") +
