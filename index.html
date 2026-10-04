@@ -277,6 +277,17 @@ nav.onderbalk{display:none}
 
         <div class="form-card" style="margin-top:18px">
           <div class="tab-kop" style="margin:0 0 12px">
+            <h3 style="font-size:.95rem;margin:0">Controle</h3>
+            <span class="hint" style="margin:0" id="ctTelling"></span>
+          </div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Soort</th><th>Wat</th><th></th></tr></thead>
+            <tbody id="ctBody"></tbody>
+          </table></div>
+        </div>
+
+        <div class="form-card" style="margin-top:18px">
+          <div class="tab-kop" style="margin:0 0 12px">
             <h3 style="font-size:.95rem;margin:0">Nog te betalen</h3>
             <span class="hint" style="margin:0"><b id="tbAantal">0</b> openstaand · <b id="tbTotaal">€ 0,00</b></span>
           </div>
@@ -1976,8 +1987,170 @@ function renderHoofd(){
   $("cKlantenSub").textContent = cache.klanten.length + " klanten totaal";
 
   renderOmzetGrafiek();
+  renderControle();
   renderTeBetalen();
   renderTeOntvangen();
+}
+
+/* Controle: zoekt in de al geladen gegevens naar wat dubbel staat of niet
+   klopt. Elke melding is aanklikbaar (opent de regel om te verbeteren) en
+   kan genegeerd worden als het zo hoort. De sleutel van een melding bevat de
+   waarden waar het om gaat, dus verandert er iets, dan komt hij terug. */
+function controleGenegeerd(){
+  try { return JSON.parse(cache.inst.controle_genegeerd || "[]"); } catch(e){ return []; }
+}
+async function bewaarGenegeerd(lijst){
+  const waarde = JSON.stringify(lijst);
+  const { error } = await db.from("instellingen").upsert({ sleutel: "controle_genegeerd", waarde }, { onConflict: "sleutel" });
+  if (error){ console.error(error); toast("Opslaan mislukt"); return false; }
+  cache.inst.controle_genegeerd = waarde;
+  return true;
+}
+
+function controleMeldingen(){
+  const m = [];
+  const vandaag = vandaagISO();
+  const factNaam = f => f.type === "verkoop" ? ("factuur " + (f.nummer || "") + " · " + (klantNaam(f.klant_id) || "—")) : (f.leverancier || "—") + (f.nummer && f.nummer !== "-" ? " · " + f.nummer : "");
+  const openF = f => () => {
+    toonTab("facturen");
+    if (f.type === "verkoop"){ kiesFSub("fUit"); openFactuur(f.id); } else { kiesFSub("fIn"); openInkoop(f.id); }
+  };
+  const groepeer = (lijst, sleutelFn) => {
+    const g = {};
+    lijst.forEach(x => { const s = sleutelFn(x); if (s !== null) (g[s] = g[s] || []).push(x); });
+    return Object.values(g).filter(a => a.length > 1);
+  };
+
+  // ---- facturen
+  const inkoop = factData.filter(f => f.type === "inkoop");
+  const dubbelIds = new Set();
+  const meldDubbel = (groep, waarom) => {
+    const ids = groep.map(f => f.id).sort();
+    if (ids.every(id => dubbelIds.has(id))) return;
+    ids.forEach(id => dubbelIds.add(id));
+    m.push({ sleutel: "fdubbel:" + ids.join(","), soort: "Dubbel", tekst: "Inkoopfactuur " + groep.length + "× ingevoerd (" + waarom + "): " +
+      factNaam(groep[0]) + ", " + fmtDatum(groep[0].datum) + ", " + eur2(groep[0].bedrag_incl), open: openF(groep[0]) });
+  };
+  groepeer(inkoop, f => f.nummer && f.nummer !== "-" ? String(f.leverancier || "").trim().toLowerCase() + "|" + String(f.nummer).trim() : null)
+    .forEach(g => meldDubbel(g, "zelfde leverancier en nummer"));
+  groepeer(inkoop, f => f.datum + "|" + Number(f.bedrag_incl || 0).toFixed(2))
+    .forEach(g => meldDubbel(g, "zelfde datum en bedrag"));
+  groepeer(factData.filter(f => f.type === "verkoop" && f.nummer), f => String(f.nummer).trim())
+    .forEach(g => m.push({ sleutel: "vnummer:" + g.map(f => f.id).sort().join(","), soort: "Dubbel",
+      tekst: "Factuurnummer " + g[0].nummer + " komt " + g.length + "× voor", open: openF(g[0]) }));
+  factData.forEach(f => {
+    if (f.type !== "verkoop" && f.type !== "inkoop") return;
+    const excl = Number(f.bedrag_excl || 0), btw = Number(f.btw_bedrag || 0), incl = Number(f.bedrag_incl || 0);
+    if (Math.abs(excl + btw - incl) > 0.02)
+      m.push({ sleutel: "optel:" + f.id + ":" + excl + ":" + btw + ":" + incl, soort: "Bedrag",
+        tekst: factNaam(f) + ": " + eur2(excl) + " + btw " + eur2(btw) + " is niet " + eur2(incl), open: openF(f) });
+    if (excl > 0 && btw !== 0){
+      const pct = btw / excl * 100;
+      if (Math.abs(pct - 21) > 1 && Math.abs(pct - 9) > 1)
+        m.push({ sleutel: "btwpct:" + f.id + ":" + excl + ":" + btw, soort: "Btw",
+          tekst: factNaam(f) + ": btw is " + pct.toLocaleString("nl-NL", { maximumFractionDigits: 1 }) + "% van het bedrag (geen 21% of 9%)", open: openF(f) });
+    }
+    if (f.datum > vandaag)
+      m.push({ sleutel: "fdatum:" + f.id + ":" + f.datum, soort: "Datum",
+        tekst: factNaam(f) + ": datum " + fmtDatum(f.datum) + " ligt in de toekomst", open: openF(f) });
+  });
+
+  // ---- uren
+  groepeer(urenData, u => [u.datum, Number(u.aantal), u.soort, u.project_id, u.klant_id, u.klus_id, String(u.omschrijving || "").trim()].join("|"))
+    .forEach(g => m.push({ sleutel: "udubbel:" + g.map(u => u.id).sort().join(","), soort: "Dubbel",
+      tekst: "Urenregel " + g.length + "× ingevoerd: " + fmtDatum(g[0].datum) + ", " + Number(g[0].aantal).toLocaleString("nl-NL") + " uur" +
+        (g[0].omschrijving ? " · " + g[0].omschrijving : ""), open: () => startUrenBewerken(g[0].id) }));
+  urenData.forEach(u => {
+    const wat = fmtDatum(u.datum) + ", " + Number(u.aantal).toLocaleString("nl-NL") + " uur" + (u.omschrijving ? " · " + u.omschrijving : "");
+    if (u.soort === "werk" && !u.project_id && !u.klant_id && !u.klus_id)
+      m.push({ sleutel: "uzonder:" + u.id, soort: "Uren", tekst: "Werkuren zonder project of klant (worden nergens gefactureerd): " + wat,
+        open: () => startUrenBewerken(u.id) });
+    if (!(Number(u.aantal) > 0) || Number(u.aantal) > 14)
+      m.push({ sleutel: "uaantal:" + u.id + ":" + u.aantal, soort: "Uren", tekst: "Vreemd aantal uren: " + wat,
+        open: () => startUrenBewerken(u.id) });
+    if (u.datum > vandaag)
+      m.push({ sleutel: "udatum:" + u.id + ":" + u.datum, soort: "Datum", tekst: "Uren in de toekomst: " + wat,
+        open: () => startUrenBewerken(u.id) });
+  });
+
+  // ---- km
+  groepeer(kmData, k => k.datum + "|" + k.km_stand)
+    .forEach(g => m.push({ sleutel: "kdubbel:" + g.map(k => k.id).sort().join(","), soort: "Dubbel",
+      tekst: "Km-stand " + g.length + "× ingevoerd: " + fmtDatum(g[0].datum) + ", stand " + Number(g[0].km_stand).toLocaleString("nl-NL"),
+      open: () => startKmBewerken(g[0].id) }));
+  const km = kmChronologisch();
+  km.forEach((k, i) => {
+    if (!i) return;
+    const vorige = km[i - 1], verschil = k.km_stand - vorige.km_stand;
+    if (verschil < 0)
+      m.push({ sleutel: "kterug:" + k.id + ":" + k.km_stand + ":" + vorige.km_stand, soort: "Km",
+        tekst: "Km-stand loopt terug op " + fmtDatum(k.datum) + ": " + Number(k.km_stand).toLocaleString("nl-NL") +
+          " na " + Number(vorige.km_stand).toLocaleString("nl-NL") + " — typfout?", open: () => startKmBewerken(k.id) });
+    else if (verschil > 1000)
+      m.push({ sleutel: "ksprong:" + k.id + ":" + k.km_stand + ":" + vorige.km_stand, soort: "Km",
+        tekst: "Grote sprong op " + fmtDatum(k.datum) + ": " + verschil.toLocaleString("nl-NL") + " km sinds de vorige stand — typfout?",
+        open: () => startKmBewerken(k.id) });
+  });
+
+  // ---- klanten, projecten, producten
+  const openKlant = id => () => {
+    toonTab("klanten"); renderKlanten();
+    const r = document.querySelector('[data-klid="' + id + '"]'); if (r) r.click();
+  };
+  const openProduct = id => () => {
+    toonTab("voorraad"); $("vFilter").value = ""; $("vZoek").value = ""; renderVoorraad();
+    const r = document.querySelector('[data-vid="' + id + '"]'); if (r) r.click();
+  };
+  groepeer(cache.klanten, k => String(k.naam || "").trim().toLowerCase())
+    .forEach(g => m.push({ sleutel: "kldubbel:" + g.map(k => k.id).sort().join(","), soort: "Dubbel",
+      tekst: "Klant " + g.length + "× aangemaakt: " + g[0].naam, open: openKlant(g[0].id) }));
+  groepeer(cache.projecten, p => String(p.naam || "").trim().toLowerCase() + "|" + p.klant_id)
+    .forEach(g => m.push({ sleutel: "prdubbel:" + g.map(p => p.id).sort().join(","), soort: "Dubbel",
+      tekst: "Project " + g.length + "× aangemaakt: " + g[0].naam, open: () => { toonTab("projecten"); openProjectDetail(g[0].id); } }));
+  groepeer(cache.producten, p => String(p.naam || "").trim().toLowerCase())
+    .forEach(g => m.push({ sleutel: "pdubbel:" + g.map(p => p.id).sort().join(","), soort: "Dubbel",
+      tekst: "Product " + g.length + "× aangemaakt: " + g[0].naam, open: openProduct(g[0].id) }));
+  cache.producten.forEach(p => {
+    const ink = Number(p.inkoopprijs || 0), verk = Number(p.verkoopprijs || 0), vr = Number(p.voorraad || 0);
+    if (p.op_voorraad && vr < 0)
+      m.push({ sleutel: "pneg:" + p.id + ":" + vr, soort: "Voorraad",
+        tekst: p.naam + ": voorraad staat op " + vr.toLocaleString("nl-NL") + " — meer gebruikt dan ingeboekt", open: openProduct(p.id) });
+    if (!ink && !verk)
+      m.push({ sleutel: "pprijs:" + p.id, soort: "Prijs", tekst: p.naam + ": geen inkoop- en verkoopprijs, telt voor € 0 mee",
+        open: openProduct(p.id) });
+    else if (verk > 0 && verk < ink)
+      m.push({ sleutel: "pmarge:" + p.id + ":" + ink + ":" + verk, soort: "Prijs",
+        tekst: p.naam + ": verkoopprijs " + eur2(verk) + " is lager dan inkoop " + eur2(ink), open: openProduct(p.id) });
+  });
+  return m;
+}
+
+function renderControle(){
+  const genegeerd = new Set(controleGenegeerd());
+  const alle = controleMeldingen();
+  const lijst = alle.filter(x => !genegeerd.has(x.sleutel));
+  const aantalGenegeerd = alle.length - lijst.length;
+  $("ctTelling").innerHTML = (lijst.length ? '<b>' + lijst.length + '</b> om naar te kijken' : 'alles in orde') +
+    (aantalGenegeerd ? ' · ' + aantalGenegeerd + ' genegeerd <button type="button" class="mini-btn" id="ctTerug">TERUGZETTEN</button>' : '');
+  $("ctBody").innerHTML = !lijst.length
+    ? '<tr><td colspan="3" class="leeg">Niets dubbel of fout gevonden.</td></tr>'
+    : lijst.map((x, i) =>
+        '<tr class="klik" data-cti="' + i + '"><td><span class="chip ' + (x.soort === "Dubbel" ? "rood" : "amber") + '">' + x.soort.toUpperCase() + '</span></td>' +
+        '<td class="tekst">' + esc(x.tekst) + '</td>' +
+        '<td class="r"><button type="button" class="mini-btn" data-ctneg="' + i + '" title="Klopt zo, niet meer melden">NEGEREN</button></td></tr>').join("");
+  $("ctBody").querySelectorAll("[data-cti]").forEach(r => r.addEventListener("click", () => lijst[Number(r.dataset.cti)].open()));
+  $("ctBody").querySelectorAll("[data-ctneg]").forEach(b => b.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    // oude sleutels opruimen die niet meer voorkomen, zodat de lijst niet blijft groeien
+    const bestaand = new Set(alle.map(x => x.sleutel));
+    const nieuw = [...genegeerd].filter(s => bestaand.has(s)).concat(lijst[Number(b.dataset.ctneg)].sleutel);
+    if (await bewaarGenegeerd(nieuw)){ toast("Genegeerd"); renderControle(); }
+  }));
+  const terug = $("ctTerug");
+  if (terug) terug.addEventListener("click", async () => {
+    if (!confirm("Alle genegeerde meldingen weer tonen?")) return;
+    if (await bewaarGenegeerd([])){ toast("Teruggezet"); renderControle(); }
+  });
 }
 
 /* Openstaande inkoopfacturen — wat je nog moet betalen, dichtstbijzijnde
@@ -3826,6 +3999,7 @@ async function herlaadProducten(){
   cache.producten = data || [];
   vulSelects();
   renderVoorraad();
+  renderControle();
 }
 
 $("vFilter").addEventListener("change", renderVoorraad);
