@@ -747,7 +747,7 @@ nav.onderbalk{display:none}
           <div class="veld" id="prUrenBlok" style="display:none"><label>Uren op dit project</label>
             <div class="tbl-wrap">
               <table>
-                <thead><tr><th>Datum</th><th>Soort</th><th class="r">Uren</th><th></th></tr></thead>
+                <thead><tr><th>Datum</th><th>Soort</th><th class="r">Uren</th><th></th><th></th></tr></thead>
                 <tbody id="prUrenBody"></tbody>
               </table>
             </div>
@@ -755,7 +755,7 @@ nav.onderbalk{display:none}
           <div class="veld" id="prKmBlok" style="display:none"><label>Kilometers op dit project</label>
             <div class="tbl-wrap">
               <table>
-                <thead><tr><th>Datum</th><th>Waar</th><th class="r">Km</th><th></th></tr></thead>
+                <thead><tr><th>Datum</th><th>Waar</th><th class="r">Km</th><th></th><th></th></tr></thead>
                 <tbody id="prKmBody"></tbody>
               </table>
             </div>
@@ -833,14 +833,14 @@ nav.onderbalk{display:none}
           <div style="margin-top:16px">
             <b style="font-size:.82rem;color:var(--ink3)">UREN</b>
             <div class="tbl-wrap"><table>
-              <thead><tr><th>Datum</th><th class="r">Uren</th><th class="r">Bedrag</th></tr></thead>
+              <thead><tr><th>Datum</th><th class="r">Uren</th><th class="r">Bedrag</th><th></th></tr></thead>
               <tbody id="klUrenBody"></tbody>
             </table></div>
           </div>
           <div style="margin-top:14px">
             <b style="font-size:.82rem;color:var(--ink3)">KILOMETERS</b>
             <div class="tbl-wrap"><table>
-              <thead><tr><th>Datum</th><th class="r">Km</th><th class="r">Bedrag</th></tr></thead>
+              <thead><tr><th>Datum</th><th class="r">Km</th><th class="r">Bedrag</th><th></th></tr></thead>
               <tbody id="klKmBody"></tbody>
             </table></div>
           </div>
@@ -3068,29 +3068,47 @@ function laadProjectUren(projectId){
   const lijst = urenData.filter(u => u.project_id === projectId && !u.klus_id)
     .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
   body.innerHTML = !lijst.length
-    ? '<tr><td colspan="4" class="leeg">Nog geen uren op dit project.</td></tr>'
+    ? '<tr><td colspan="5" class="leeg">Nog geen uren op dit project.</td></tr>'
     : lijst.map(u =>
         '<tr class="klik" data-prueid="' + u.id + '"><td>' + fmtDatum(u.datum) + '</td>' +
         '<td><span class="chip ' + (u.soort === "werk" ? "groen" : "grijs") + '">' + (u.soort === "werk" ? "WERK" : "KANTOOR") + '</span>' +
           (u.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
         '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
-        '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td></tr>').join("");
+        '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td>' +
+        '<td class="r"><button class="verwijder" data-pruid="' + u.id + '" title="Verwijderen">✕</button></td></tr>').join("");
   body.querySelectorAll("[data-prueid]").forEach(r =>
     r.addEventListener("click", () => startUrenBewerken(r.dataset.prueid)));
+  body.querySelectorAll("[data-pruid]").forEach(k => k.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm("Deze urenregel verwijderen?")) return;
+    const { error } = await db.from("uren").delete().eq("id", k.dataset.pruid);
+    if (error) { toast("Verwijderen mislukt"); return; }
+    toast("Verwijderd");
+    await herlaadUren();
+  }));
 }
 function laadProjectKm(projectId){
   const body = $("prKmBody");
   const lijst = kmRegels().filter(k => k.project_id === projectId && !k.klus_id && k.zakelijk && k.gereden > 0)
     .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
   body.innerHTML = !lijst.length
-    ? '<tr><td colspan="4" class="leeg">Nog geen kilometers op dit project.</td></tr>'
+    ? '<tr><td colspan="5" class="leeg">Nog geen kilometers op dit project.</td></tr>'
     : lijst.map(k =>
         '<tr class="klik" data-prkeid="' + k.id + '"><td>' + fmtDatum(k.datum) + '</td>' +
         '<td class="tekst">' + esc(k.omschrijving || "—") + (k.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
         '<td class="r">' + Number(k.gereden).toLocaleString("nl-NL") + '</td>' +
-        '<td class="r">' + eur2(Number(k.gereden) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0))) + '</td></tr>').join("");
+        '<td class="r">' + eur2(Number(k.gereden) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0))) + '</td>' +
+        '<td class="r">' + (k.gefactureerd ? '' : '<button class="verwijder" data-prkid="' + k.id + '" title="Verwijderen">✕</button>') + '</td></tr>').join("");
   body.querySelectorAll("[data-prkeid]").forEach(r =>
     r.addEventListener("click", () => startKmBewerken(r.dataset.prkeid)));
+  body.querySelectorAll("[data-prkid]").forEach(b => b.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm("Deze km-regel verwijderen?")) return;
+    const { error } = await db.from("km_registratie").delete().eq("id", b.dataset.prkid);
+    if (error) { toast("Verwijderen mislukt"); return; }
+    toast("Verwijderd");
+    await herlaadKm();
+  }));
 }
 
 /* Vaste-prijs projecten: vergelijkt de schatting met wat er werkelijk aan
@@ -3324,21 +3342,41 @@ $("klVergelijkSluit").addEventListener("click", () => { $("klVergelijkBlok").sty
 function laadKlusRegels(klusId){
   const urenLijst = urenData.filter(u => u.klus_id === klusId).sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
   $("klUrenBody").innerHTML = !urenLijst.length
-    ? '<tr><td colspan="3" class="leeg">Geen uren op deze klus.</td></tr>'
+    ? '<tr><td colspan="4" class="leeg">Geen uren op deze klus.</td></tr>'
     : urenLijst.map(u =>
         '<tr class="klik" data-klueid="' + u.id + '"><td>' + fmtDatum(u.datum) + '</td>' +
         '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
-        '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td></tr>').join("");
+        '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td>' +
+        '<td class="r"><button class="verwijder" data-kluid="' + u.id + '" title="Verwijderen">✕</button></td></tr>').join("");
   $("klUrenBody").querySelectorAll("[data-klueid]").forEach(r => r.addEventListener("click", () => startUrenBewerken(r.dataset.klueid)));
+  $("klUrenBody").querySelectorAll("[data-kluid]").forEach(b => b.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm("Deze urenregel verwijderen?")) return;
+    const { error } = await db.from("uren").delete().eq("id", b.dataset.kluid);
+    if (error) { toast("Verwijderen mislukt"); return; }
+    toast("Verwijderd");
+    await herlaadUren();
+    laadKlusRegels(klusId);
+  }));
 
   const kmLijst = kmRegels().filter(k => k.klus_id === klusId && k.zakelijk && k.gereden > 0).sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
   $("klKmBody").innerHTML = !kmLijst.length
-    ? '<tr><td colspan="3" class="leeg">Geen kilometers op deze klus.</td></tr>'
+    ? '<tr><td colspan="4" class="leeg">Geen kilometers op deze klus.</td></tr>'
     : kmLijst.map(k =>
         '<tr class="klik" data-klkeid="' + k.id + '"><td>' + fmtDatum(k.datum) + '</td>' +
         '<td class="r">' + Number(k.gereden).toLocaleString("nl-NL") + '</td>' +
-        '<td class="r">' + eur2(Number(k.gereden) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0))) + '</td></tr>').join("");
+        '<td class="r">' + eur2(Number(k.gereden) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0))) + '</td>' +
+        '<td class="r">' + (k.gefactureerd ? '' : '<button class="verwijder" data-klkid="' + k.id + '" title="Verwijderen">✕</button>') + '</td></tr>').join("");
   $("klKmBody").querySelectorAll("[data-klkeid]").forEach(r => r.addEventListener("click", () => startKmBewerken(r.dataset.klkeid)));
+  $("klKmBody").querySelectorAll("[data-klkid]").forEach(b => b.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm("Deze km-regel verwijderen?")) return;
+    const { error } = await db.from("km_registratie").delete().eq("id", b.dataset.klkid);
+    if (error) { toast("Verwijderen mislukt"); return; }
+    toast("Verwijderd");
+    await herlaadKm();
+    laadKlusRegels(klusId);
+  }));
 
   const prodLijst = cache.mutaties.filter(m => m.klus_id === klusId && m.type === "gebruik").sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
   $("klProdBody").innerHTML = !prodLijst.length
