@@ -948,10 +948,11 @@ nav.onderbalk{display:none}
           <div class="card"><div class="k">Marge</div><div class="v" id="mdMarge">—</div><div class="m">winst / omzet</div></div>
         </div>
         <h3 style="font-size:.95rem;margin:0 0 10px">Omzet</h3>
-        <div class="tbl-wrap" style="margin-bottom:20px"><table>
-          <thead><tr><th>Datum</th><th>Wat</th><th>Soort</th><th class="r">Bedrag excl.</th></tr></thead>
+        <div class="tbl-wrap" style="margin-bottom:6px"><table>
+          <thead><tr><th>Datum</th><th>Wat</th><th>Soort</th><th class="r">Bedrag excl.</th><th class="r">Kostprijs</th><th class="r">Winst</th></tr></thead>
           <tbody id="mdOmzetBody"></tbody>
         </table></div>
+        <div class="hint" style="margin-bottom:20px">Kostprijs = het materiaal op de factuur tegen de inkoopprijs die nu bij het product staat. Uren en km hebben geen kostprijs; vaste lasten en overige kosten staan hieronder bij Kosten.</div>
         <h3 style="font-size:.95rem;margin:0 0 10px">Kosten</h3>
         <div class="tbl-wrap" style="margin-bottom:20px"><table>
           <thead><tr><th>Datum</th><th>Wat</th><th>Soort</th><th class="r">Bedrag excl.</th></tr></thead>
@@ -2405,7 +2406,7 @@ function maandPosten(jaar, maand){
     const excl = Number(f.bedrag_excl || 0);
     if (f.type === "verkoop"){
       if (inMaand(f.datum)) omzet.push({ datum: f.datum, wat: "Factuur " + (f.nummer || "") + " · " + (klantNaam(f.klant_id) || "—"),
-        soort: "Factuur", bedrag: excl, open: () => { toonTab("facturen"); kiesFSub("fUit"); openFactuur(f.id); } });
+        soort: "Factuur", bedrag: excl, kost: factuurKostprijs(f.id), open: () => { toonTab("facturen"); kiesFSub("fUit"); openFactuur(f.id); } });
     } else if (f.type === "inkoop"){
       const jr = Number(f.afschrijf_jaren || 0);
       const fJaar = new Date(f.datum).getFullYear();
@@ -2436,6 +2437,15 @@ function maandPosten(jaar, maand){
   return { omzet: omzet.sort(opDatum), kosten: kosten.sort(opDatum) };
 }
 
+/* Inkoopwaarde van het materiaal op één verkoopfactuur (aantal x huidige inkoopprijs). */
+function factuurKostprijs(factuurId){
+  return (cache.regels || []).filter(r => r.factuur_id === factuurId && r.mutatie_id).reduce((t, r) => {
+    const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
+    const p = m && cache.producten.find(x => x.id === m.product_id);
+    return t + (p ? Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0) : 0);
+  }, 0);
+}
+
 function openMaandDetail(jaar, maand){
   mdJaar = jaar; mdMaand = maand;
   renderMaandDetail();
@@ -2453,17 +2463,23 @@ function renderMaandDetail(){
   $("mdKosten").textContent = eur2(k);
   $("mdWinst").textContent = eur2(w);
   $("mdMarge").textContent = o > 0 ? Math.round(w / o * 100) + "%" : "—";
-  const tabel = (id, lijst, leeg) => {
+  const tabel = (id, lijst, leeg, metWinst) => {
+    const kostTot = lijst.reduce((t, p) => t + (p.kost || 0), 0);
+    const extra = p => !metWinst ? '' : p.kost === undefined
+      ? '<td class="r" style="color:var(--ink3)">—</td><td class="r">' + eur2(p.bedrag) + '</td>'
+      : '<td class="r">' + eur2(p.kost) + '</td><td class="r">' + eur2(p.bedrag - p.kost) +
+        (p.bedrag > 0 ? ' <span style="color:var(--ink3);font-size:.75rem">(' + Math.round((p.bedrag - p.kost) / p.bedrag * 100) + '%)</span>' : '') + '</td>';
     $(id).innerHTML = !lijst.length
-      ? '<tr><td colspan="4" class="leeg">' + leeg + '</td></tr>'
+      ? '<tr><td colspan="' + (metWinst ? 6 : 4) + '" class="leeg">' + leeg + '</td></tr>'
       : lijst.map((p, i) => '<tr class="klik" data-mdi="' + i + '"><td>' + fmtDatum(p.datum) + '</td>' +
           '<td class="tekst">' + esc(p.wat) + '</td>' +
           '<td><span class="chip grijs">' + esc(p.soort).toUpperCase() + '</span></td>' +
-          '<td class="r">' + eur2(p.bedrag) + '</td></tr>').join("") +
-        '<tr style="border-top:2px solid var(--line)"><td colspan="3"><b>Totaal</b></td><td class="r"><b>' + eur2(som(lijst)) + '</b></td></tr>';
+          '<td class="r">' + eur2(p.bedrag) + '</td>' + extra(p) + '</tr>').join("") +
+        '<tr style="border-top:2px solid var(--line)"><td colspan="3"><b>Totaal</b></td><td class="r"><b>' + eur2(som(lijst)) + '</b></td>' +
+        (metWinst ? '<td class="r"><b>' + eur2(kostTot) + '</b></td><td class="r"><b>' + eur2(som(lijst) - kostTot) + '</b></td>' : '') + '</tr>';
     $(id).querySelectorAll("[data-mdi]").forEach(r => r.addEventListener("click", () => lijst[Number(r.dataset.mdi)].open()));
   };
-  tabel("mdOmzetBody", omzet, "Geen omzet in deze maand.");
+  tabel("mdOmzetBody", omzet, "Geen omzet in deze maand.", true);
   tabel("mdKostenBody", kosten, "Geen kosten in deze maand.");
 }
 
