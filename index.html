@@ -5699,11 +5699,14 @@ function renderKostensoorten(){
 
   $("ksSubtabs").innerHTML = KOSTEN.map(([code, naam]) =>
     '<button data-ks="' + code + '" class="' + (code === ksActief ? "aan" : "") + '">' + esc(naam) + '</button>'
-  ).join("");
+  ).join("") +
+    '<button data-ks="vaste_lasten" class="' + (ksActief === "vaste_lasten" ? "aan" : "") + '">Vaste lasten</button>';
   $("ksSubtabs").querySelectorAll("[data-ks]").forEach(b => b.addEventListener("click", () => {
     ksActief = b.dataset.ks;
     renderKostensoorten();
   }));
+
+  if (ksActief === "vaste_lasten"){ renderVasteLastenBlok(jaar); return; }
 
   const inkoopRegels = inkoop.filter(f => (f.categorie || "materiaal") === ksActief)
     .map(f => ({ soort: "inkoop", f, datum: f.datum, bedrag: Number(f.bedrag_excl || 0) }));
@@ -5751,6 +5754,43 @@ function renderKostensoorten(){
   // klik op een vaste last springt naar het Invulformulier om 'm te bewerken
   $("ksBlok").querySelectorAll("[data-ksvlid]").forEach(r => r.addEventListener("click", () =>
     startVasteLastBewerken(r.dataset.ksvlid)));
+}
+/* Subtab Vaste lasten: alle vaste lasten, eerstvolgende afschrijving eerst.
+   Het totaal is wat ze samen in het gekozen jaar kosten. */
+function renderVasteLastenBlok(jaar){
+  const vandaag = new Date(); vandaag.setHours(0, 0, 0, 0);
+  const lijst = cache.vasteLasten
+    .map(vl => ({ vl, volgende: volgendeAfschrijving(vl, new Date()) }))
+    .sort((a, b) => a.volgende - b.volgende);
+  const totaal = cache.vasteLasten.reduce((s, vl) => s + vasteLastDatumsInJaar(vl, jaar).length * Number(vl.bedrag || 0), 0);
+  const rijen = !lijst.length
+    ? '<tr><td colspan="3" class="leeg">Nog geen vaste lasten toegevoegd.</td></tr>'
+    : lijst.map(({ vl, volgende }) => {
+        const dagen = Math.round((volgende - vandaag) / 86400000);
+        const relatief = dagen <= 0 ? "vandaag" : dagen === 1 ? "morgen" : "over " + dagen + " dagen";
+        return '<tr class="klik" data-vlid="' + vl.id + '"><td class="tekst">' + esc(vl.naam) +
+          (vl.categorie ? ' <span class="chip grijs">' + esc(kostenNaam(vl.categorie)) + '</span>' : '') + '</td>' +
+          '<td>' + fmtDatum(isoDatum(volgende)) + ' <span style="color:var(--ink3);font-size:.75rem">(' + relatief + ')</span></td>' +
+          '<td class="r">' + eur2(vl.bedrag) + '</td></tr>';
+      }).join("");
+  $("ksBlok").innerHTML =
+    '<div class="form-card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+        '<h3 style="font-size:.92rem;margin:0">Vaste lasten <span class="mono" style="font-weight:600;margin-left:6px">' + eur2(totaal) + '</span> <span style="color:var(--ink3);font-size:.75rem;font-weight:400">in ' + jaar + '</span></h3>' +
+        '<button class="knop klein stil" id="vlNieuw">+ Vaste last</button>' +
+      '</div>' +
+      '<div class="tbl-wrap"><table>' +
+        '<thead><tr><th>Wat</th><th>Volgende keer</th><th class="r">Bedrag</th></tr></thead>' +
+        '<tbody>' + rijen + '</tbody>' +
+      '</table></div>' +
+    '</div>';
+  $("ksBlok").querySelectorAll("[data-vlid]").forEach(r => r.addEventListener("click", () => startVasteLastBewerken(r.dataset.vlid)));
+  $("vlNieuw").addEventListener("click", () => {
+    vlFormLeeg();
+    toonTab("invullen");
+    kiesSub("sub-vastelast");
+    $("vlNaam").focus();
+  });
 }
 $("ksJaar").addEventListener("change", renderKostensoorten);
 ["owJaar","bwJaar","btJaar"].forEach(id => $(id).addEventListener("change", renderFinancieel));
