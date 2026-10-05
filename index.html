@@ -198,6 +198,8 @@ nav.onderbalk{display:none}
   .sheet button:last-child{border-bottom:none}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.nav-tel{margin-left:8px;font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--amber-bg);color:var(--amber);vertical-align:1px}
+.nav-tel:empty{display:none}
 </style>
 </head>
 <body>
@@ -232,6 +234,7 @@ nav.onderbalk{display:none}
       <div class="groep">Overzicht</div>
       <button data-tab="hoofd">Hoofdpagina</button>
       <button data-tab="omzet">Omzet / winst</button>
+      <button data-tab="controle">Controle<span class="nav-tel" id="ctNavTel"></span></button>
       <div class="groep">Dagelijks</div>
       <button data-tab="invullen">Invulformulier</button>
       <button data-tab="uren">Urenregistratie</button>
@@ -277,17 +280,6 @@ nav.onderbalk{display:none}
 
         <div class="form-card" style="margin-top:18px">
           <div class="tab-kop" style="margin:0 0 12px">
-            <h3 style="font-size:.95rem;margin:0">Controle</h3>
-            <span class="hint" style="margin:0" id="ctTelling"></span>
-          </div>
-          <div class="tbl-wrap"><table>
-            <thead><tr><th>Soort</th><th>Wat</th><th></th></tr></thead>
-            <tbody id="ctBody"></tbody>
-          </table></div>
-        </div>
-
-        <div class="form-card" style="margin-top:18px">
-          <div class="tab-kop" style="margin:0 0 12px">
             <h3 style="font-size:.95rem;margin:0">Nog te betalen</h3>
             <span class="hint" style="margin:0"><b id="tbAantal">0</b> openstaand · <b id="tbTotaal">€ 0,00</b></span>
           </div>
@@ -311,6 +303,17 @@ nav.onderbalk{display:none}
         <div class="status-balk">
           <div><span class="bol" id="dbBol"></span><span class="t" id="dbStatus">Database verbinden…</span></div>
         </div>
+      </div>
+
+      <!-- ========== CONTROLE ========== -->
+      <div class="tab" id="tab-controle">
+        <div class="tab-kop"><h2>Controle</h2>
+          <span class="hint" style="margin:0" id="ctTelling"></span>
+        </div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Soort</th><th>Wat</th><th></th></tr></thead>
+          <tbody id="ctBody"></tbody>
+        </table></div>
       </div>
 
       <!-- ========== INVULFORMULIER ========== -->
@@ -1437,6 +1440,7 @@ nav.onderbalk{display:none}
   <!-- mobiele navigatie -->
   <div class="sheet" id="meerSheet">
     <button data-tab="omzet">Omzet / winst</button>
+    <button data-tab="controle">Controle<span class="nav-tel" id="ctNavTelMob"></span></button>
     <button data-tab="uren">Urenregistratie</button>
     <button data-tab="km">KM-registratie</button>
     <button data-tab="offertes">Offertes</button>
@@ -2130,6 +2134,7 @@ function renderControle(){
   const alle = controleMeldingen();
   const lijst = alle.filter(x => !genegeerd.has(x.sleutel));
   const aantalGenegeerd = alle.length - lijst.length;
+  ["ctNavTel","ctNavTelMob"].forEach(id => { $(id).textContent = lijst.length || ""; });
   $("ctTelling").innerHTML = (lijst.length ? '<b>' + lijst.length + '</b> om naar te kijken' : 'alles in orde') +
     (aantalGenegeerd ? ' · ' + aantalGenegeerd + ' genegeerd <button type="button" class="mini-btn" id="ctTerug">TERUGZETTEN</button>' : '');
   $("ctBody").innerHTML = !lijst.length
