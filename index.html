@@ -932,6 +932,33 @@ nav.onderbalk{display:none}
           <button class="knop" id="owDoelenOpslaan">Doelen opslaan</button>
         </div>
       </div>
+      <!-- ========== MAANDDETAIL (vanuit Omzet / winst) ========== -->
+      <div class="tab" id="tab-maand">
+        <div class="tab-kop"><h2 id="mdTitel">Maand</h2>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="knop klein stil" id="mdTerug">&larr; Omzet / winst</button>
+            <button class="knop klein stil" id="mdVorige" title="Vorige maand">&lsaquo;</button>
+            <button class="knop klein stil" id="mdVolgende" title="Volgende maand">&rsaquo;</button>
+          </div>
+        </div>
+        <div class="grid4">
+          <div class="card"><div class="k">Omzet</div><div class="v" id="mdOmzet">—</div><div class="m">excl. btw</div></div>
+          <div class="card"><div class="k">Kosten</div><div class="v" id="mdKosten">—</div><div class="m">excl. btw</div></div>
+          <div class="card groen"><div class="k">Winst</div><div class="v" id="mdWinst">—</div><div class="m">omzet min kosten</div></div>
+          <div class="card"><div class="k">Marge</div><div class="v" id="mdMarge">—</div><div class="m">winst / omzet</div></div>
+        </div>
+        <h3 style="font-size:.95rem;margin:0 0 10px">Omzet</h3>
+        <div class="tbl-wrap" style="margin-bottom:20px"><table>
+          <thead><tr><th>Datum</th><th>Wat</th><th>Soort</th><th class="r">Bedrag excl.</th></tr></thead>
+          <tbody id="mdOmzetBody"></tbody>
+        </table></div>
+        <h3 style="font-size:.95rem;margin:0 0 10px">Kosten</h3>
+        <div class="tbl-wrap" style="margin-bottom:20px"><table>
+          <thead><tr><th>Datum</th><th>Wat</th><th>Soort</th><th class="r">Bedrag excl.</th></tr></thead>
+          <tbody id="mdKostenBody"></tbody>
+        </table></div>
+      </div>
+
       <!-- ========== OFFERTES ========== -->
       <div class="tab" id="tab-offertes">
         <div class="tab-kop"><h2>Offertes</h2>
@@ -2364,6 +2391,91 @@ function omzetWinstPerMaand(jaar){
   const winst = omzet.map((o, i) => o - kosten[i]);
   return { omzet, kosten, winst };
 }
+
+/* Maanddetail: alle posten achter één regel van "Per maand" op Omzet / winst.
+   Volgt exact dezelfde rekenwijze als omzetWinstPerMaand(), zodat de totalen
+   hier gelijk zijn aan die in de tabel. */
+let mdJaar = null, mdMaand = null;
+
+function maandPosten(jaar, maand){
+  const omzet = [], kosten = [];
+  const inMaand = d => { const x = new Date(d); return x.getFullYear() === jaar && x.getMonth() === maand; };
+  const eersteVanMaand = jaar + "-" + String(maand + 1).padStart(2, "0") + "-01";
+  factData.forEach(f => {
+    const excl = Number(f.bedrag_excl || 0);
+    if (f.type === "verkoop"){
+      if (inMaand(f.datum)) omzet.push({ datum: f.datum, wat: "Factuur " + (f.nummer || "") + " · " + (klantNaam(f.klant_id) || "—"),
+        soort: "Factuur", bedrag: excl, open: () => { toonTab("facturen"); kiesFSub("fUit"); openFactuur(f.id); } });
+    } else if (f.type === "inkoop"){
+      const jr = Number(f.afschrijf_jaren || 0);
+      const fJaar = new Date(f.datum).getFullYear();
+      const wat = (f.leverancier || "—") + (f.nummer && f.nummer !== "-" ? " · " + f.nummer : "");
+      const open = () => { toonTab("facturen"); kiesFSub("fIn"); openInkoop(f.id); };
+      if (f.is_investering && jr > 0){
+        if (jaar >= fJaar && jaar < fJaar + jr)
+          kosten.push({ datum: eersteVanMaand, wat: wat + " (" + eur2(excl) + " over " + jr + " jaar)",
+            soort: "Afschrijving", bedrag: excl / jr / 12, open });
+      } else if (inMaand(f.datum)){
+        kosten.push({ datum: f.datum, wat, soort: kostenNaam(f.categorie || "materiaal"), bedrag: excl, open });
+      }
+    }
+  });
+  cache.correcties.forEach(c => {
+    if (!inMaand(c.datum)) return;
+    const post = { datum: c.datum, wat: c.omschrijving || "—", soort: "Overige boeking", bedrag: Number(c.bedrag_excl || 0),
+      open: () => { toonTab("omzet"); $("owCorrectiesBody").scrollIntoView({ block: "center" }); } };
+    (c.type === "omzet" ? omzet : kosten).push(post);
+  });
+  cache.vasteLasten.forEach(vl => {
+    vasteLastDatumsInJaar(vl, jaar).forEach(datum => {
+      if (new Date(datum).getMonth() === maand)
+        kosten.push({ datum, wat: vl.naam, soort: "Vaste last", bedrag: Number(vl.bedrag || 0), open: () => startVasteLastBewerken(vl.id) });
+    });
+  });
+  const opDatum = (a, b) => String(a.datum).localeCompare(String(b.datum));
+  return { omzet: omzet.sort(opDatum), kosten: kosten.sort(opDatum) };
+}
+
+function openMaandDetail(jaar, maand){
+  mdJaar = jaar; mdMaand = maand;
+  renderMaandDetail();
+  toonTab("maand");
+  document.querySelectorAll('[data-tab="omzet"]').forEach(k => k.classList.add("actief"));
+}
+
+function renderMaandDetail(){
+  if (mdJaar === null) return;
+  const { omzet, kosten } = maandPosten(mdJaar, mdMaand);
+  const som = l => l.reduce((t, p) => t + p.bedrag, 0);
+  const o = som(omzet), k = som(kosten), w = o - k;
+  $("mdTitel").textContent = MAAND_NAMEN[mdMaand] + " " + mdJaar;
+  $("mdOmzet").textContent = eur2(o);
+  $("mdKosten").textContent = eur2(k);
+  $("mdWinst").textContent = eur2(w);
+  $("mdMarge").textContent = o > 0 ? Math.round(w / o * 100) + "%" : "—";
+  const tabel = (id, lijst, leeg) => {
+    $(id).innerHTML = !lijst.length
+      ? '<tr><td colspan="4" class="leeg">' + leeg + '</td></tr>'
+      : lijst.map((p, i) => '<tr class="klik" data-mdi="' + i + '"><td>' + fmtDatum(p.datum) + '</td>' +
+          '<td class="tekst">' + esc(p.wat) + '</td>' +
+          '<td><span class="chip grijs">' + esc(p.soort).toUpperCase() + '</span></td>' +
+          '<td class="r">' + eur2(p.bedrag) + '</td></tr>').join("") +
+        '<tr style="border-top:2px solid var(--line)"><td colspan="3"><b>Totaal</b></td><td class="r"><b>' + eur2(som(lijst)) + '</b></td></tr>';
+    $(id).querySelectorAll("[data-mdi]").forEach(r => r.addEventListener("click", () => lijst[Number(r.dataset.mdi)].open()));
+  };
+  tabel("mdOmzetBody", omzet, "Geen omzet in deze maand.");
+  tabel("mdKostenBody", kosten, "Geen kosten in deze maand.");
+}
+
+$("mdTerug").addEventListener("click", () => toonTab("omzet"));
+$("mdVorige").addEventListener("click", () => {
+  if (mdMaand === 0){ mdMaand = 11; mdJaar--; } else mdMaand--;
+  renderMaandDetail();
+});
+$("mdVolgende").addEventListener("click", () => {
+  if (mdMaand === 11){ mdMaand = 0; mdJaar++; } else mdMaand++;
+  renderMaandDetail();
+});
 
 const MAAND_KORT = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
 const MAAND_NAMEN = ["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
@@ -5490,8 +5602,10 @@ function renderOmzet(){
 
   const fm = omzetWinstPerMaand(jaar);
   $("owMaandBody").innerHTML =
-    MAAND_NAMEN.map((n, i) => rij(n, fm.omzet[i], fm.kosten[i])).join("") +
+    MAAND_NAMEN.map((n, i) => rij(n, fm.omzet[i], fm.kosten[i], ' class="klik" data-owm="' + i + '" title="Bekijk alle cijfers van ' + n.toLowerCase() + '"')).join("") +
     rij("<b>Heel " + jaar + "</b>", omzetJ, kostenJ, ' style="border-top:2px solid var(--line)"');
+  $("owMaandBody").querySelectorAll("[data-owm]").forEach(r =>
+    r.addEventListener("click", () => openMaandDetail(jaar, Number(r.dataset.owm))));
 
   const heeftDetail = { materiaal: "product", werkperstuk: "klus" };
   const bronRijen = Object.entries(winstBronnen(jaar)).filter(([, b]) => b.omzet || b.kost);
@@ -5687,7 +5801,7 @@ function toggleHint(id){
 [["owCorrectiesVraag", "owCorrectiesHint"]]
   .forEach(([knopId, hintId]) => $(knopId).addEventListener("click", () => toggleHint(hintId)));
 
-function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); renderKostensoorten(); }
+function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); renderKostensoorten(); renderMaandDetail(); }
 
 /* Alle inkoopfacturen gegroepeerd per kostensoort — bedrag en leverancier,
    zodat je ziet wat iets gekost heeft en waar je het weer kunt bestellen. */
