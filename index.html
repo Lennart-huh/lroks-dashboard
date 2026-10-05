@@ -1423,16 +1423,6 @@ nav.onderbalk{display:none}
         <div class="subtabs" id="ksSubtabs"></div>
         <div id="ksBlok"></div>
 
-        <div class="form-card" style="margin-top:18px">
-          <div class="tab-kop" style="margin:0 0 12px">
-            <h3 style="font-size:.95rem;margin:0">Vaste lasten</h3>
-            <button class="knop klein stil" id="vlNaarInvullen">+ Vaste last</button>
-          </div>
-          <div class="tbl-wrap"><table>
-            <thead><tr><th>Wat</th><th>Volgende keer</th><th class="r">Bedrag</th></tr></thead>
-            <tbody id="vlBody"></tbody>
-          </table></div>
-        </div>
       </div>
     </main>
   </div>
@@ -2263,25 +2253,6 @@ function vasteLastDatumsInJaar(vl, jaar){
 
 let bewerkVasteLastId = null;
 
-function renderVasteLasten(){
-  const body = $("vlBody");
-  const vandaag = new Date(); vandaag.setHours(0, 0, 0, 0);
-  const lijst = cache.vasteLasten
-    .map(vl => ({ vl, volgende: volgendeAfschrijving(vl, new Date()) }))
-    .sort((a, b) => a.volgende - b.volgende);
-  body.innerHTML = !lijst.length
-    ? '<tr><td colspan="3" class="leeg">Nog geen vaste lasten toegevoegd.</td></tr>'
-    : lijst.map(({ vl, volgende }) => {
-        const dagen = Math.round((volgende - vandaag) / 86400000);
-        const relatief = dagen <= 0 ? "vandaag" : dagen === 1 ? "morgen" : "over " + dagen + " dagen";
-        return '<tr class="klik" data-vlid="' + vl.id + '"><td class="tekst">' + esc(vl.naam) +
-          (vl.categorie ? ' <span class="chip grijs">' + esc(kostenNaam(vl.categorie)) + '</span>' : '') + '</td>' +
-          '<td>' + fmtDatum(isoDatum(volgende)) + ' <span style="color:var(--ink3);font-size:.75rem">(' + relatief + ')</span></td>' +
-          '<td class="r">' + eur2(vl.bedrag) + '</td></tr>';
-      }).join("");
-  body.querySelectorAll("[data-vlid]").forEach(r => r.addEventListener("click", () => startVasteLastBewerken(r.dataset.vlid)));
-}
-
 function vlFormLeeg(){
   bewerkVasteLastId = null;
   $("vlNaam").value = ""; $("vlBedrag").value = "";
@@ -2293,12 +2264,6 @@ function vlFormLeeg(){
   $("vlVerwijder").style.display = "none";
   $("vlAnnuleer").style.display = "none";
 }
-$("vlNaarInvullen").addEventListener("click", () => {
-  vlFormLeeg();
-  toonTab("invullen");
-  kiesSub("sub-vastelast");
-  $("vlNaam").focus();
-});
 $("vlAnnuleer").addEventListener("click", vlFormLeeg);
 
 function startVasteLastBewerken(id){
@@ -2345,7 +2310,7 @@ $("vlOpslaan").addEventListener("click", async () => {
   vlFormLeeg();
   const { data } = await db.from("vaste_lasten").select("*").eq("actief", true);
   cache.vasteLasten = data || [];
-  renderVasteLasten();
+  renderTeBetalen(); renderKostensoorten();
   toast(wasBewerken ? "Vaste last bijgewerkt" : "Vaste last opgeslagen");
 });
 
@@ -2354,10 +2319,11 @@ $("vlVerwijder").addEventListener("click", async () => {
   if (!confirm("Deze vaste last verwijderen?")) return;
   const { error } = await db.from("vaste_lasten").delete().eq("id", bewerkVasteLastId);
   if (error){ toast("Verwijderen mislukt"); return; }
+  const weg = bewerkVasteLastId;
   toast("Verwijderd");
   vlFormLeeg();
-  cache.vasteLasten = cache.vasteLasten.filter(x => x.id !== bewerkVasteLastId);
-  renderVasteLasten();
+  cache.vasteLasten = cache.vasteLasten.filter(x => x.id !== weg);
+  renderTeBetalen(); renderKostensoorten();
 });
 
 /* Omzet en winst per maand, zelfde rekenwijze als financieelJaar() maar dan
@@ -5728,7 +5694,6 @@ function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); rend
 let ksActief = KOSTEN[0][0];
 
 function renderKostensoorten(){
-  renderVasteLasten();
   const jaar = vulJaarKeuze("ksJaar");
   const inkoop = factData.filter(f => f.type === "inkoop" && new Date(f.datum).getFullYear() === jaar);
 
