@@ -239,6 +239,7 @@ nav.onderbalk{display:none}
       <button data-tab="invullen">Invulformulier</button>
       <button data-tab="uren">Urenregistratie</button>
       <button data-tab="km">KM-registratie</button>
+      <button data-tab="auto">Auto</button>
       <div class="groep">Administratie</div>
       <button data-tab="offertes">Offertes</button>
       <button data-tab="facturen">Facturen</button>
@@ -638,6 +639,36 @@ nav.onderbalk{display:none}
             <tbody id="kmBody"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- ========== AUTO ========== -->
+      <div class="tab" id="tab-auto">
+        <div class="tab-kop"><h2>Auto</h2>
+          <select id="auJaar" style="width:auto;padding:8px 12px"></select>
+        </div>
+        <div class="grid4">
+          <div class="card"><div class="k">Autokosten</div><div class="v" id="auKosten">—</div><div class="m" id="auKostenSub">excl. btw</div></div>
+          <div class="card"><div class="k">Gereden</div><div class="v" id="auKm">—</div><div class="m" id="auKmSub"></div></div>
+          <div class="card"><div class="k">Kosten per km</div><div class="v" id="auPerKm">—</div><div class="m" id="auPerKmSub">alle km</div></div>
+          <div class="card" id="auVergKaart"><div class="k">Km gefactureerd</div><div class="v" id="auVerg">—</div><div class="m" id="auVergSub"></div></div>
+        </div>
+        <div class="banner" id="auPrive" style="display:none"></div>
+
+        <h3 style="font-size:.95rem;margin:0 0 10px">Per maand</h3>
+        <div class="tbl-wrap" style="margin-bottom:20px"><table>
+          <thead><tr><th>Maand</th><th class="r">Km zakelijk</th><th class="r">Km privé</th><th class="r">Kosten</th><th class="r">Per km</th><th class="r">Km gefactureerd</th></tr></thead>
+          <tbody id="auMaandBody"></tbody>
+        </table></div>
+
+        <h3 style="font-size:.95rem;margin:0 0 10px">Waar de kosten uit bestaan</h3>
+        <div class="tbl-wrap" style="margin-bottom:6px"><table>
+          <thead><tr><th>Datum</th><th>Wat</th><th>Soort</th><th class="r">Bedrag excl.</th></tr></thead>
+          <tbody id="auKostenBody"></tbody>
+        </table></div>
+        <div class="hint">Hier telt alles mee met kostensoort <b>Vervoer / brandstof</b>: tanken, onderhoud, wegenbelasting en
+          de afschrijving van de auto. De auto zelf voer je in als inkoopfactuur (Invulformulier → Inkoopfactuur) met kostensoort
+          Vervoer / brandstof, <b>Investering: ja</b> en het aantal jaren dat je afschrijft. Die afschrijving telt dan ook mee bij
+          Omzet / winst en Belasting. Is de autoverzekering een vaste last, zet die dan ook op Vervoer / brandstof.</div>
       </div>
 
       <!-- ========== KLANTEN ========== -->
@@ -1461,6 +1492,7 @@ nav.onderbalk{display:none}
     <button data-tab="controle">Controle<span class="nav-tel" id="ctNavTelMob"></span></button>
     <button data-tab="uren">Urenregistratie</button>
     <button data-tab="km">KM-registratie</button>
+    <button data-tab="auto">Auto</button>
     <button data-tab="offertes">Offertes</button>
     <button data-tab="kostensoorten">Kostensoorten</button>
     <button data-tab="projecten">Projecten</button>
@@ -1615,6 +1647,7 @@ function toonTab(naam){
 document.querySelectorAll("[data-tab]").forEach(k =>
   k.addEventListener("click", () => {
     toonTab(k.dataset.tab);
+    if (k.dataset.tab === "auto") renderAuto();
     if (k.dataset.tab === "klussen"){ $("klVergelijkBlok").style.display = "none"; renderKlussenTab(); }
   }));
 $("meerKnop").addEventListener("click", () => $("meerSheet").classList.toggle("open"));
@@ -2880,6 +2913,92 @@ function kmJaarTotaal(jaar){
     .filter(r => r.zakelijk && new Date(r.datum).getFullYear() === jaar)
     .reduce((s,r) => s + r.gereden, 0);
 }
+
+/* Auto: alle kosten met kostensoort 'vervoer' (inkoop, afschrijving van
+   investeringen, vaste lasten) per maand naast de gereden km. Afschrijving
+   rekent hetzelfde als omzetWinstPerMaand(): gelijk verdeeld over de maanden. */
+function autoKostenPosten(jaar){
+  const posten = [];
+  factData.filter(f => f.type === "inkoop" && f.categorie === "vervoer").forEach(f => {
+    const excl = Number(f.bedrag_excl || 0);
+    const jr = Number(f.afschrijf_jaren || 0);
+    const fJaar = new Date(f.datum).getFullYear();
+    const wat = (f.leverancier || "—") + (f.nummer && f.nummer !== "-" ? " · " + f.nummer : "");
+    const open = () => { toonTab("facturen"); kiesFSub("fIn"); openInkoop(f.id); };
+    if (f.is_investering && jr > 0){
+      if (jaar >= fJaar && jaar < fJaar + jr)
+        for (let m = 0; m < 12; m++) posten.push({ maand: m, datum: jaar + "-" + String(m + 1).padStart(2, "0") + "-01",
+          wat: wat + " (" + eur2(excl) + " over " + jr + " jaar)", soort: "Afschrijving", bedrag: excl / jr / 12, open, afschr: f.id });
+    } else if (fJaar === jaar){
+      posten.push({ maand: new Date(f.datum).getMonth(), datum: f.datum, wat, soort: "Inkoop", bedrag: excl, open });
+    }
+  });
+  cache.vasteLasten.filter(vl => vl.categorie === "vervoer").forEach(vl =>
+    vasteLastDatumsInJaar(vl, jaar).forEach(datum => posten.push({ maand: new Date(datum).getMonth(), datum,
+      wat: vl.naam, soort: "Vaste last", bedrag: Number(vl.bedrag || 0), open: () => startVasteLastBewerken(vl.id) })));
+  return posten;
+}
+
+function renderAuto(){
+  const jaar = vulJaarKeuze("auJaar");
+  const posten = autoKostenPosten(jaar);
+  const rijPrijs = r => Number(r.km_prijs ?? (cache.inst.km_prijs || 0));
+  const ritten = kmRegels().filter(r => new Date(r.datum).getFullYear() === jaar);
+  const maanden = MAAND_NAMEN.map(() => ({ zak: 0, prive: 0, kosten: 0, verg: 0 }));
+  ritten.forEach(r => {
+    const m = maanden[new Date(r.datum).getMonth()];
+    if (r.zakelijk){ m.zak += r.gereden; m.verg += r.gereden * rijPrijs(r); } else m.prive += r.gereden;
+  });
+  posten.forEach(p => { maanden[p.maand].kosten += p.bedrag; });
+  const tot = maanden.reduce((t, m) => ({ zak: t.zak + m.zak, prive: t.prive + m.prive, kosten: t.kosten + m.kosten, verg: t.verg + m.verg }),
+    { zak: 0, prive: 0, kosten: 0, verg: 0 });
+  const perKm = (k, km) => km > 0 ? "€ " + (k / km).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+  const nl = n => Math.round(n).toLocaleString("nl-NL");
+
+  $("auKosten").textContent = eur2(tot.kosten);
+  const afschr = posten.filter(p => p.soort === "Afschrijving").reduce((t, p) => t + p.bedrag, 0);
+  $("auKostenSub").textContent = afschr ? "waarvan " + eur2(afschr) + " afschrijving" : "excl. btw · nog geen afschrijving";
+  $("auKm").textContent = nl(tot.zak + tot.prive) + " km";
+  $("auKmSub").textContent = nl(tot.zak) + " zakelijk · " + nl(tot.prive) + " privé";
+  $("auPerKm").textContent = perKm(tot.kosten, tot.zak + tot.prive);
+  $("auPerKmSub").textContent = "per zakelijke km " + perKm(tot.kosten, tot.zak);
+  $("auVerg").textContent = eur2(tot.verg);
+  const verschil = tot.verg - tot.kosten;
+  $("auVergSub").textContent = (verschil >= 0 ? eur2(verschil) + " meer dan de kosten" : eur2(-verschil) + " minder dan de kosten");
+  $("auVergKaart").classList.toggle("groen", verschil >= 0 && tot.kosten > 0);
+  $("auVergKaart").classList.toggle("amber", verschil < 0);
+
+  const prive = $("auPrive");
+  prive.style.display = tot.prive > 0 ? "block" : "none";
+  prive.textContent = tot.prive > 500
+    ? "Je hebt in " + jaar + " " + nl(tot.prive) + " km privé gereden. Staat de auto op de zaak, dan is dat meer dan 500 km en geldt er bijtelling."
+    : "Privé gereden in " + jaar + ": " + nl(tot.prive) + " km van de 500 km die zonder bijtelling mag (als de auto op de zaak staat).";
+
+  $("auMaandBody").innerHTML = maanden.map((m, i) =>
+      '<tr><td>' + MAAND_NAMEN[i] + '</td><td class="r">' + nl(m.zak) + '</td><td class="r">' + nl(m.prive) + '</td>' +
+      '<td class="r">' + eur2(m.kosten) + '</td><td class="r">' + perKm(m.kosten, m.zak + m.prive) + '</td>' +
+      '<td class="r">' + eur2(m.verg) + '</td></tr>').join("") +
+    '<tr style="border-top:2px solid var(--line)"><td><b>Heel ' + jaar + '</b></td><td class="r"><b>' + nl(tot.zak) + '</b></td>' +
+      '<td class="r"><b>' + nl(tot.prive) + '</b></td><td class="r"><b>' + eur2(tot.kosten) + '</b></td>' +
+      '<td class="r"><b>' + perKm(tot.kosten, tot.zak + tot.prive) + '</b></td><td class="r"><b>' + eur2(tot.verg) + '</b></td></tr>';
+
+  // afschrijving als één regel per investering (jaarbedrag), de rest per boeking
+  const lijst = [];
+  const perInvestering = {};
+  posten.forEach(p => {
+    if (!p.afschr) { lijst.push(p); return; }
+    if (!perInvestering[p.afschr]) { perInvestering[p.afschr] = { ...p, datum: jaar + "-01-01", wat: p.wat + " · heel " + jaar, bedrag: 0 }; lijst.push(perInvestering[p.afschr]); }
+    perInvestering[p.afschr].bedrag += p.bedrag;
+  });
+  lijst.sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  $("auKostenBody").innerHTML = !lijst.length
+    ? '<tr><td colspan="4" class="leeg">Nog geen kosten met kostensoort Vervoer / brandstof in ' + jaar + '.</td></tr>'
+    : lijst.map((p, i) => '<tr class="klik" data-aui="' + i + '"><td>' + fmtDatum(p.datum) + '</td>' +
+        '<td class="tekst">' + esc(p.wat) + '</td><td><span class="chip grijs">' + esc(p.soort).toUpperCase() + '</span></td>' +
+        '<td class="r">' + eur2(p.bedrag) + '</td></tr>').join("");
+  $("auKostenBody").querySelectorAll("[data-aui]").forEach(r => r.addEventListener("click", () => lijst[Number(r.dataset.aui)].open()));
+}
+$("auJaar").addEventListener("change", renderAuto);
 
 function renderKm(){
   const p = periodes();
