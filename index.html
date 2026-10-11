@@ -42,8 +42,8 @@ body{background:var(--bg);color:var(--ink);font-family:'Archivo',sans-serif;min-
 button{font-family:inherit}
 
 /* ---------- login ---------- */
-#loginScherm{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
-.login-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:34px 28px}
+#loginScherm{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;padding:20px;overflow-y:auto}
+.login-card{width:100%;max-width:380px;margin:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:34px 28px}
 .login-card .merk{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
 .login-card .merk h1{font-size:1.15rem;font-weight:700;letter-spacing:.06em}
 .login-card .merk span{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase}
@@ -208,12 +208,30 @@ nav.onderbalk{display:none}
 <div id="loginScherm">
   <div class="login-card">
     <div class="merk"><h1>LROKS</h1><span>Command Center</span></div>
-    <p>Log in om verder te gaan.</p>
-    <div class="veld"><label for="loginEmail">E-mail</label>
-      <input id="loginEmail" type="email" autocomplete="username" inputmode="email"></div>
-    <div class="veld"><label for="loginWw">Wachtwoord</label>
-      <input id="loginWw" type="password" autocomplete="current-password"></div>
-    <button class="knop" id="loginKnop">Inloggen</button>
+    <div id="loginStapWw">
+      <p>Log in om verder te gaan.</p>
+      <div class="veld"><label for="loginEmail">E-mail</label>
+        <input id="loginEmail" type="email" autocomplete="username" inputmode="email"></div>
+      <div class="veld"><label for="loginWw">Wachtwoord</label>
+        <input id="loginWw" type="password" autocomplete="current-password"></div>
+      <button class="knop" id="loginKnop">Inloggen</button>
+    </div>
+    <!-- tweede stap: code uit Google Authenticator (of eerst koppelen) -->
+    <div id="loginStapCode" style="display:none">
+      <div id="mfaKoppelUitleg" style="display:none">
+        <p>Eenmalig instellen: open Google Authenticator, tik op <b>+</b> &rarr; <b>QR-code scannen</b> en scan deze code.</p>
+        <div style="background:#fff;border-radius:8px;padding:10px;width:200px;height:200px;margin:0 auto 10px">
+          <img id="mfaQr" alt="QR-code voor Google Authenticator" style="width:180px;height:180px;display:block">
+        </div>
+        <div class="hint" style="text-align:center;margin-bottom:18px;word-break:break-all">Scannen lukt niet? Kies &lsquo;Insteltoets invoeren&rsquo; en typ:<br><b id="mfaGeheim"></b></div>
+      </div>
+      <p id="mfaVraag">Vul de 6-cijferige code uit Google Authenticator in.</p>
+      <div class="veld"><label for="mfaCode">Code</label>
+        <input id="mfaCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*"
+          style="font-family:'IBM Plex Mono',monospace;font-size:1.3rem;letter-spacing:.35em;text-align:center"></div>
+      <button class="knop" id="mfaKnop">Bevestigen</button>
+      <button class="knop stil" id="mfaTerug" style="margin-top:8px">Terug / uitloggen</button>
+    </div>
     <div class="login-fout" id="loginFout"></div>
   </div>
 </div>
@@ -1869,12 +1887,78 @@ $("ikOpslaan").addEventListener("click", async () => {
    ===================================================== */
 async function start(){
   const { data: { session } } = await db.auth.getSession();
-  if (session) toonApp(); else toonLogin();
+  if (session) naWachtwoord(); else toonLogin();
 }
 function toonLogin(){
   $("loginScherm").style.display = "flex";
   $("app").style.display = "none";
+  $("loginStapWw").style.display = "block";
+  $("loginStapCode").style.display = "none";
+  $("loginFout").style.display = "none";
 }
+function loginFout(tekst){
+  $("loginFout").textContent = tekst;
+  $("loginFout").style.display = "block";
+}
+
+/* Tweestapsverificatie (TOTP, Google Authenticator) via Supabase Auth MFA.
+   Wachtwoord alleen geeft een sessie op niveau 'aal1'; pas na de code wordt
+   het 'aal2' en gaat het dashboard open. Is er nog geen authenticator
+   gekoppeld, dan moet je die eerst koppelen — overslaan kan niet. */
+let mfaFactorId = null;
+async function naWachtwoord(){
+  const { data: niveau, error } = await db.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error){ toonLogin(); return; }
+  if (niveau.currentLevel === "aal2"){ toonApp(); return; }
+
+  $("loginScherm").style.display = "flex";
+  $("app").style.display = "none";
+  $("loginStapWw").style.display = "none";
+  $("loginStapCode").style.display = "block";
+  $("loginFout").style.display = "none";
+  $("mfaCode").value = "";
+
+  const { data: factoren, error: fFout } = await db.auth.mfa.listFactors();
+  if (fFout){ loginFout("Kon je authenticator niet ophalen. Probeer opnieuw."); return; }
+  const gekoppeld = (factoren.totp || []).find(f => f.status === "verified");
+  if (gekoppeld){
+    mfaFactorId = gekoppeld.id;
+    $("mfaKoppelUitleg").style.display = "none";
+    $("mfaVraag").textContent = "Vul de 6-cijferige code uit Google Authenticator in.";
+  } else {
+    // half afgemaakte koppelingen van een eerdere poging opruimen
+    for (const f of (factoren.all || []).filter(f => f.status !== "verified"))
+      await db.auth.mfa.unenroll({ factorId: f.id });
+    const { data: nieuw, error: eFout } = await db.auth.mfa.enroll({
+      factorType: "totp", issuer: "LRoks Command Center", friendlyName: "Google Authenticator " + vandaagISO()
+    });
+    if (eFout){ loginFout("Koppelen starten mislukt: " + eFout.message); return; }
+    mfaFactorId = nieuw.id;
+    $("mfaQr").src = nieuw.totp.qr_code;
+    $("mfaGeheim").textContent = nieuw.totp.secret;
+    $("mfaKoppelUitleg").style.display = "block";
+    $("mfaVraag").textContent = "Vul daarna de 6-cijferige code in die de app laat zien.";
+  }
+  $("mfaCode").focus();
+}
+async function bevestigCode(){
+  if ($("mfaKnop").disabled) return;   // automatisch versturen bij 6 cijfers + Enter tegelijk
+  const code = $("mfaCode").value.replace(/\D/g, "");
+  if (code.length !== 6){ loginFout("De code bestaat uit 6 cijfers."); return; }
+  $("mfaKnop").disabled = true; $("mfaKnop").textContent = "Bezig…";
+  const { error } = await db.auth.mfa.challengeAndVerify({ factorId: mfaFactorId, code });
+  $("mfaKnop").disabled = false; $("mfaKnop").textContent = "Bevestigen";
+  if (error){ loginFout("Code klopt niet of is verlopen. Probeer de volgende code."); $("mfaCode").value = ""; $("mfaCode").focus(); return; }
+  $("mfaQr").removeAttribute("src");
+  $("mfaGeheim").textContent = "";
+  toonApp();
+}
+$("mfaKnop").addEventListener("click", bevestigCode);
+$("mfaCode").addEventListener("keydown", e => { if (e.key === "Enter") bevestigCode(); });
+$("mfaCode").addEventListener("input", () => {
+  if ($("mfaCode").value.replace(/\D/g, "").length === 6) bevestigCode();
+});
+$("mfaTerug").addEventListener("click", async () => { await db.auth.signOut(); toonLogin(); });
 async function toonApp(){
   $("loginScherm").style.display = "none";
   $("app").style.display = "block";
@@ -1899,7 +1983,8 @@ async function inloggen(){
   });
   $("loginKnop").disabled = false; $("loginKnop").textContent = "Inloggen";
   if (error) { fout.textContent = "Inloggen mislukt. Controleer je e-mail en wachtwoord."; fout.style.display = "block"; return; }
-  toonApp();
+  $("loginWw").value = "";
+  naWachtwoord();
 }
 $("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut(); toonLogin(); });
 
