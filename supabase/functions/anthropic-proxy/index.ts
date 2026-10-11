@@ -28,6 +28,16 @@ function corsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
+function aalVan(authorization: string | null): string | null {
+  try {
+    const deel = (authorization || "").replace(/^Bearer\s+/i, "").split(".")[1];
+    const b64 = deel.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(deel.length / 4) * 4, "=");
+    return JSON.parse(atob(b64)).aal ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function json(body: unknown, status: number, origin: string | null): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -43,6 +53,13 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method !== "POST") {
     return json({ error: { message: "Alleen POST" } }, 405, origin);
+  }
+
+  // Alleen met tweestapsverificatie (Google Authenticator) erbij. De handtekening
+  // van het token is al gecontroleerd door verify_jwt; hier alleen het niveau
+  // uitlezen: 'aal1' = alleen wachtwoord, 'aal2' = wachtwoord + code.
+  if (aalVan(req.headers.get("authorization")) !== "aal2") {
+    return json({ error: { message: "Log opnieuw in met je authenticator-code" } }, 401, origin);
   }
 
   const sleutel = Deno.env.get("ANTHROPIC_API_KEY");
