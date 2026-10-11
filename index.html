@@ -243,6 +243,7 @@ nav.onderbalk{display:none}
       <div class="groep">Administratie</div>
       <button data-tab="offertes">Offertes</button>
       <button data-tab="facturen">Facturen</button>
+      <button data-tab="betalingen">Betalingen</button>
       <button data-tab="voorraad">Voorraad</button>
       <button data-tab="kostensoorten">Kostensoorten</button>
       <button data-tab="projecten">Projecten</button>
@@ -1183,6 +1184,7 @@ nav.onderbalk{display:none}
                 <button type="button" id="fdiStatusOpen" class="aan">Nog open</button>
                 <button type="button" id="fdiStatusBetaald">Betaald</button>
               </div>
+              <div class="hint" id="fdiBetaaldOp"></div>
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <button class="knop klein stil" id="fdiBewerk">Wijzigen in het invulformulier</button>
@@ -1219,6 +1221,71 @@ nav.onderbalk{display:none}
             <button class="knop klein" id="bgOpslaan">Opslaan</button>
           </div>
         </div>
+      </div>
+      <!-- ========== BETALINGEN ========== -->
+      <div class="tab" id="tab-betalingen">
+        <div class="tab-kop"><h2>Betalingen</h2>
+          <button class="knop klein" id="bpNieuw">+ Betaling zonder factuur</button>
+        </div>
+        <div class="grid4">
+          <div class="card"><div class="k">Betaald</div><div class="v" id="bpUit">—</div><div class="m" id="bpUitSub">incl. btw</div></div>
+          <div class="card groen"><div class="k">Ontvangen</div><div class="v" id="bpIn">—</div><div class="m" id="bpInSub">incl. btw</div></div>
+          <div class="card amber"><div class="k">Nog te betalen</div><div class="v" id="bpOpen">—</div><div class="m" id="bpOpenSub"></div></div>
+          <div class="card"><div class="k">Factuur ontbreekt</div><div class="v" id="bpMist">—</div><div class="m" id="bpMistSub"></div></div>
+        </div>
+
+        <div class="form-card" id="bpLosForm" style="display:none;margin-bottom:18px;max-width:620px">
+          <h3 style="font-size:.95rem;margin:0 0 12px" id="bpLosTitel">Betaling zonder factuur</h3>
+          <div class="veld"><label>Richting</label>
+            <div class="schakel">
+              <button type="button" id="bpLosUit" class="aan">Afgeschreven (ik betaalde)</button>
+              <button type="button" id="bpLosIn">Bijgeschreven (ik ontving)</button>
+            </div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Datum en tijd</label><input type="datetime-local" id="bpLosWanneer"></div>
+            <div class="veld"><label>Bedrag incl. btw</label><input type="number" step="0.01" min="0" id="bpLosBedrag" placeholder="0,00"></div>
+          </div>
+          <div class="veld"><label>Tegenpartij</label><input type="text" id="bpLosTegen" list="ikLevLijst" placeholder="bv. Hornbach"></div>
+          <div class="veld"><label>Omschrijving</label><input type="text" id="bpLosOms" placeholder="wat je in je bank-app ziet staan"></div>
+          <div class="veld" id="bpLosKoppelVeld" style="display:none"><label>Factuur is er nu — koppelen</label>
+            <div style="display:flex;gap:6px">
+              <select id="bpLosKoppel" style="flex:1"></select>
+              <button type="button" class="knop klein stil" id="bpLosKoppelKnop">Koppelen</button>
+            </div>
+            <div class="hint">Staat de factuur nog niet in het systeem? Voer 'm eerst in via Invulformulier, en koppel 'm daarna hier. De factuur krijgt dan deze betaaltijd en deze losse regel verdwijnt.</div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="knop klein" id="bpLosOpslaan">Opslaan</button>
+            <button class="knop klein stil" id="bpLosSluit">Sluiten</button>
+            <button class="knop klein gevaar" id="bpLosVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+          </div>
+        </div>
+
+        <div class="form-card" id="bpFactForm" style="display:none;margin-bottom:18px;max-width:620px">
+          <h3 style="font-size:.95rem;margin:0 0 12px" id="bpFactTitel">Betaling</h3>
+          <div class="veld"><label>Betaald op (datum en tijd)</label><input type="datetime-local" id="bpFactWanneer">
+            <div class="hint" id="bpFactHint"></div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="knop klein" id="bpFactOpslaan">Opslaan</button>
+            <button class="knop klein stil" id="bpFactNaarFactuur">Factuur openen</button>
+            <button class="knop klein stil" id="bpFactSluit">Sluiten</button>
+            <button class="knop klein gevaar" id="bpFactOnbetaald" style="margin-left:auto">Toch niet betaald</button>
+          </div>
+        </div>
+
+        <div id="bpOpenBlok" style="margin-bottom:22px"></div>
+
+        <div class="subtabs" id="bpFilter">
+          <button data-bpf="alles" class="aan">Alles</button>
+          <button data-bpf="uit">Afgeschreven</button>
+          <button data-bpf="in">Bijgeschreven</button>
+          <button data-bpf="mist">Factuur ontbreekt</button>
+          <select id="bpMaand" style="margin-left:auto;padding:8px 12px;border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--ink);font-size:.84rem"></select>
+        </div>
+        <div id="bpLijst"></div>
+        <div class="hint" style="margin-top:10px">Bedragen incl. btw, zoals ze op je bankafschrift staan. Facturen die al betaald waren vóór dit tabblad bestond hebben geen betaaltijd; die staan op hun factuurdatum met "tijd ?" — klik erop om de echte datum en tijd in te vullen.</div>
       </div>
       <div class="tab" id="tab-voorraad">
         <div class="tab-kop"><h2>Voorraad</h2>
@@ -1493,6 +1560,7 @@ nav.onderbalk{display:none}
     <button data-tab="uren">Urenregistratie</button>
     <button data-tab="km">KM-registratie</button>
     <button data-tab="auto">Auto</button>
+    <button data-tab="betalingen">Betalingen</button>
     <button data-tab="offertes">Offertes</button>
     <button data-tab="kostensoorten">Kostensoorten</button>
     <button data-tab="projecten">Projecten</button>
@@ -1648,6 +1716,7 @@ document.querySelectorAll("[data-tab]").forEach(k =>
   k.addEventListener("click", () => {
     toonTab(k.dataset.tab);
     if (k.dataset.tab === "auto") renderAuto();
+    if (k.dataset.tab === "betalingen") herlaadBetalingen();
     if (k.dataset.tab === "klussen"){ $("klVergelijkBlok").style.display = "none"; renderKlussenTab(); }
   }));
 $("meerKnop").addEventListener("click", () => $("meerSheet").classList.toggle("open"));
@@ -1898,6 +1967,7 @@ async function laadAlles(){
     renderHoofd();
     renderFinancieel();
     checkHerinnering();
+    herlaadBetalingen();
 
     dbStatus.textContent = "Database verbonden";
     dbBol.style.background = "var(--groen)";
@@ -5400,6 +5470,7 @@ async function herlaadFacturen(){
   factData = data || [];
   cache.regels = fr.data || [];
   cache.mutaties = vm.data || [];
+  renderBetalingen();
   renderFacturen();
   renderHoofd();
   renderFinancieel();
@@ -5454,6 +5525,310 @@ function renderFacturen(){
     r.addEventListener("click", () => openInkoop(r.dataset.fiid)));
 }
 
+/* =====================================================
+   BETALINGEN — een soort betaalrekening: elke betaalde factuur op datum en
+   tijd, plus losse betalingen waarvan de factuur nog ontbreekt.
+   Er is bewust geen bankkoppeling; alles komt uit de facturen zelf.
+   betaald_op wordt door een trigger in de database gevuld zodra een factuur
+   op 'betaald' gaat, en weer leeggemaakt als hij terug naar open gaat.
+   ===================================================== */
+let losseBetalingen = [];
+let bpFilter = "alles";
+let bpMaandKeuze = null;      // "2026-10", of "" voor alles
+let bpLosId = null, bpLosRichting = "uit";
+let bpFactId = null;
+
+const DAGEN = ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
+const MAANDEN_LANG = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+const bpIncl = f => r2(Number(f.bedrag_excl || 0) + Number(f.btw_bedrag || 0));
+// timestamptz <-> waarde voor <input type="datetime-local"> (in lokale tijd)
+function naarLokaalInput(iso){
+  const d = iso ? new Date(iso) : new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+function lokaleDag(d){
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+const tijdVan = d => String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+
+async function herlaadBetalingen(){
+  const { data, error } = await db.from("losse_betalingen").select("*").order("betaald_op", { ascending:false });
+  if (!error) losseBetalingen = data || [];
+  renderBetalingen();
+}
+
+/* alle posten als regels van een afschrift: { dag, tijd, sort, richting, bedrag, ... } */
+function bpPosten(){
+  const posten = [];
+  factData.filter(f => f.status === "betaald" && (f.type === "inkoop" || f.type === "verkoop")).forEach(f => {
+    const d = f.betaald_op ? new Date(f.betaald_op) : null;
+    posten.push({
+      soort: "factuur", id: f.id, type: f.type,
+      richting: f.type === "inkoop" ? "uit" : "in",
+      dag: d ? lokaleDag(d) : f.datum,
+      tijd: d ? tijdVan(d) : null,
+      // zonder tijd onderaan de dag
+      sort: d ? d.getTime() : new Date(f.datum + "T00:00:00").getTime() - 1,
+      naam: f.type === "inkoop" ? (f.leverancier || "—") : (klantNaam(f.klant_id) || "—"),
+      sub: (f.type === "inkoop" ? "Inkoopfactuur" : "Verkoopfactuur") + (f.nummer && f.nummer !== "-" ? " " + f.nummer : ""),
+      bedrag: bpIncl(f)
+    });
+  });
+  losseBetalingen.forEach(l => {
+    const d = new Date(l.betaald_op);
+    posten.push({
+      soort: "los", id: l.id, richting: l.richting,
+      dag: lokaleDag(d), tijd: tijdVan(d), sort: d.getTime(),
+      naam: l.tegenpartij || "—", sub: l.omschrijving || "",
+      bedrag: Number(l.bedrag || 0)
+    });
+  });
+  return posten.sort((a, b) => b.sort - a.sort);
+}
+
+function renderBetalingen(){
+  if (!$("bpLijst")) return;
+  const alle = bpPosten();
+
+  // maandkeuze: standaard de huidige maand
+  const maanden = [...new Set(alle.map(p => p.dag.slice(0, 7)))].sort().reverse();
+  const dezeMaand = vandaagISO().slice(0, 7);
+  if (!maanden.includes(dezeMaand)) maanden.unshift(dezeMaand);
+  if (bpMaandKeuze === null) bpMaandKeuze = dezeMaand;
+  $("bpMaand").innerHTML = '<option value="">Alle maanden</option>' + maanden.map(m => {
+    const [j, mm] = m.split("-");
+    return '<option value="' + m + '"' + (m === bpMaandKeuze ? " selected" : "") + '>' +
+      MAANDEN_LANG[Number(mm) - 1] + " " + j + '</option>';
+  }).join("");
+
+  const inMaand = alle.filter(p => !bpMaandKeuze || p.dag.startsWith(bpMaandKeuze));
+  const label = bpMaandKeuze ? MAANDEN_LANG[Number(bpMaandKeuze.slice(5)) - 1] : "totaal";
+  const uit = inMaand.filter(p => p.richting === "uit"), bij = inMaand.filter(p => p.richting === "in");
+  $("bpUit").textContent = eur2(uit.reduce((s, p) => s + p.bedrag, 0));
+  $("bpUitSub").textContent = label + " · " + uit.length + " posten";
+  $("bpIn").textContent = eur2(bij.reduce((s, p) => s + p.bedrag, 0));
+  $("bpInSub").textContent = label + " · " + bij.length + " posten";
+
+  const openInkoop = factData.filter(f => f.type === "inkoop" && f.status === "open");
+  $("bpOpen").textContent = eur2(openInkoop.reduce((s, f) => s + bpIncl(f), 0));
+  $("bpOpenSub").textContent = openInkoop.length + " inkoopfacturen";
+  const mist = losseBetalingen.filter(l => l.richting === "uit");
+  $("bpMist").textContent = losseBetalingen.length;
+  $("bpMist").style.color = losseBetalingen.length ? "var(--rood)" : "";
+  $("bpMistSub").textContent = losseBetalingen.length
+    ? "losse betalingen · " + eur2(mist.reduce((s, l) => s + Number(l.bedrag || 0), 0)) + " af" : "alles heeft een factuur";
+
+  renderBpOpen();
+
+  const lijst = inMaand.filter(p =>
+    bpFilter === "alles" ? true : bpFilter === "mist" ? p.soort === "los" : p.richting === bpFilter);
+  if (!lijst.length){
+    $("bpLijst").innerHTML = '<div class="card leeg">Geen betalingen in deze periode.</div>';
+    return;
+  }
+  // per dag groeperen, zoals een bankafschrift
+  const perDag = [];
+  lijst.forEach(p => {
+    const laatste = perDag[perDag.length - 1];
+    if (laatste && laatste.dag === p.dag) laatste.posten.push(p);
+    else perDag.push({ dag: p.dag, posten: [p] });
+  });
+  $("bpLijst").innerHTML = perDag.map(g => {
+    const d = new Date(g.dag + "T00:00:00");
+    const saldo = g.posten.reduce((s, p) => s + (p.richting === "in" ? p.bedrag : -p.bedrag), 0);
+    return '<div class="tbl-wrap" style="margin-bottom:12px"><table>' +
+      '<thead><tr><th colspan="2">' + DAGEN[d.getDay()] + " " + d.getDate() + " " + MAANDEN_LANG[d.getMonth()] + " " + d.getFullYear() +
+      '</th><th class="r" style="color:' + (saldo < 0 ? "var(--rood)" : "var(--groen)") + '">' + (saldo < 0 ? "− " : "+ ") + eur2(Math.abs(saldo)).slice(2) + '</th></tr></thead><tbody>' +
+      g.posten.map(p =>
+        '<tr class="klik" data-bpsoort="' + p.soort + '" data-bpid="' + p.id + '">' +
+          '<td class="mono" style="width:62px;color:var(--ink2)">' + (p.tijd || '<span title="Tijd niet vastgelegd — klik om in te vullen">tijd ?</span>') + '</td>' +
+          // label onder de naam i.p.v. eigen kolom, anders valt het bedrag op mobiel buiten beeld
+          '<td class="tekst"><b>' + esc(p.naam) + '</b><div class="hint" style="margin-top:3px">' +
+            (p.soort === "los" ? '<span class="chip rood">FACTUUR ONTBREEKT</span> ' : '') + esc(p.sub) + '</div></td>' +
+          '<td class="r mono" style="white-space:nowrap;color:' + (p.richting === "in" ? "var(--groen)" : "var(--ink)") + '">' +
+            (p.richting === "in" ? "+ " : "− ") + eur2(p.bedrag).slice(2) + '</td>' +
+        '</tr>').join("") +
+      '</tbody></table></div>';
+  }).join("");
+  $("bpLijst").querySelectorAll("[data-bpid]").forEach(r => r.addEventListener("click", () => {
+    if (r.dataset.bpsoort === "los") openLosseBetaling(r.dataset.bpid);
+    else openBpFactuur(r.dataset.bpid);
+  }));
+}
+
+/* openstaande inkoopfacturen, met één klik op betaald (tijd = nu) */
+function renderBpOpen(){
+  const open = factData.filter(f => f.type === "inkoop" && f.status === "open")
+    .sort((a, b) => String(a.vervaldatum || a.datum).localeCompare(String(b.vervaldatum || b.datum)));
+  if (!open.length){ $("bpOpenBlok").innerHTML = ""; return; }
+  const vandaag = vandaagISO();
+  $("bpOpenBlok").innerHTML =
+    '<h3 style="font-size:.95rem;margin:0 0 10px">Nog te betalen</h3>' +
+    '<div class="tbl-wrap"><table><thead><tr><th>Leverancier</th><th>Vervalt</th><th class="r">Bedrag</th></tr></thead><tbody>' +
+    open.map(f =>
+      '<tr><td class="tekst">' + esc(f.leverancier || "—") +
+        (f.nummer && f.nummer !== "-" ? '<div class="hint" style="margin-top:2px">' + esc(f.nummer) + '</div>' : '') + '</td>' +
+      '<td>' + fmtDatum(f.vervaldatum || f.datum) +
+        (f.vervaldatum && f.vervaldatum < vandaag ? '<br><span class="chip rood">VERLOPEN</span>' : '') + '</td>' +
+      '<td class="r mono">' + eur2(bpIncl(f)) +
+        '<br><button class="knop klein stil" style="margin-top:6px;padding:7px 11px" data-bpbetaal="' + f.id + '">Nu betaald</button></td></tr>').join("") +
+    '</tbody></table></div>';
+  $("bpOpenBlok").querySelectorAll("[data-bpbetaal]").forEach(k => k.addEventListener("click", async () => {
+    k.disabled = true;
+    const { error } = await db.from("facturen").update({ status: "betaald" }).eq("id", k.dataset.bpbetaal);
+    if (error){ toast("Bijwerken mislukt"); k.disabled = false; return; }
+    toast("Betaald — tijd vastgelegd");
+    await herlaadFacturen();
+  }));
+}
+
+/* ---- betaaltijd van een factuur aanpassen ---- */
+function openBpFactuur(id){
+  const f = factData.find(x => x.id === id);
+  if (!f) return;
+  bpFactId = id;
+  $("bpLosForm").style.display = "none";
+  $("bpFactTitel").textContent = (f.type === "inkoop" ? (f.leverancier || "—") : (klantNaam(f.klant_id) || "—")) +
+    " · " + eur2(bpIncl(f));
+  $("bpFactWanneer").value = f.betaald_op ? naarLokaalInput(f.betaald_op) : f.datum + "T12:00";
+  $("bpFactHint").textContent = f.betaald_op
+    ? "Factuurdatum " + fmtDatum(f.datum) + ". Pas aan als je eerder of later betaalde dan je 'm op betaald zette."
+    : "Nog geen betaaltijd vastgelegd — nu ingevuld met de factuurdatum, 12:00. Zet hier neer wanneer het echt van je rekening ging.";
+  $("bpFactOnbetaald").textContent = f.type === "inkoop" ? "Toch niet betaald" : "Toch niet ontvangen";
+  $("bpFactForm").style.display = "block";
+  window.scrollTo(0, 0);
+}
+$("bpFactSluit").addEventListener("click", () => { $("bpFactForm").style.display = "none"; bpFactId = null; });
+$("bpFactOpslaan").addEventListener("click", async () => {
+  if (!bpFactId || !$("bpFactWanneer").value){ toast("Vul datum en tijd in"); return; }
+  const { error } = await db.from("facturen")
+    .update({ betaald_op: new Date($("bpFactWanneer").value).toISOString() }).eq("id", bpFactId);
+  if (error){ toast("Opslaan mislukt"); return; }
+  toast("Betaaltijd opgeslagen");
+  $("bpFactForm").style.display = "none"; bpFactId = null;
+  await herlaadFacturen();
+});
+$("bpFactOnbetaald").addEventListener("click", async () => {
+  if (!bpFactId || !confirm("Deze factuur weer op open zetten?")) return;
+  const { error } = await db.from("facturen").update({ status: "open" }).eq("id", bpFactId);
+  if (error){ toast("Bijwerken mislukt"); return; }
+  toast("Weer op open gezet");
+  $("bpFactForm").style.display = "none"; bpFactId = null;
+  await herlaadFacturen();
+});
+$("bpFactNaarFactuur").addEventListener("click", () => {
+  const f = factData.find(x => x.id === bpFactId);
+  if (!f) return;
+  $("bpFactForm").style.display = "none";
+  toonTab("facturen");
+  if (f.type === "inkoop"){ kiesFSub("fIn"); openInkoop(f.id); }
+  else { kiesFSub("fUit"); openFactuur(f.id); }
+});
+
+/* ---- losse betaling (factuur ontbreekt nog) ---- */
+function zetBpRichting(r){
+  bpLosRichting = r;
+  schakel(r === "uit" ? "bpLosUit" : "bpLosIn", r === "uit" ? "bpLosIn" : "bpLosUit");
+  vulBpKoppel();
+}
+$("bpLosUit").addEventListener("click", () => zetBpRichting("uit"));
+$("bpLosIn").addEventListener("click", () => zetBpRichting("in"));
+
+// facturen die bij deze betaling kunnen horen: zelfde kant op, nog niet betaald,
+// of betaald zonder vastgelegde tijd. Gelijk bedrag bovenaan.
+function vulBpKoppel(){
+  const bedrag = Number($("bpLosBedrag").value) || 0;
+  const type = bpLosRichting === "uit" ? "inkoop" : "verkoop";
+  const kandidaten = factData.filter(f => f.type === type && f.status !== "concept" && (f.status !== "betaald" || !f.betaald_op))
+    .map(f => ({ f, gelijk: Math.abs(bpIncl(f) - bedrag) < 0.005 }))
+    .sort((a, b) => (b.gelijk - a.gelijk) || String(b.f.datum).localeCompare(String(a.f.datum)));
+  $("bpLosKoppel").innerHTML = '<option value="">— kies de factuur —</option>' + kandidaten.map(({ f, gelijk }) =>
+    '<option value="' + f.id + '">' + (gelijk ? "✓ " : "") +
+    esc(type === "inkoop" ? (f.leverancier || "—") : (klantNaam(f.klant_id) || "—")) +
+    " · " + fmtDatum(f.datum) + " · " + eur2(bpIncl(f)) + (f.status === "betaald" ? " (betaald, tijd ?)" : "") + '</option>').join("");
+}
+$("bpLosBedrag").addEventListener("input", vulBpKoppel);
+
+function bpLosLeeg(){
+  bpLosId = null;
+  $("bpLosTitel").textContent = "Betaling zonder factuur";
+  $("bpLosWanneer").value = naarLokaalInput(null);
+  ["bpLosBedrag","bpLosTegen","bpLosOms"].forEach(id => $(id).value = "");
+  zetBpRichting("uit");
+  $("bpLosKoppelVeld").style.display = "none";
+  $("bpLosVerwijder").style.display = "none";
+}
+$("bpNieuw").addEventListener("click", () => {
+  bpLosLeeg();
+  $("bpFactForm").style.display = "none";
+  $("bpLosForm").style.display = "block";
+  $("bpLosBedrag").focus();
+});
+function openLosseBetaling(id){
+  const l = losseBetalingen.find(x => x.id === id);
+  if (!l) return;
+  bpLosId = id;
+  $("bpFactForm").style.display = "none";
+  $("bpLosTitel").textContent = "Losse betaling — factuur ontbreekt";
+  $("bpLosWanneer").value = naarLokaalInput(l.betaald_op);
+  $("bpLosBedrag").value = l.bedrag;
+  $("bpLosTegen").value = l.tegenpartij || "";
+  $("bpLosOms").value = l.omschrijving || "";
+  zetBpRichting(l.richting);
+  $("bpLosKoppelVeld").style.display = "block";
+  $("bpLosVerwijder").style.display = "inline-block";
+  $("bpLosForm").style.display = "block";
+  window.scrollTo(0, 0);
+}
+$("bpLosSluit").addEventListener("click", () => { $("bpLosForm").style.display = "none"; bpLosId = null; });
+$("bpLosOpslaan").addEventListener("click", async () => {
+  const bedrag = Number($("bpLosBedrag").value);
+  if (!$("bpLosWanneer").value || !(bedrag > 0)){ toast("Vul datum/tijd en een bedrag in"); return; }
+  const rij = {
+    betaald_op: new Date($("bpLosWanneer").value).toISOString(),
+    richting: bpLosRichting, bedrag: r2(bedrag),
+    tegenpartij: $("bpLosTegen").value.trim() || null,
+    omschrijving: $("bpLosOms").value.trim() || null
+  };
+  const { error } = bpLosId
+    ? await db.from("losse_betalingen").update(rij).eq("id", bpLosId)
+    : await db.from("losse_betalingen").insert(rij);
+  if (error){ toast("Opslaan mislukt"); return; }
+  toast(bpLosId ? "Betaling bijgewerkt" : "Betaling toegevoegd — factuur ontbreekt nog");
+  $("bpLosForm").style.display = "none"; bpLosId = null;
+  await herlaadBetalingen();
+});
+$("bpLosVerwijder").addEventListener("click", async () => {
+  if (!bpLosId || !confirm("Deze losse betaling verwijderen?")) return;
+  const { error } = await db.from("losse_betalingen").delete().eq("id", bpLosId);
+  if (error){ toast("Verwijderen mislukt"); return; }
+  toast("Verwijderd");
+  $("bpLosForm").style.display = "none"; bpLosId = null;
+  await herlaadBetalingen();
+});
+/* koppelen: factuur wordt betaald met de tijd van deze betaling, losse regel verdwijnt */
+$("bpLosKoppelKnop").addEventListener("click", async () => {
+  const fid = $("bpLosKoppel").value;
+  const l = losseBetalingen.find(x => x.id === bpLosId);
+  if (!fid || !l){ toast("Kies eerst een factuur"); return; }
+  const { error } = await db.from("facturen").update({ status: "betaald", betaald_op: l.betaald_op }).eq("id", fid);
+  if (error){ toast("Koppelen mislukt"); return; }
+  const { error: fout } = await db.from("losse_betalingen").delete().eq("id", l.id);
+  if (fout) toast("Factuur betaald, maar losse regel niet verwijderd");
+  else toast("Gekoppeld aan de factuur");
+  $("bpLosForm").style.display = "none"; bpLosId = null;
+  await herlaadFacturen();
+  await herlaadBetalingen();
+});
+
+document.querySelectorAll("[data-bpf]").forEach(k => k.addEventListener("click", () => {
+  bpFilter = k.dataset.bpf;
+  document.querySelectorAll("[data-bpf]").forEach(b => b.classList.toggle("aan", b === k));
+  renderBetalingen();
+}));
+$("bpMaand").addEventListener("change", () => { bpMaandKeuze = $("bpMaand").value; renderBetalingen(); });
+
 /* ---- inkoopfacturen: hier alleen bekijken.
      Toevoegen en wijzigen gaat via Invulformulier > Inkoopfactuur ---- */
 let bekijkInkoopId = null;
@@ -5471,6 +5846,9 @@ function openInkoop(id){
   $("fdiCategorie").textContent = kostenNaam(f.categorie) + (f.is_investering ? "  (investering / KIA)" : "");
   $("fdiProject").textContent = projectNaam(f.project_id) || "\u2014";
   $("fdiNotitie").textContent = f.notities || "\u2014";
+  $("fdiBetaaldOp").textContent = f.status !== "betaald" ? ""
+    : f.betaald_op ? "Betaald op " + new Date(f.betaald_op).toLocaleString("nl-NL", { dateStyle:"medium", timeStyle:"short" }) + " — aanpassen kan in Betalingen"
+    : "Betaaltijd niet vastgelegd — vul 'm in via Betalingen";
   zetInkoopStatus(f.status === "betaald" ? "betaald" : "open");
   $("fiDetail").style.display = "block";
   laadInkoopRegels(id);
