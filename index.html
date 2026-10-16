@@ -1901,9 +1901,57 @@ $("ikOpslaan").addEventListener("click", async () => {
    ===================================================== */
 async function start(){
   const { data: { session } } = await db.auth.getSession();
-  if (session) naWachtwoord(); else toonLogin();
+  if (!session){ toonLogin(); return; }
+  // browser dicht geweest en te lang niets gedaan: niet stilletjes weer binnen
+  if (Date.now() - laatstActief() > INACTIEF_MS){ await automatischUitloggen(); return; }
+  naWachtwoord();
 }
+
+/* Automatisch uitloggen na 30 minuten zonder klikken, typen of scrollen.
+   Het moment van laatste activiteit staat in localStorage, zodat meerdere
+   tabbladen samen tellen en een gesloten browser die later weer opengaat
+   ook als inactief geldt. Uitloggen gebeurt ook bij Supabase (scope 'local':
+   alleen deze sessie, je andere apparaten blijven ingelogd). */
+const INACTIEF_MS = 30 * 60 * 1000;
+const WAARSCHUW_MS = 2 * 60 * 1000;
+let sessieActief = false, inactiefGewaarschuwd = false;
+function laatstActief(){
+  try { return Number(localStorage.getItem("lroks_laatst_actief")) || 0; } catch { return 0; }
+}
+function markeerActief(){
+  inactiefGewaarschuwd = false;
+  try { localStorage.setItem("lroks_laatst_actief", String(Date.now())); } catch {}
+}
+let activiteitGemeld = 0;
+["pointerdown","keydown","scroll","touchstart","mousemove","wheel"].forEach(ev =>
+  window.addEventListener(ev, () => {
+    if (!sessieActief) return;
+    const nu = Date.now();
+    if (nu - activiteitGemeld < 15000) return;   // niet bij elke muisbeweging schrijven
+    activiteitGemeld = nu;
+    markeerActief();
+  }, { passive:true, capture:true }));
+async function automatischUitloggen(){
+  sessieActief = false;
+  await db.auth.signOut({ scope: "local" });
+  toonLogin();
+  loginFout("Je bent automatisch uitgelogd na 30 minuten zonder activiteit.");
+}
+function controleerInactief(){
+  if (!sessieActief) return;
+  const stil = Date.now() - laatstActief();
+  if (stil > INACTIEF_MS) automatischUitloggen();
+  else if (stil > INACTIEF_MS - WAARSCHUW_MS && !inactiefGewaarschuwd){
+    inactiefGewaarschuwd = true;
+    toast("Over 2 minuten word je uitgelogd — klik ergens om ingelogd te blijven");
+  }
+}
+setInterval(controleerInactief, 20000);
+// timers lopen trager in een tabblad op de achtergrond: bij terugkomen meteen kijken
+document.addEventListener("visibilitychange", () => { if (!document.hidden) controleerInactief(); });
+
 function toonLogin(){
+  sessieActief = false;
   $("loginScherm").style.display = "flex";
   $("app").style.display = "none";
   $("loginStapWw").style.display = "block";
@@ -1921,6 +1969,8 @@ function loginFout(tekst){
    gekoppeld, dan moet je die eerst koppelen — overslaan kan niet. */
 let mfaFactorId = null;
 async function naWachtwoord(){
+  sessieActief = true;
+  markeerActief();
   const { data: niveau, error } = await db.auth.mfa.getAuthenticatorAssuranceLevel();
   if (error){ toonLogin(); return; }
   if (niveau.currentLevel === "aal2"){ toonApp(); return; }
@@ -2000,7 +2050,7 @@ async function inloggen(){
   $("loginWw").value = "";
   naWachtwoord();
 }
-$("uitlogKnop").addEventListener("click", async () => { await db.auth.signOut(); toonLogin(); });
+$("uitlogKnop").addEventListener("click", async () => { sessieActief = false; await db.auth.signOut(); toonLogin(); });
 
 /* =====================================================
    ALLES LADEN
