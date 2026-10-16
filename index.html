@@ -4835,11 +4835,41 @@ $("pfAnnuleer").addEventListener("click", () => {
 });
 
 function matchProduct(oms){
-  const o = String(oms || "").toLowerCase();
+  const o = String(oms || "").trim().toLowerCase();
+  if (!o) return null;
+  /* eerst exact op volledige naam — daar staat sinds de uitlezer de
+     omschrijving van de leverancier in, dus een herhaalaankoop valt meteen goed */
+  const exact = cache.producten.find(p => (p.volledige_naam || "").trim().toLowerCase() === o);
+  if (exact) return exact;
   return cache.producten.find(p => {
     const n = p.naam.toLowerCase();
     return o.includes(n) || n.includes(o);
   }) || null;
+}
+
+/* Korte naam voorstellen uit de omschrijving van de leverancier: hooguit
+   ~40 tekens, afgekapt op een woordgrens. Pas je later zelf aan. */
+function korteNaam(oms){
+  const t = String(oms || "").replace(/\s+/g, " ").trim();
+  if (t.length <= 40) return t;
+  const kap = t.slice(0, 40);
+  const spatie = kap.lastIndexOf(" ");
+  return (spatie > 15 ? kap.slice(0, spatie) : kap).trim();
+}
+
+/* "Koppel aan"-lijst voor één regel: de producten uit de gekozen categorie
+   bovenaan, zodat je ziet of het product daar al in staat; de rest eronder. */
+function pfKoppelOpties(catId, gekozen){
+  const optie = p => '<option value="' + p.id + '"' + (gekozen === p.id ? ' selected' : '') + '>' + esc(p.naam) + '</option>';
+  const opNaam = (a, b) => a.naam.localeCompare(b.naam, "nl");
+  const vast = '<option value="_skip"' + (gekozen === "_skip" ? ' selected' : '') + '>— overslaan —</option>' +
+    '<option value="_nieuw"' + (gekozen === "_nieuw" ? ' selected' : '') + '>+ Nieuw product</option>';
+  if (!catId) return vast + [...cache.producten].sort(opNaam).map(optie).join("");
+  const inCat = cache.producten.filter(p => p.categorie_id === catId).sort(opNaam);
+  const rest = cache.producten.filter(p => p.categorie_id !== catId).sort(opNaam);
+  return vast +
+    '<optgroup label="In ' + esc(catNaam(catId) || "deze categorie") + ' (' + inCat.length + ')">' + inCat.map(optie).join("") + '</optgroup>' +
+    (rest.length ? '<optgroup label="Andere categorieën">' + rest.map(optie).join("") + '</optgroup>' : "");
 }
 
 function toonPfRegels(regels){
@@ -4848,36 +4878,51 @@ function toonPfRegels(regels){
 
   $("pfRegels").innerHTML = regels.map((r, i) => {
     const match = matchProduct(r.omschrijving);
-    const opties = cache.producten.map(p =>
-      '<option value="' + p.id + '"' + (match && match.id === p.id ? ' selected' : '') + '>' + esc(p.naam) + '</option>').join("");
     /* bestaat het product al, dan zijn categorie voorselecteren */
     const gekozenCat = match && match.categorie_id ? match.categorie_id : "";
     const catMetSel = catOpties.replace('value="' + gekozenCat + '"', 'value="' + gekozenCat + '" selected');
     return '<div class="pf-regel" data-i="' + i + '" style="border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px">' +
+      '<div class="veld"><label>Volledige naam (zoals op de factuur)</label><input type="text" class="pfr-naam" value="' + esc(r.omschrijving || "") + '"></div>' +
       '<div class="rij2">' +
-        '<div class="veld"><label>Omschrijving</label><input type="text" class="pfr-naam" value="' + esc(r.omschrijving || "") + '"></div>' +
+        '<div class="veld"><label>Categorie</label><select class="pfr-cat">' + catMetSel + '</select>' +
+          '<div class="hint pfr-cat-hint"></div></div>' +
         '<div class="veld"><label>Koppel aan</label><select class="pfr-select">' +
-          '<option value="_skip">— overslaan —</option>' +
-          '<option value="_nieuw"' + (!match ? ' selected' : '') + '>+ Nieuw product</option>' +
-          opties +
+          pfKoppelOpties(gekozenCat, match ? match.id : "_nieuw") +
         '</select></div>' +
       '</div>' +
+      '<div class="veld pfr-kort-veld"><label>Naam (kort)</label><input type="text" class="pfr-kort" value="' + esc(korteNaam(r.omschrijving)) + '">' +
+        '<div class="hint">Wat je in keuzelijsten ziet. De volledige naam hierboven komt bij het product onder "Volledige naam".</div></div>' +
       '<div class="rij2">' +
         '<div class="veld"><label>Aantal</label><input type="number" class="pfr-aantal" step="0.5" value="' + (r.aantal || 1) + '"></div>' +
         '<div class="veld"><label>Prijs p/st excl. (€)</label><input type="number" class="pfr-prijs" step="0.01" value="' + (r.prijs_per_stuk || 0) + '"></div>' +
       '</div>' +
-      '<div class="veld"><label>Categorie</label><select class="pfr-cat">' + catMetSel + '</select></div>' +
     '</div>';
   }).join("");
 
-  /* overslaan gekozen? dan de rest van de regel dimmen */
-  $("pfRegels").querySelectorAll(".pfr-select").forEach(sel => {
-    const dim = () => {
-      const uit = sel.value === "_skip";
-      sel.closest(".pf-regel").style.opacity = uit ? ".45" : "1";
+  $("pfRegels").querySelectorAll(".pf-regel").forEach(el => {
+    const sel = el.querySelector(".pfr-select");
+    const cat = el.querySelector(".pfr-cat");
+    const hint = el.querySelector(".pfr-cat-hint");
+    /* overslaan gekozen? dan de rest van de regel dimmen; korte naam alleen bij een nieuw product */
+    const bijwerk = () => {
+      el.style.opacity = sel.value === "_skip" ? ".45" : "1";
+      el.querySelector(".pfr-kort-veld").style.display = sel.value === "_nieuw" ? "" : "none";
+      const n = cat.value ? cache.producten.filter(p => p.categorie_id === cat.value).length : 0;
+      hint.textContent = !cat.value ? "" : n === 0 ? "Nog geen producten in deze categorie"
+        : n + " product" + (n === 1 ? "" : "en") + " in deze categorie — staan bovenaan bij Koppel aan";
     };
-    sel.addEventListener("change", dim);
-    dim();
+    /* andere categorie: koppellijst opnieuw sorteren, keuze behouden */
+    cat.addEventListener("change", () => { sel.innerHTML = pfKoppelOpties(cat.value, sel.value); bijwerk(); });
+    /* bestaand product gekozen: zijn categorie overnemen */
+    sel.addEventListener("change", () => {
+      const p = cache.producten.find(x => x.id === sel.value);
+      if (p && p.categorie_id && p.categorie_id !== cat.value){
+        cat.value = p.categorie_id;
+        sel.innerHTML = pfKoppelOpties(cat.value, p.id);
+      }
+      bijwerk();
+    });
+    bijwerk();
   });
 }
 
@@ -4921,8 +4966,9 @@ $("pfVerwerk").addEventListener("click", async () => {
     if (keuze !== "_skip"){
       productId = keuze;
       if (keuze === "_nieuw" && naam){
+        const kort = el.querySelector(".pfr-kort").value.trim() || korteNaam(naam);
         const { data: np, error: npF } = await db.from("producten").insert({
-          naam: naam.slice(0, 120), inkoopprijs: prijs,
+          naam: kort.slice(0, 120), volledige_naam: naam, inkoopprijs: prijs,
           categorie_id: catId,
           marge_pct: stdMarge > 0 ? stdMarge : null,
           verkoopprijs: stdMarge > 0 ? r2(prijs * (1 + stdMarge / 100)) : 0,
@@ -4943,6 +4989,7 @@ $("pfVerwerk").addEventListener("click", async () => {
         if (prod){
           const updates = { inkoopprijs: prijs };
           if (catId && catId !== prod.categorie_id) updates.categorie_id = catId;
+          if (!prod.volledige_naam && naam) updates.volledige_naam = naam;
           if (prod.marge_pct != null) updates.verkoopprijs = r2(prijs * (1 + Number(prod.marge_pct) / 100));
           if (prod.op_voorraad !== false && aantal > 0) updates.voorraad = Number(prod.voorraad || 0) + aantal;
           await db.from("producten").update(updates).eq("id", productId);
