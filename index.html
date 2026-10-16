@@ -5559,7 +5559,8 @@ async function startFacturering(projectId){
       datum: g.datum, eenheid: (prod && prod.eenheid) || "",
       aantal: Math.abs(Number(g.aantal)),
       prijs: verborgen ? 0 : Number(prod ? (prod.verkoopprijs || 0) : 0),
-      uren_id: null, mutatie_id: g.id, km_id: null, extra_id: null, klus_id: g.klus_id || null, verborgen
+      uren_id: null, mutatie_id: g.id, km_id: null, extra_id: null, klus_id: g.klus_id || null, verborgen,
+      product_id: g.product_id   // alleen voor voegKleinMateriaalSamen, gaat niet mee de database in
     });
   });
   kmVoor.forEach(r => {
@@ -5594,6 +5595,9 @@ async function startFacturering(projectId){
       uren_id: null, mutatie_id: null, km_id: null, extra_id: null, klus_id: k.id, verborgen: false
     });
   });
+  // materiaalregels met een regeltotaal onder KLEIN_MAT_GRENS samen als één
+  // regel "Klein materiaal" — zie voegKleinMateriaalSamen
+  voegKleinMateriaalSamen(regels);
   // alles door elkaar op datum, niet gegroepeerd per soort (uren/materiaal/km/extra)
   regels.sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")));
   pendingFactuur = { projectId, regels };
@@ -5621,6 +5625,36 @@ async function startFacturering(projectId){
   toonTab("facturen");
   kiesFSub("fUit");
   window.scrollTo(0, 0);
+}
+
+/* Klein materiaal: materiaalregels (geen 'Werk per stuk') met een regeltotaal
+   (aantal x prijs) onder KLEIN_MAT_GRENS gaan niet los op de factuur maar
+   samen in één regel "Klein materiaal". De losse regels blijven als
+   'verborgen' gekoppeld — mét hun eigen prijs, zodat voorraad, kostprijs en
+   winst per product blijven kloppen en verwijderen van de factuur ze weer
+   vrijgeeft. De samenvattende regel krijgt bewust geen klus_id: een regel
+   met klus_id en verder geen koppeling is de vaste-prijs-klusregel. */
+const KLEIN_MAT_GRENS = 5;
+const KLEIN_MAT_NAAM = "Klein materiaal";
+function isKleinMatRegel(r){
+  return r.omschrijving === KLEIN_MAT_NAAM && !r.uren_id && !r.mutatie_id && !r.km_id && !r.extra_id && !r.klus_id;
+}
+function voegKleinMateriaalSamen(regels){
+  const klein = regels.filter(r => {
+    if (!r.mutatie_id || r.verborgen) return false;
+    if (isWerkPerStukProduct(cache.producten.find(x => x.id === r.product_id))) return false;
+    const totaal = r2(Number(r.aantal) * Number(r.prijs));
+    return totaal > 0 && totaal < KLEIN_MAT_GRENS;
+  });
+  if (!klein.length) return;
+  klein.forEach(r => { r.verborgen = true; });
+  const datums = klein.map(r => r.datum).filter(Boolean).sort();
+  regels.push({
+    omschrijving: KLEIN_MAT_NAAM,
+    datum: datums.length ? datums[datums.length - 1] : vandaagISO(), eenheid: "",
+    aantal: 1, prijs: r2(klein.reduce((s, r) => s + r2(Number(r.aantal) * Number(r.prijs)), 0)),
+    uren_id: null, mutatie_id: null, km_id: null, extra_id: null, klus_id: null, verborgen: false
+  });
 }
 
 async function maakFactuurAan(){
@@ -6213,7 +6247,8 @@ function isWerkPerStukProduct(p){
    toch tegen de normale verkoopprijs van het product, zodat je ziet wat je
    er normaal aan verdient — ook al is dat bedrag niet apart gefactureerd. */
 function bronOmzet(r, p){
-  if (r.verborgen && p) return Number(p.verkoopprijs || 0) * Number(r.aantal || 0);
+  // klein materiaal is ook verborgen, maar houdt zijn echte prijs — die telt
+  if (r.verborgen && p && !Number(r.prijs)) return Number(p.verkoopprijs || 0) * Number(r.aantal || 0);
   return Number(r.aantal || 0) * Number(r.prijs || 0);
 }
 
@@ -6242,6 +6277,8 @@ function winstBronnen(jaar){
     // te zetten (dat is geen voorraadproduct), dus die laten we buiten deze
     // uitsplitsing — hun opbrengst zit al in de klusprijs (bron.overig).
     if (r.verborgen) return;
+    // de samenvattende klein-materiaalregel: die omzet zit al bij materiaal
+    if (isKleinMatRegel(r)) return;
     const bedrag = Number(r.aantal || 0) * Number(r.prijs || 0);
     if (r.uren_id) bron.uren.omzet += bedrag;
     else if (r.km_id) bron.km.omzet += bedrag;
