@@ -507,6 +507,10 @@ nav.onderbalk{display:none}
                 </div>
               </div>
             </div>
+            <div class="veld" id="pfBetaaldVeld" style="display:none"><label>Betaald op</label>
+              <input type="datetime-local" id="pfBetaaldOp">
+              <div class="hint" id="pfBetaaldHint"></div>
+            </div>
             <div class="veld"><label>Regels — kies per regel wat ermee moet gebeuren</label>
               <div id="pfRegels"></div>
             </div>
@@ -1793,8 +1797,18 @@ $("ikStatusBetaald").addEventListener("click", () => { ikStatus = "betaald"; sch
 
 $("pfInvNee").addEventListener("click", () => { pfInvestering = false; schakel("pfInvNee","pfInvJa"); });
 $("pfInvJa").addEventListener("click", () => { pfInvestering = true; schakel("pfInvJa","pfInvNee"); });
-$("pfStatusOpen").addEventListener("click", () => { pfStatus = "open"; schakel("pfStatusOpen","pfStatusBetaald"); });
-$("pfStatusBetaald").addEventListener("click", () => { pfStatus = "betaald"; schakel("pfStatusBetaald","pfStatusOpen"); });
+/* Betaald gekozen: betaalmoment tonen. Leeg? Dan de factuurdatum, 12:00. */
+function pfZetStatus(s){
+  pfStatus = s;
+  schakel(s === "betaald" ? "pfStatusBetaald" : "pfStatusOpen", s === "betaald" ? "pfStatusOpen" : "pfStatusBetaald");
+  $("pfBetaaldVeld").style.display = s === "betaald" ? "block" : "none";
+  if (s === "betaald" && !$("pfBetaaldOp").value){
+    $("pfBetaaldOp").value = ($("pfDatum").value || vandaagISO()) + "T12:00";
+    $("pfBetaaldHint").textContent = "Geen betaaldatum op de factuur gevonden — factuurdatum ingevuld. Pas aan als het anders was.";
+  }
+}
+$("pfStatusOpen").addEventListener("click", () => pfZetStatus("open"));
+$("pfStatusBetaald").addEventListener("click", () => pfZetStatus("betaald"));
 
 /* btw automatisch uitrekenen */
 $("ikBedrag").addEventListener("input", () => {
@@ -4789,8 +4803,10 @@ $("pdfLees").addEventListener("click", async () => {
         max_tokens: 32000,
         output_config: { effort: "max" },
         messages: [{ role: "user", content: [ blok, { type: "text", text:
-          'Lees dit inkoopdocument van een elektrotechnisch installatiebedrijf — dit kan een inkoopfactuur van een leverancier zijn, of een kassabon/bonnetje van een winkel. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","vervaldatum":"JJJJ-MM-DD of null","bedrag_excl":0,"btw_bedrag":0,"categorie":"","is_investering":false,"regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0}]} ' +
+          'Lees dit inkoopdocument van een elektrotechnisch installatiebedrijf — dit kan een inkoopfactuur van een leverancier zijn, of een kassabon/bonnetje van een winkel. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","vervaldatum":"JJJJ-MM-DD of null","bedrag_excl":0,"btw_bedrag":0,"categorie":"","is_investering":false,"betaald":false,"betaald_op":"JJJJ-MM-DDTHH:MM of null","regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0}]} ' +
           '"datum" is de datum waarop er daadwerkelijk gekocht/afgerekend is (de bon- of transactiedatum, vaak bovenaan met een tijdstip erbij). Gebruik NOOIT een latere factuur-, verzend- of documentdatum als die afwijkt van de aankoopdatum — bij een kassabon staat meestal maar één datum en is die de juiste. ' +
+          '"betaald" is true als uit het document blijkt dat er al betaald is: een kassabon, of een factuur met "voldaan", "betaald", een pin-, iDEAL-, creditcard- of PayPal-betaling, of een openstaand bedrag van 0. Bij een gewone factuur met een betaaltermijn of vervaldatum is het false. ' +
+          '"betaald_op" is het moment van betalen zoals het op het document staat (bij een kassabon de transactiedatum en -tijd); alleen een datum zonder tijd → "JJJJ-MM-DD". Staat er geen betaalmoment op, of is het niet betaald: null. ' +
           'Alle bedragen excl. btw met een punt als decimaalteken. prijs_per_stuk is de stukprijs, niet het regeltotaal. Neem ook verzendkosten en statiegeld op als regel. ' +
           'Bij verlegde btw: btw_bedrag 0. ' +
           'Kies categorie uit exact deze lijst: ' + KOSTEN.map(k => k[0]).join(", ") + '. ' +
@@ -4816,8 +4832,14 @@ $("pdfLees").addEventListener("click", async () => {
     pfInvestering = !!pfParsed.is_investering;
     schakel(pfInvestering ? "pfInvJa" : "pfInvNee", pfInvestering ? "pfInvNee" : "pfInvJa");
     $("pfVervaldatum").value = pfParsed.vervaldatum || "";
-    pfStatus = "open";
-    schakel("pfStatusOpen", "pfStatusBetaald");
+    /* betaaldatum uit het document halen, zodat hij in Betalingen op de
+       echte dag staat en niet op de dag dat je de factuur toevoegt */
+    const bOp = typeof pfParsed.betaald_op === "string" ? pfParsed.betaald_op.trim().replace(/^(\d{4}-\d{2}-\d{2}) (\d)/, "$1T$2") : "";
+    const bGeldig = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?/.test(bOp);
+    $("pfBetaaldOp").value = bGeldig ? (/T\d{2}:\d{2}/.test(bOp) ? bOp.slice(0, 16) : bOp.slice(0, 10) + "T12:00") : "";
+    $("pfBetaaldHint").textContent = !bGeldig ? ""
+      : /T\d{2}:\d{2}/.test(bOp) ? "Uit de factuur gehaald." : "Datum uit de factuur gehaald; er stond geen tijd bij, dus 12:00.";
+    pfZetStatus(pfParsed.betaald || bGeldig ? "betaald" : "open");
     toonPfRegels(pfParsed.regels || []);
     $("pdfResultaat").style.display = "block";
     status.textContent = "Gelukt — controleer hieronder en klik op Verwerken.";
@@ -4833,6 +4855,11 @@ $("pfAnnuleer").addEventListener("click", () => {
   $("pdfBestand").value = "";
   $("pdfStatus").textContent = "";
 });
+
+function pfBetaaldISO(){
+  const v = $("pfBetaaldOp").value;
+  return pfStatus === "betaald" && v ? new Date(v).toISOString() : null;
+}
 
 function matchProduct(oms){
   const o = String(oms || "").trim().toLowerCase();
@@ -4944,6 +4971,7 @@ $("pfVerwerk").addEventListener("click", async () => {
     type: "inkoop", leverancier: lev,
     nummer: $("pfNummer").value.trim() || "-",
     datum, vervaldatum: $("pfVervaldatum").value || null, status: pfStatus,
+    betaald_op: pfBetaaldISO(),
     bedrag_excl: r2(bedrag), btw_bedrag: r2(btw), bedrag_incl: r2(bedrag + btw),
     categorie: $("pfCategorie").value || "materiaal",
     project_id: $("pfProject").value || null,
@@ -4952,6 +4980,11 @@ $("pfVerwerk").addEventListener("click", async () => {
   }).select().single();
   if (fFout){ $("pfVerwerk").disabled = false; status.textContent = "Inkoopfactuur opslaan mislukt."; return; }
   const factuurId = nieuweFactuur ? nieuweFactuur.id : null;
+  /* zet een trigger betaald_op toch op "nu", dan alsnog het echte
+     betaalmoment erin — net als bij aanpassen in Betalingen */
+  if (factuurId && pfBetaaldISO()){
+    await db.from("facturen").update({ betaald_op: pfBetaaldISO() }).eq("id", factuurId);
+  }
 
   let verwerkt = 0, nieuw = 0;
   const regels = [...document.querySelectorAll("#pfRegels .pf-regel")];
