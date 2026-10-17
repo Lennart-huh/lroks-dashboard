@@ -268,6 +268,8 @@ nav.onderbalk{display:none}
       <button data-tab="klussen">Klussen</button>
       <button data-tab="klanten">Klanten</button>
       <button data-tab="notities">Notities</button>
+      <div class="groep">Installatie</div>
+      <button data-tab="groepen">Groepenverklaring</button>
       <div class="groep">Cijfers</div>
       <button data-tab="belasting">Belasting</button>
       <button data-tab="btw">BTW</button>
@@ -758,6 +760,35 @@ nav.onderbalk{display:none}
           <div class="veld" style="margin-bottom:0"><label>Filter op klant</label><select id="ntFilterKlant"><option value="">Alle</option></select></div>
         </div>
         <div id="ntLijst"></div>
+      </div>
+
+      <!-- ========== GROEPENVERKLARING ========== -->
+      <div class="tab" id="tab-groepen">
+        <div class="tab-kop"><h2>Groepenverklaring</h2>
+          <button class="knop klein" id="gvNieuw">+ Nieuwe kaart</button></div>
+        <div class="form-card" id="gvForm" style="display:none;margin-bottom:18px">
+          <div class="rij2">
+            <div class="veld"><label>Klant</label><select id="gvKlant"></select></div>
+            <div class="veld"><label>Naam (alleen voor jezelf)</label><input type="text" id="gvNaam" placeholder="bv. Meterkast hal, of Groepenkast garage"></div>
+          </div>
+          <div class="veld"><label>Groepen</label>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th style="width:90px">Groep</th><th>Omschrijving</th><th style="width:40px"></th></tr></thead>
+                <tbody id="gvGroepenBody"></tbody>
+              </table>
+            </div>
+            <button type="button" class="knop klein stil" id="gvGroepErbij" style="margin-top:8px">+ Groep</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="knop klein" id="gvOpslaan">Opslaan</button>
+            <button class="knop klein stil" id="gvPdf">PDF maken</button>
+            <button class="knop klein stil" id="gvSluit">Sluiten</button>
+          </div>
+          <div class="hint" style="margin-top:10px">Op de kaart staan je logo, je bedrijfsnaam en je telefoonnummer
+            (uit de bedrijfsgegevens) en de groepen — geen klant of adres.</div>
+        </div>
+        <div id="gvLijst"></div>
       </div>
 
       <!-- ========== PROJECTEN ========== -->
@@ -1597,6 +1628,7 @@ nav.onderbalk{display:none}
     <button data-tab="klussen">Klussen</button>
     <button data-tab="klanten">Klanten</button>
     <button data-tab="notities">Notities</button>
+    <button data-tab="groepen">Groepenverklaring</button>
     <button data-tab="belasting">Belasting</button>
     <button data-tab="btw">BTW</button>
   </div>
@@ -1679,7 +1711,7 @@ const KOSTEN = [
 const kostenNaam = c => (KOSTEN.find(k => k[0] === c) || [null, c || "—"])[1];
 
 /* centrale gegevens */
-const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], vasteLasten:[], correcties:[], notities:[], klussen:[], inst:{} };
+const cache = { klanten:[], projecten:[], categorieen:[], producten:[], onderdelen:[], vasteLasten:[], correcties:[], notities:[], groepen:[], klussen:[], inst:{} };
 let urenData = [];
 let kmData = [];
 let factData = [];
@@ -2119,6 +2151,7 @@ async function laadAlles(){
     renderFacturen();
     herlaadOffertes();
     herlaadNotities();
+    herlaadGroepen();
     vulBedrijf();
     vlFormLeeg();
     renderHoofd();
@@ -2197,6 +2230,7 @@ function vulSelects(){
 
   bijwerkKmHint();
   vulNotitieSelects();
+  vulGroepenKlanten();
   ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
     vulKlusSelect(projId, ["uKlus","kKlus","pKlus","erKlus"][i]));
 }
@@ -7504,6 +7538,169 @@ $("ntToevoegen").addEventListener("click", async () => {
 });
 $("ntFilterProject").addEventListener("change", renderNotities);
 $("ntFilterKlant").addEventListener("change", renderNotities);
+
+/* =====================================================
+   GROEPENVERKLARING — kaart voor in de meterkast: welk groepnummer wat voedt.
+   Per klant opgeslagen (groepen als jsonb-lijst {nr, omschrijving}); de PDF
+   toont alleen logo, bedrijfsnaam, telefoon en de groepen — geen klant of
+   adres, dat wilde Lennart er bewust niet op.
+   ===================================================== */
+let bewerkGroepenId = null;
+
+async function herlaadGroepen(){
+  const { data, error } = await db.from("groepenverklaringen").select("*").order("bijgewerkt_op", { ascending: false });
+  if (error) console.error(error);
+  cache.groepen = data || [];
+  renderGroepenLijst();
+}
+
+function vulGroepenKlanten(){
+  const huidig = $("gvKlant").value;
+  $("gvKlant").innerHTML = '<option value="">— geen —</option>' +
+    cache.klanten.map(k => '<option value="' + k.id + '">' + esc(k.naam) + '</option>').join("");
+  $("gvKlant").value = huidig;
+}
+
+function gvRijHtml(g){
+  return '<tr><td><input type="text" class="gvNr" value="' + esc(g.nr) + '"></td>' +
+    '<td><input type="text" class="gvOms" value="' + esc(g.omschrijving) + '" placeholder="bv. Keuken — wcd aanrecht"></td>' +
+    '<td><button type="button" class="verwijder gvWeg" title="Groep weghalen">✕</button></td></tr>';
+}
+
+// rijen zonder omschrijving tellen niet mee: een leeg nummer is geen groep
+function gvGroepenUitForm(){
+  return [...$("gvGroepenBody").querySelectorAll("tr")].map(tr => ({
+    nr: tr.querySelector(".gvNr").value.trim(),
+    omschrijving: tr.querySelector(".gvOms").value.trim()
+  })).filter(g => g.omschrijving);
+}
+
+function gvGroepErbij(){
+  const nrs = [...$("gvGroepenBody").querySelectorAll(".gvNr")].map(i => parseInt(i.value, 10)).filter(n => !isNaN(n));
+  $("gvGroepenBody").insertAdjacentHTML("beforeend",
+    gvRijHtml({ nr: String(nrs.length ? Math.max(...nrs) + 1 : 1), omschrijving: "" }));
+  const oms = $("gvGroepenBody").querySelectorAll(".gvOms");
+  oms[oms.length - 1].focus();
+}
+
+function gvOpen(id){
+  const v = id ? cache.groepen.find(x => x.id === id) : null;
+  bewerkGroepenId = v ? v.id : null;
+  vulGroepenKlanten();
+  $("gvKlant").value = v && v.klant_id || "";
+  $("gvNaam").value = v && v.naam || "";
+  const groepen = v && v.groepen && v.groepen.length ? v.groepen
+    : [1, 2, 3, 4].map(n => ({ nr: String(n), omschrijving: "" }));
+  $("gvGroepenBody").innerHTML = groepen.map(gvRijHtml).join("");
+  $("gvForm").style.display = "";
+  $("gvForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderGroepenLijst(){
+  const lijst = cache.groepen || [];
+  $("gvLijst").innerHTML = !lijst.length
+    ? '<div class="hint">Nog geen groepenverklaringen.</div>'
+    : '<div class="tbl-wrap"><table><thead><tr><th>Klant</th><th>Naam</th><th class="r">Groepen</th><th>Bijgewerkt</th><th></th></tr></thead><tbody>' +
+      lijst.map(v => '<tr data-gvopen="' + v.id + '" style="cursor:pointer">' +
+        '<td>' + esc(klantNaam(v.klant_id) || "—") + '</td>' +
+        '<td>' + esc(v.naam || "") + '</td>' +
+        '<td class="r">' + (v.groepen || []).length + '</td>' +
+        '<td>' + fmtDatum(String(v.bijgewerkt_op).slice(0, 10)) + '</td>' +
+        '<td><button class="verwijder" data-gvweg="' + v.id + '" title="Verwijderen">✕</button></td></tr>').join("") +
+      '</tbody></table></div>';
+  $("gvLijst").querySelectorAll("[data-gvopen]").forEach(r => r.addEventListener("click", () => gvOpen(r.dataset.gvopen)));
+  $("gvLijst").querySelectorAll("[data-gvweg]").forEach(k => k.addEventListener("click", async e => {
+    e.stopPropagation();
+    if (!confirm("Deze groepenverklaring verwijderen?")) return;
+    const { error } = await db.from("groepenverklaringen").delete().eq("id", k.dataset.gvweg);
+    if (error){ toast("Verwijderen mislukt"); return; }
+    cache.groepen = cache.groepen.filter(v => v.id !== k.dataset.gvweg);
+    if (bewerkGroepenId === k.dataset.gvweg){ bewerkGroepenId = null; $("gvForm").style.display = "none"; }
+    renderGroepenLijst();
+  }));
+}
+
+/* A5 staand: past in de meterkastdeur en blijft leesbaar. Logo links,
+   bedrijfsnaam en telefoon rechts, daaronder de groepen. */
+function genereerGroepenPdf(groepen, I){
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a5" });
+  const L = 12, R = 136;
+  let y = 12;
+
+  let logoH = 0;
+  try {
+    const logoW = 32;
+    logoH = logoW * 628 / 700;
+    doc.addImage(LOGO_DATA_URI, "PNG", L, y, logoW, logoH, undefined, "SLOW");
+  } catch (e) { console.error("Logo tekenen mislukt", e); }
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+  doc.text(I.bedrijf_naam || "LRoks Elektrotechniek", R, y + 4, { align: "right" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+  if (I.bedrijf_telefoon) doc.text("Tel. " + I.bedrijf_telefoon, R, y + 10, { align: "right" });
+
+  y += logoH + 10;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(15);
+  doc.text("GROEPENVERKLARING", L, y);
+  y += 5;
+
+  doc.autoTable({
+    startY: y,
+    margin: { left: L, right: 148 - R },
+    theme: "plain",
+    styles: { font: "helvetica", fontSize: 10, cellPadding: 2.5, lineColor: [200, 200, 200], lineWidth: { bottom: 0.2 } },
+    headStyles: { fontStyle: "bold", fontSize: 8, textColor: 20, lineColor: [0, 0, 0], lineWidth: { bottom: 0.5 } },
+    columnStyles: { 0: { cellWidth: 20, fontStyle: "bold" } },
+    head: [["Groep", "Omschrijving"]],
+    body: groepen.map(g => [g.nr, g.omschrijving])
+  });
+  return doc;
+}
+
+$("gvNieuw").addEventListener("click", () => gvOpen(null));
+$("gvSluit").addEventListener("click", () => { bewerkGroepenId = null; $("gvForm").style.display = "none"; });
+$("gvGroepErbij").addEventListener("click", gvGroepErbij);
+$("gvGroepenBody").addEventListener("click", e => {
+  const k = e.target.closest(".gvWeg");
+  if (k) k.closest("tr").remove();
+});
+// Enter in de laatste omschrijving = volgende groep erbij, lekker snel doortikken
+$("gvGroepenBody").addEventListener("keydown", e => {
+  if (e.key !== "Enter" || !e.target.classList.contains("gvOms")) return;
+  e.preventDefault();
+  const oms = $("gvGroepenBody").querySelectorAll(".gvOms");
+  const i = [...oms].indexOf(e.target);
+  if (i === oms.length - 1) gvGroepErbij(); else oms[i + 1].focus();
+});
+
+$("gvOpslaan").addEventListener("click", async () => {
+  const groepen = gvGroepenUitForm();
+  if (!groepen.length){ toast("Vul minstens één groep in"); return; }
+  const rij = { klant_id: $("gvKlant").value || null, naam: $("gvNaam").value.trim() || null,
+    groepen, bijgewerkt_op: new Date().toISOString() };
+  $("gvOpslaan").disabled = true;
+  const { data, error } = bewerkGroepenId
+    ? await db.from("groepenverklaringen").update(rij).eq("id", bewerkGroepenId).select().single()
+    : await db.from("groepenverklaringen").insert(rij).select().single();
+  $("gvOpslaan").disabled = false;
+  if (error){ console.error(error); toast("Opslaan mislukt"); return; }
+  cache.groepen = [data, ...cache.groepen.filter(v => v.id !== data.id)];
+  bewerkGroepenId = data.id;
+  renderGroepenLijst();
+  toast("Groepenverklaring opgeslagen");
+});
+
+// werkt ook op wat nu in het formulier staat, opslaan hoeft niet eerst
+$("gvPdf").addEventListener("click", () => {
+  const groepen = gvGroepenUitForm();
+  if (!groepen.length){ toast("Vul minstens één groep in"); return; }
+  try {
+    const doc = genereerGroepenPdf(groepen, cache.inst);
+    const delen = [klantNaam($("gvKlant").value), $("gvNaam").value.trim()]
+      .map(t => t.replace(/[\\/:*?"<>|]/g, "").trim()).filter(Boolean);
+    doc.save("Groepenverklaring" + (delen.length ? " - " + delen.join(" - ") : "") + ".pdf");
+  } catch (e) { console.error(e); toast("PDF maken mislukt"); }
+});
 
 $("fdPrint").addEventListener("click", () => {
   if (!bewerkFactuurId) return;
