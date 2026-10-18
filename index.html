@@ -624,6 +624,13 @@ nav.onderbalk{display:none}
               <button type="button" id="pkAfgerond">Afgerond</button>
             </div>
           </div>
+          <div class="veld"><label>Soort</label>
+            <div class="schakel">
+              <button type="button" id="pkOpdracht" class="aan">Opdracht</button>
+              <button type="button" id="pkMeerwerk">Meerwerk</button>
+            </div>
+            <div class="hint">Meerwerk komt op de factuur in een apart blok met een eigen subtotaal.</div>
+          </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="knop" id="pkToevoegen">Klus toevoegen</button>
             <button class="knop klein stil" id="pkAnnuleer" style="display:none">Wijzigen annuleren</button>
@@ -2244,7 +2251,7 @@ function vulKlusSelect(projectSelId, klusSelId){
   const huidig = $(klusSelId).value;
   const klussenVoorProject = cache.klussen.filter(k => k.project_id === projectId && k.status === "open");
   $(klusSelId).innerHTML = '<option value="">— geen, rechtstreeks op project —</option>' +
-    klussenVoorProject.map(k => '<option value="' + k.id + '">' + esc(k.naam) + '</option>').join("");
+    klussenVoorProject.map(k => '<option value="' + k.id + '">' + esc(k.naam) + (k.meerwerk ? " (meerwerk)" : "") + '</option>').join("");
   if (klussenVoorProject.some(k => k.id === huidig)) $(klusSelId).value = huidig;
 }
 ["uProject","kProject","pProject","erProject"].forEach((projId, i) => {
@@ -3820,7 +3827,7 @@ function renderKlussen(projectId){
     ? '<tr><td colspan="2" class="leeg">Nog geen klussen bij dit project — voeg er een toe via het Invulformulier.</td></tr>'
     : lijst.map(k =>
         '<tr class="klik" data-klid="' + k.id + '">' +
-          '<td class="tekst">' + esc(k.naam) + '</td>' +
+          '<td class="tekst">' + esc(k.naam) + (k.meerwerk ? ' <span class="chip amber">MEERWERK</span>' : '') + '</td>' +
           '<td class="r">' + (k.prijstype === "vast" ? eur2(k.vaste_prijs || 0) : "—") + '</td>' +
         '</tr>').join("");
   $("prKlussenBody").querySelectorAll("[data-klid]").forEach(r => r.addEventListener("click", () => startKlusBewerken(r.dataset.klid)));
@@ -3828,6 +3835,7 @@ function renderKlussen(projectId){
 
 let pkPrijstype = "uurbasis";
 let pkStatus = "open";
+let pkMeerwerk = false;
 let bewerkKlusId = null;
 
 $("pkUurbasis").addEventListener("click", () => {
@@ -3840,6 +3848,8 @@ $("pkVast").addEventListener("click", () => {
 });
 $("pkOpen").addEventListener("click", () => { pkStatus = "open"; schakel("pkOpen","pkAfgerond"); });
 $("pkAfgerond").addEventListener("click", () => { pkStatus = "afgerond"; schakel("pkAfgerond","pkOpen"); });
+$("pkOpdracht").addEventListener("click", () => { pkMeerwerk = false; schakel("pkOpdracht","pkMeerwerk"); });
+$("pkMeerwerk").addEventListener("click", () => { pkMeerwerk = true; schakel("pkMeerwerk","pkOpdracht"); });
 
 function pkFormLeeg(){
   bewerkKlusId = null;
@@ -3848,6 +3858,7 @@ function pkFormLeeg(){
   pkPrijstype = "uurbasis"; schakel("pkUurbasis","pkVast");
   $("pkVastVelden").style.display = "none"; $("pkVastVelden2").style.display = "none";
   pkStatus = "open"; schakel("pkOpen","pkAfgerond");
+  pkMeerwerk = false; schakel("pkOpdracht","pkMeerwerk");
   $("pkToevoegen").textContent = "Klus toevoegen";
   $("pkAnnuleer").style.display = "none";
   $("pkVerwijder").style.display = "none";
@@ -3870,6 +3881,8 @@ function startKlusBewerken(id){
   $("pkGeschatKm").value = k.geschat_km ?? "";
   pkStatus = k.status === "afgerond" ? "afgerond" : "open";
   if (pkStatus === "afgerond") schakel("pkAfgerond","pkOpen"); else schakel("pkOpen","pkAfgerond");
+  pkMeerwerk = !!k.meerwerk;
+  if (pkMeerwerk) schakel("pkMeerwerk","pkOpdracht"); else schakel("pkOpdracht","pkMeerwerk");
   $("pkToevoegen").textContent = "Wijziging opslaan";
   $("pkAnnuleer").style.display = "inline-block";
   $("pkVerwijder").style.display = "inline-block";
@@ -3883,7 +3896,7 @@ $("pkToevoegen").addEventListener("click", async () => {
   const naam = $("pkNaam").value.trim();
   if (!naam) { toast("Vul een naam voor de klus in"); return; }
   const rij = {
-    project_id: projectId, naam, prijstype: pkPrijstype, status: pkStatus,
+    project_id: projectId, naam, prijstype: pkPrijstype, status: pkStatus, meerwerk: pkMeerwerk,
     vaste_prijs: pkPrijstype === "vast" ? (parseFloat($("pkVastePrijs").value) || 0) : null,
     geschat_uren: pkPrijstype === "vast" ? (parseFloat($("pkGeschatUren").value) || null) : null,
     geschat_kosten: pkPrijstype === "vast" ? (parseFloat($("pkGeschatKosten").value) || null) : null,
@@ -3938,7 +3951,8 @@ function renderKlussenTab(){
     .sort((a, b) => (Number(a.k.vaste_prijs || 0) - a.kosten.werkelijkeTotaal) - (Number(b.k.vaste_prijs || 0) - b.kosten.werkelijkeTotaal));
   const uurRijen = cache.klussen.filter(k => k.prijstype !== "vast");
 
-  const statusChip = k => '<span class="chip ' + (k.status === "open" ? "amber" : "grijs") + '">' + (k.status === "open" ? "OPEN" : "AFGEROND") + '</span>';
+  const statusChip = k => '<span class="chip ' + (k.status === "open" ? "amber" : "grijs") + '">' + (k.status === "open" ? "OPEN" : "AFGEROND") + '</span>' +
+    (k.meerwerk ? ' <span class="chip amber">MEERWERK</span>' : '');
 
   const htmlVast = vastRijen.map(({ k, kosten }) => {
     const winst = Number(k.vaste_prijs || 0) - kosten.werkelijkeTotaal;
@@ -5440,13 +5454,19 @@ function toonFdRegels(regels){
   if (!zichtbaar.length){
     body.innerHTML = '<tr><td colspan="5" class="leeg">Geen regels.</td></tr>';
   } else {
-    body.innerHTML = zichtbaar.map(r =>
-      '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") +
-      (r.klus_id ? ' <span class="chip grijs">' + esc(klusNaam(r.klus_id)) + '</span>' : '') + '</td>' +
-      '<td class="tekst">' + esc(r.omschrijving) + '</td>' +
-      '<td class="r">' + esc(fmtAantal(r)) + '</td>' +
-      '<td class="r">' + esc(fmtPrijsPerEenheid(r)) + '</td>' +
-      '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("");
+    // bij meerwerk: kopje + subtotaal per blok (zie factuurBlokken)
+    body.innerHTML = factuurBlokken(regels).map(b =>
+      (b.titel ? '<tr><td colspan="5" class="tekst" style="padding-top:12px"><b>' + esc(b.titel) + '</b></td></tr>' : '') +
+      b.regels.map(r =>
+        '<tr><td>' + (r.datum ? fmtDatum(r.datum) : "—") +
+        (r.klus_id ? ' <span class="chip grijs">' + esc(klusNaam(r.klus_id)) + '</span>' : '') + '</td>' +
+        '<td class="tekst">' + esc(r.omschrijving) + '</td>' +
+        '<td class="r">' + esc(fmtAantal(r)) + '</td>' +
+        '<td class="r">' + esc(fmtPrijsPerEenheid(r)) + '</td>' +
+        '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td></tr>').join("") +
+      (b.titel ? '<tr><td colspan="4" class="r"><b>Subtotaal ' + esc(b.titel.toLowerCase()) + '</b></td>' +
+        '<td class="r"><b>' + eur2(b.subtotaal) + '</b></td></tr>' : '')
+    ).join("");
   }
   const excl = zichtbaar.reduce((s,r) => s + Number(r.aantal) * Number(r.prijs), 0);
   const btw = r2(excl * btwPct() / 100);
@@ -5637,6 +5657,7 @@ async function startFacturering(projectId){
       uren_id: null, mutatie_id: null, km_id: null, extra_id: null, klus_id: k.id, verborgen: false
     });
   });
+  regels.forEach(r => { r.meerwerk = isMeerwerkKlus(r.klus_id); });
   // materiaalregels met een regeltotaal onder KLEIN_MAT_GRENS samen als één
   // regel "Klein materiaal" — zie voegKleinMateriaalSamen
   voegKleinMateriaalSamen(regels);
@@ -5682,21 +5703,44 @@ function isKleinMatRegel(r){
   return r.omschrijving === KLEIN_MAT_NAAM && !r.uren_id && !r.mutatie_id && !r.km_id && !r.extra_id && !r.klus_id;
 }
 function voegKleinMateriaalSamen(regels){
-  const klein = regels.filter(r => {
-    if (!r.mutatie_id || r.verborgen) return false;
-    if (isWerkPerStukProduct(cache.producten.find(x => x.id === r.product_id))) return false;
-    const totaal = r2(Number(r.aantal) * Number(r.prijs));
-    return totaal > 0 && totaal < KLEIN_MAT_GRENS;
+  // per blok apart (opdracht / meerwerk), zodat klein materiaal van het
+  // meerwerk ook in het meerwerk-subtotaal zit
+  [false, true].forEach(meerwerk => {
+    const klein = regels.filter(r => {
+      if (!r.mutatie_id || r.verborgen || !!r.meerwerk !== meerwerk) return false;
+      if (isWerkPerStukProduct(cache.producten.find(x => x.id === r.product_id))) return false;
+      const totaal = r2(Number(r.aantal) * Number(r.prijs));
+      return totaal > 0 && totaal < KLEIN_MAT_GRENS;
+    });
+    if (!klein.length) return;
+    klein.forEach(r => { r.verborgen = true; });
+    const datums = klein.map(r => r.datum).filter(Boolean).sort();
+    regels.push({
+      omschrijving: KLEIN_MAT_NAAM,
+      datum: datums.length ? datums[datums.length - 1] : vandaagISO(), eenheid: "",
+      aantal: 1, prijs: r2(klein.reduce((s, r) => s + r2(Number(r.aantal) * Number(r.prijs)), 0)),
+      uren_id: null, mutatie_id: null, km_id: null, extra_id: null, klus_id: null, verborgen: false, meerwerk
+    });
   });
-  if (!klein.length) return;
-  klein.forEach(r => { r.verborgen = true; });
-  const datums = klein.map(r => r.datum).filter(Boolean).sort();
-  regels.push({
-    omschrijving: KLEIN_MAT_NAAM,
-    datum: datums.length ? datums[datums.length - 1] : vandaagISO(), eenheid: "",
-    aantal: 1, prijs: r2(klein.reduce((s, r) => s + r2(Number(r.aantal) * Number(r.prijs)), 0)),
-    uren_id: null, mutatie_id: null, km_id: null, extra_id: null, klus_id: null, verborgen: false
-  });
+}
+
+/* Meerwerk: regels die bij een klus met meerwerk = true horen komen op de
+   factuur in een eigen blok met subtotaal. De vlag staat ook op
+   factuur_regels zelf, zodat een verstuurde factuur gelijk blijft als je de
+   klus later omzet. Zonder meerwerk-regels is er één blok zonder kopje —
+   dan ziet de factuur er precies zo uit als vroeger. */
+const isMeerwerkKlus = id => !!(id && (cache.klussen.find(k => k.id === id) || {}).meerwerk);
+function factuurBlokken(regels){
+  const zichtbaar = regels.filter(r => !r.verborgen)
+    .sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")));
+  const som = lijst => r2(lijst.reduce((s, r) => s + Number(r.aantal) * Number(r.prijs), 0));
+  const meer = zichtbaar.filter(r => r.meerwerk);
+  if (!meer.length) return [{ titel: null, regels: zichtbaar, subtotaal: som(zichtbaar) }];
+  const opdracht = zichtbaar.filter(r => !r.meerwerk);
+  return [
+    ...(opdracht.length ? [{ titel: "Opdracht", regels: opdracht, subtotaal: som(opdracht) }] : []),
+    { titel: "Meerwerk", regels: meer, subtotaal: som(meer) }
+  ];
 }
 
 async function maakFactuurAan(){
@@ -5725,7 +5769,7 @@ async function maakFactuurAan(){
     factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
     aantal: r.aantal, prijs: r.prijs,
     uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null, extra_id: r.extra_id || null,
-    klus_id: r.klus_id || null, verborgen: !!r.verborgen
+    klus_id: r.klus_id || null, verborgen: !!r.verborgen, meerwerk: !!r.meerwerk
   }));
   const { error: e2 } = await db.from("factuur_regels").insert(invoerRegels);
   if (e2){
@@ -6821,11 +6865,19 @@ function genereerFactuurPdf(f, k, I, regels){
     // alles op datum onder elkaar, niet gegroepeerd per soort (uren/materiaal/km/extra),
     // de klus staat erbij in de datumkolom, en 'verborgen' regels (opgegaan in
     // de vaste prijs van een klus) blijven van de factuur zelf af
-    body: regels.filter(r => !r.verborgen)
-      .sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || ""))).map(r => [
+    // Met meerwerk: blok "Opdracht" en blok "Meerwerk", elk met kopje en subtotaal
+    body: factuurBlokken(regels).flatMap(b => [
+      ...(b.titel ? [[{ content: b.titel, colSpan: 5,
+        styles: { fontStyle: "bold", fontSize: 10, cellPadding: { top: 5, bottom: 2, left: 2, right: 2 }, lineWidth: 0 } }]] : []),
+      ...b.regels.map(r => [
         (r.datum ? fmtDatum(r.datum) : "—") + (r.klus_id ? "\n" + klusNaam(r.klus_id) : ""),
         r.omschrijving, fmtAantal(r), fmtPrijsPerEenheid(r), eur2(Number(r.aantal) * Number(r.prijs))
-      ])
+      ]),
+      ...(b.titel ? [[
+        { content: "Subtotaal " + b.titel.toLowerCase(), colSpan: 4, styles: { halign: "right", fontStyle: "bold", lineWidth: 0 } },
+        { content: eur2(b.subtotaal), styles: { fontStyle: "bold", lineWidth: 0 } }
+      ]] : [])
+    ])
   });
 
   y = doc.lastAutoTable.finalY + 8;
