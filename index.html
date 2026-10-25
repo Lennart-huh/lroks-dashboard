@@ -1066,6 +1066,8 @@ nav.onderbalk{display:none}
               </div>
             </div>
           </div>
+          <div class="veld"><label>Naam</label><input type="text" id="offNaam" placeholder="bv. Groepenkast vervangen">
+            <div class="hint">Komt op de offerte onder het nummer, en wordt de projectnaam bij accepteren.</div></div>
           <div class="rij2">
             <div class="veld"><label>Datum</label><input type="date" id="offDatum"></div>
             <div class="veld"><label>Geldig tot</label><input type="date" id="offGeldigTot"></div>
@@ -1154,7 +1156,7 @@ nav.onderbalk{display:none}
           </div>
         </div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th>Nr</th><th>Klant</th><th>Datum</th><th>Status</th><th class="r">Excl.</th></tr></thead>
+          <thead><tr><th>Nr</th><th>Naam</th><th>Klant</th><th>Datum</th><th>Status</th><th class="r">Excl.</th></tr></thead>
           <tbody id="offBody"></tbody>
         </table></div>
       </div>
@@ -6952,6 +6954,12 @@ function genereerOffertePdf(o, k, I, regels){
   y = Math.max(y + logoH + 8, ry) + 8;
   doc.setFont("helvetica", "bold"); doc.setFontSize(16);
   doc.text("OFFERTE " + (o.nummer || ""), L, y);
+  if (o.naam){
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+    const naamRegels = doc.splitTextToSize(o.naam, R - L);
+    doc.text(naamRegels, L, y + 6.5);
+    y += 5 * naamRegels.length;
+  }
   y += 10;
 
   doc.setFontSize(9);
@@ -7078,7 +7086,7 @@ async function herlaadOffertes(){
 function renderOffertes(){
   const body = $("offBody");
   if (!offerteData.length){
-    body.innerHTML = '<tr><td colspan="5" class="leeg">Nog geen offertes.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="leeg">Nog geen offertes.</td></tr>';
     return;
   }
   const chip = s => s === "geaccepteerd" ? '<span class="chip groen">GEACCEPTEERD</span>'
@@ -7088,6 +7096,7 @@ function renderOffertes(){
   body.innerHTML = offerteData.map(o =>
     '<tr class="klik" data-ofid="' + o.id + '">' +
       '<td>' + esc(o.nummer || "") + '</td>' +
+      '<td class="tekst">' + esc(o.naam || "") + '</td>' +
       '<td class="tekst">' + esc(klantNaam(o.klant_id) || "—") + '</td>' +
       '<td>' + fmtDatum(o.datum) + '</td>' +
       '<td>' + chip(o.status) + '</td>' +
@@ -7272,6 +7281,7 @@ function offerteFormLeeg(){
   offerteRegels = [];
   vulOffKlanten();
   $("offNummer").value = volgendOfferteNummer();
+  $("offNaam").value = "";
   $("offKlant").value = "";
   $("offDatum").value = vandaagISO();
   const geldigTot = new Date();
@@ -7303,6 +7313,7 @@ async function openOfferte(id){
   bewerkOfferteId = id;
   vulOffKlanten();
   $("offNummer").value = o.nummer || "";
+  $("offNaam").value = o.naam || "";
   $("offKlant").value = o.klant_id || "";
   $("offDatum").value = o.datum || "";
   $("offGeldigTot").value = o.geldig_tot || "";
@@ -7348,6 +7359,7 @@ $("offOpslaan").addEventListener("click", async () => {
   const tot = toonOffRegels();
   const rij = {
     nummer: nummer || null,
+    naam: $("offNaam").value.trim() || null,
     klant_id: $("offKlant").value || null,
     datum: $("offDatum").value || vandaagISO(),
     geldig_tot: $("offGeldigTot").value || null,
@@ -7424,7 +7436,7 @@ $("offKlantKopieer").addEventListener("click", async () => {
    bij 'vast' voeden ze ook de geschatte materiaalkosten (kostprijs) voor de
    vergelijking 'vaste prijs vs. werkelijk' bij de klus. */
 async function accepteerOfferte(o){
-  const naam = o.nummer || "Nieuw project";
+  const naam = o.naam || o.nummer || "Nieuw project";
   const vast = o.prijstype === "vast";
   const { data: regelsData } = await db.from("offerte_regels").select("*").eq("offerte_id", o.id);
   const producten = (regelsData || []).filter(r => r.product_id);
@@ -7485,7 +7497,8 @@ $("offPdf").addEventListener("click", () => {
   try {
     const doc = genereerOffertePdf(o, k, cache.inst, offerteRegels);
     const klantVeilig = (k && k.naam ? k.naam : "").replace(/[\\/:*?"<>|]/g, "").trim();
-    doc.save("Offerte - " + (o.nummer || "concept") + (klantVeilig ? " - " + klantVeilig : "") + ".pdf");
+    const naamVeilig = (o.naam || "").replace(/[\\/:*?"<>|]/g, "").trim();
+    doc.save("Offerte - " + (o.nummer || "concept") + (naamVeilig ? " - " + naamVeilig : "") + (klantVeilig ? " - " + klantVeilig : "") + ".pdf");
   } catch (e) { console.error(e); toast("PDF maken mislukt"); }
 });
 
