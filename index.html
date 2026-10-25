@@ -1123,11 +1123,16 @@ nav.onderbalk{display:none}
             <div id="offVastBlok" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
               <div class="rij2">
                 <div class="veld"><label>Geschatte uren</label><input type="number" id="offGeschatUren" step="0.5" min="0" inputmode="decimal"></div>
-                <div class="veld"><label>Geschatte km</label><input type="number" id="offGeschatKm" step="1" min="0" inputmode="decimal"></div>
-              </div>
-              <div class="rij2" style="margin-top:13px">
                 <div class="veld"><label>Prijs arbeid (€, totaal)</label><input type="number" id="offPrijsArbeid" step="0.01" min="0" inputmode="decimal">
                   <div class="hint" id="offPrijsArbeidHint"></div></div>
+              </div>
+              <div class="rij2" style="margin-top:13px">
+                <div class="veld"><label>Reisuren</label><input type="number" id="offGeschatReisuren" step="0.5" min="0" inputmode="decimal"></div>
+                <div class="veld"><label>Prijs reisuren (€, totaal)</label><input type="number" id="offPrijsReisuren" step="0.01" min="0" inputmode="decimal">
+                  <div class="hint" id="offPrijsReisurenHint"></div></div>
+              </div>
+              <div class="rij2" style="margin-top:13px">
+                <div class="veld"><label>Geschatte km</label><input type="number" id="offGeschatKm" step="1" min="0" inputmode="decimal"></div>
                 <div class="veld"><label>Prijs km (€, totaal)</label><input type="number" id="offPrijsKm" step="0.01" min="0" inputmode="decimal">
                   <div class="hint" id="offPrijsKmHint"></div></div>
               </div>
@@ -7017,6 +7022,9 @@ function genereerOffertePdf(o, k, I, regels){
     if (o.geschat_uren || o.prijs_arbeid != null)
       vasteRegels.push(["Arbeid", o.geschat_uren ? Number(o.geschat_uren).toLocaleString("nl-NL") : "—", "uur", "",
         o.prijs_arbeid != null ? eur2(o.prijs_arbeid) : ""]);
+    if (o.geschat_reisuren || o.prijs_reisuren != null)
+      vasteRegels.push(["Reisuren", o.geschat_reisuren ? Number(o.geschat_reisuren).toLocaleString("nl-NL") : "—", "uur", "",
+        o.prijs_reisuren != null ? eur2(o.prijs_reisuren) : ""]);
     if (o.geschat_km || o.prijs_km != null)
       vasteRegels.push(["Kilometers", o.geschat_km ? Number(o.geschat_km).toLocaleString("nl-NL") : "—", "km", "",
         o.prijs_km != null ? eur2(o.prijs_km) : ""]);
@@ -7176,29 +7184,36 @@ $("offVastePrijs").addEventListener("input", () => { if (offertePrijstype === "v
    met hun bedrag op de PDF; de vaste prijs zelf blijft een los getal dat je
    zelf invult (de som staat er alleen als hint bij). Zolang je een bedrag
    niet zelf aanpast, rekent de app het voor: producten = som van de regels,
-   arbeid = uren x laatst gebruikte uurtarief, km = km x je km-prijs. */
-let offHand = { producten: false, arbeid: false, km: false };
+   arbeid = uren x laatst gebruikte uurtarief, reisuren idem, km = km x je
+   km-prijs. */
+let offHand = { producten: false, arbeid: false, reis: false, km: false };
 const offUurtarief = () => Number((urenData.find(u => u.tarief != null) || {}).tarief || 0);
 const offKmPrijs = () => Number(cache.inst.km_prijs || 0.35);
 function offVoorstelArbeidKm(){
   const uren = parseFloat($("offGeschatUren").value) || 0;
+  const reisuren = parseFloat($("offGeschatReisuren").value) || 0;
   const km = parseFloat($("offGeschatKm").value) || 0;
   const tarief = offUurtarief(), kmPrijs = offKmPrijs();
   if (!offHand.arbeid) $("offPrijsArbeid").value = uren && tarief ? r2(uren * tarief) : "";
+  if (!offHand.reis) $("offPrijsReisuren").value = reisuren && tarief ? r2(reisuren * tarief) : "";
   if (!offHand.km) $("offPrijsKm").value = km ? r2(km * kmPrijs) : "";
   $("offPrijsArbeidHint").textContent = offHand.arbeid ? "Zelf ingevuld"
     : tarief ? "Voorstel: uren × " + eur2(tarief) + " (laatst gebruikte uurtarief)" : "Geen uurtarief bekend — vul zelf in";
+  $("offPrijsReisurenHint").textContent = offHand.reis ? "Zelf ingevuld"
+    : tarief ? "Voorstel: reisuren × " + eur2(tarief) : "Geen uurtarief bekend — vul zelf in";
   $("offPrijsKmHint").textContent = offHand.km ? "Zelf ingevuld" : "Voorstel: km × " + eur2(kmPrijs);
   offVasteSomHint();
 }
 function offVasteSomHint(){
-  const som = ["offGeschatProducten", "offPrijsArbeid", "offPrijsKm"]
+  const som = ["offGeschatProducten", "offPrijsArbeid", "offPrijsReisuren", "offPrijsKm"]
     .reduce((t, id) => t + (parseFloat($(id).value) || 0), 0);
-  $("offVasteSomHint").textContent = som ? "Producten + arbeid + km = " + eur2(som) : "";
+  $("offVasteSomHint").textContent = som ? "Producten + arbeid + reisuren + km = " + eur2(som) : "";
 }
 $("offGeschatUren").addEventListener("input", offVoorstelArbeidKm);
+$("offGeschatReisuren").addEventListener("input", offVoorstelArbeidKm);
 $("offGeschatKm").addEventListener("input", offVoorstelArbeidKm);
 $("offPrijsArbeid").addEventListener("input", () => { offHand.arbeid = $("offPrijsArbeid").value !== ""; offVoorstelArbeidKm(); });
+$("offPrijsReisuren").addEventListener("input", () => { offHand.reis = $("offPrijsReisuren").value !== ""; offVoorstelArbeidKm(); });
 $("offPrijsKm").addEventListener("input", () => { offHand.km = $("offPrijsKm").value !== ""; offVoorstelArbeidKm(); });
 $("offGeschatProducten").addEventListener("input", () => { offHand.producten = $("offGeschatProducten").value !== ""; offVasteSomHint(); });
 
@@ -7318,8 +7333,9 @@ function offerteFormLeeg(){
   zetOfferteStatus("concept");
   zetOffertePrijstype("product");
   $("offGeschatUren").value = ""; $("offGeschatKm").value = ""; $("offVastePrijs").value = "";
+  $("offGeschatReisuren").value = ""; $("offPrijsReisuren").value = "";
   $("offPrijsArbeid").value = ""; $("offPrijsKm").value = ""; $("offGeschatProducten").value = "";
-  offHand = { producten: false, arbeid: false, km: false };
+  offHand = { producten: false, arbeid: false, reis: false, km: false };
   offVoorstelArbeidKm();
   $("offNotities").value = "";
   $("offVerwijder").style.display = "none";
@@ -7353,8 +7369,11 @@ async function openOfferte(id){
   // bedrag krijgen gewoon weer het voorstel
   $("offPrijsArbeid").value = o.prijs_arbeid ?? "";
   $("offPrijsKm").value = o.prijs_km ?? "";
+  $("offGeschatReisuren").value = o.geschat_reisuren ?? "";
+  $("offPrijsReisuren").value = o.prijs_reisuren ?? "";
   $("offGeschatProducten").value = o.prijs_producten ?? "";
-  offHand = { producten: o.prijs_producten != null, arbeid: o.prijs_arbeid != null, km: o.prijs_km != null };
+  offHand = { producten: o.prijs_producten != null, arbeid: o.prijs_arbeid != null,
+    reis: o.prijs_reisuren != null, km: o.prijs_km != null };
   offVoorstelArbeidKm();
   $("offNotities").value = o.notities || "";
   $("offVerwijder").style.display = "inline-block";
@@ -7396,6 +7415,8 @@ $("offOpslaan").addEventListener("click", async () => {
     geschat_km: vast ? (parseFloat($("offGeschatKm").value) || null) : null,
     prijs_producten: vast && $("offGeschatProducten").value !== "" ? r2(parseFloat($("offGeschatProducten").value) || 0) : null,
     prijs_arbeid: vast && $("offPrijsArbeid").value !== "" ? r2(parseFloat($("offPrijsArbeid").value) || 0) : null,
+    geschat_reisuren: vast ? (parseFloat($("offGeschatReisuren").value) || null) : null,
+    prijs_reisuren: vast && $("offPrijsReisuren").value !== "" ? r2(parseFloat($("offPrijsReisuren").value) || 0) : null,
     prijs_km: vast && $("offPrijsKm").value !== "" ? r2(parseFloat($("offPrijsKm").value) || 0) : null,
     bedrag_excl: tot.excl, btw_bedrag: tot.btw, bedrag_incl: tot.incl,
     notities: $("offNotities").value.trim() || null
@@ -7480,7 +7501,8 @@ async function accepteerOfferte(o){
     const { error: klusFout } = await db.from("klussen").insert({
       project_id: nieuw.id, naam, prijstype: "vast", status: "open",
       vaste_prijs: o.bedrag_excl || 0,
-      geschat_uren: o.geschat_uren || null,
+      // reisuren schrijf je in het project als gewone uren, dus die tellen mee
+      geschat_uren: (Number(o.geschat_uren || 0) + Number(o.geschat_reisuren || 0)) || null,
       geschat_kosten: r2(geschatKosten),
       geschat_km: o.geschat_km || null
     });
