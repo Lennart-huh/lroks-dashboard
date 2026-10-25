@@ -6926,6 +6926,32 @@ function genereerFactuurPdf(f, k, I, regels){
    maar dan als OFFERTE: geen datum-kolom (regels zijn handmatig, niet uit
    gedateerde uren/producten/km), geen betaal-QR, en een geldigheidstekst
    i.p.v. betaalinstructies. */
+/* Zelfde regel als voegKleinMateriaalSamen op de factuur: productregels (geen
+   'Werk per stuk') met een regeltotaal onder KLEIN_MAT_GRENS staan op de
+   offerte-PDF samen als één regel "Klein materiaal", achter het overige
+   materiaal. Alleen voor de PDF — de regels zelf blijven los (bestellen,
+   accepteren). */
+function offerteRegelsMetKleinMat(regels){
+  // 0,815 x 100 is in JS 81,4999…; r2 maakt daar 0,81 van terwijl eur2 0,82
+  // toont — eerst op 10 cijfers afronden zodat de som klopt met wat je zou zien
+  const regelTotaal = r => Math.round(Number((Number(r.aantal) * Number(r.prijs) * 100).toPrecision(10))) / 100;
+  const isKlein = r => {
+    if (!r.product_id) return false;
+    if (isWerkPerStukProduct(cache.producten.find(x => x.id === r.product_id))) return false;
+    const totaal = regelTotaal(r);
+    return totaal > 0 && totaal < KLEIN_MAT_GRENS;
+  };
+  const klein = regels.filter(isKlein);
+  if (!klein.length) return regels;
+  const kleinRegel = {
+    omschrijving: KLEIN_MAT_NAAM, eenheid: "", aantal: 1,
+    prijs: r2(klein.reduce((s, r) => s + regelTotaal(r), 0))
+  };
+  const rest = regels.filter(r => !isKlein(r));
+  const naLaatsteProduct = rest.map(r => !!r.product_id).lastIndexOf(true) + 1;
+  rest.splice(naLaatsteProduct, 0, kleinRegel);
+  return rest;
+}
 function genereerOffertePdf(o, k, I, regels){
   const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
   const L = 15, R = 195;
@@ -6976,6 +7002,7 @@ function genereerOffertePdf(o, k, I, regels){
 
   const vast = o.prijstype === "vast";
   y = Math.max(ky, y + 9) + 6;
+  regels = offerteRegelsMetKleinMat(regels);
   if (vast){
     // vaste prijs: producten met hun prijs, daaronder het bedrag dat je voor
     // het materiaal vraagt, en arbeid/km met hun vaste bedrag achter de
