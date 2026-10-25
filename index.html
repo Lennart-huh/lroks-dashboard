@@ -7391,20 +7391,13 @@ async function openOfferte(id){
   window.scrollTo(0, 0);
 }
 
-$("offOpslaan").addEventListener("click", async () => {
-  // status 'geaccepteerd' zegt niets over of er al een project bestaat —
-  // dat gebeurt alleen via de aparte 'Accepteren'-knop. Onthoud dat hier
-  // (opslaan zelf raakt project_id nooit aan) zodat die knop na het
-  // opslaan niet per ongeluk verdwijnt zonder dat er een project is.
-  const bestaandProjectId = bewerkOfferteId
-    ? (offerteData.find(x => x.id === bewerkOfferteId) || {}).project_id || null : null;
-  const nummer = $("offNummer").value.trim();
+/* De offerte zoals hij nu in het formulier staat — voor opslaan én voor de
+   PDF, zodat de PDF ook klopt als je nog niet hebt opgeslagen. */
+function offFormRij(){
   const vast = offertePrijstype === "vast";
-  if (!vast && !offerteRegels.length) { toast("Voeg minstens 1 regel toe"); return; }
-  if (vast && !(parseFloat($("offVastePrijs").value) > 0)) { toast("Vul de vaste prijs in"); return; }
   const tot = toonOffRegels();
-  const rij = {
-    nummer: nummer || null,
+  return {
+    nummer: $("offNummer").value.trim() || null,
     naam: $("offNaam").value.trim() || null,
     klant_id: $("offKlant").value || null,
     datum: $("offDatum").value || vandaagISO(),
@@ -7421,6 +7414,19 @@ $("offOpslaan").addEventListener("click", async () => {
     bedrag_excl: tot.excl, btw_bedrag: tot.btw, bedrag_incl: tot.incl,
     notities: $("offNotities").value.trim() || null
   };
+}
+
+$("offOpslaan").addEventListener("click", async () => {
+  // status 'geaccepteerd' zegt niets over of er al een project bestaat —
+  // dat gebeurt alleen via de aparte 'Accepteren'-knop. Onthoud dat hier
+  // (opslaan zelf raakt project_id nooit aan) zodat die knop na het
+  // opslaan niet per ongeluk verdwijnt zonder dat er een project is.
+  const bestaandProjectId = bewerkOfferteId
+    ? (offerteData.find(x => x.id === bewerkOfferteId) || {}).project_id || null : null;
+  const vast = offertePrijstype === "vast";
+  if (!vast && !offerteRegels.length) { toast("Voeg minstens 1 regel toe"); return; }
+  if (vast && !(parseFloat($("offVastePrijs").value) > 0)) { toast("Vul de vaste prijs in"); return; }
+  const rij = offFormRij();
   $("offOpslaan").disabled = true;
   let offerteId = bewerkOfferteId, fout;
   if (bewerkOfferteId){
@@ -7539,9 +7545,8 @@ $("offAccepteren").addEventListener("click", async () => {
 });
 
 $("offPdf").addEventListener("click", () => {
-  if (!bewerkOfferteId) return;
-  const o = offerteData.find(x => x.id === bewerkOfferteId);
-  if (!o) return;
+  // wat er nu in het formulier staat, ook als het nog niet is opgeslagen
+  const o = offFormRij();
   const k = cache.klanten.find(x => x.id === o.klant_id);
   try {
     const doc = genereerOffertePdf(o, k, cache.inst, offerteRegels);
