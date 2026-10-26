@@ -363,6 +363,7 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Soort</label>
               <div class="schakel">
                 <button type="button" id="uSoortWerk" class="aan">Werkuren</button>
+                <button type="button" id="uSoortReis">Reisuren</button>
                 <button type="button" id="uSoortKantoor">Kantooruren</button>
               </div>
             </div>
@@ -449,6 +450,13 @@ nav.onderbalk{display:none}
         <div class="subform form-card" id="sub-extra">
           <div class="veld"><label>Project</label><select id="erProject"></select></div>
           <div class="veld"><label>Klus binnen dit project (optioneel)</label><select id="erKlus"><option value="">— geen, rechtstreeks op project —</option></select></div>
+          <div class="veld"><label>Soort</label>
+            <div class="schakel">
+              <button type="button" id="erSoortRegel" class="aan">Gewone regel</button>
+              <button type="button" id="erSoortKosten">Kostenpost (bv. tanken)</button>
+            </div>
+            <div class="hint" id="erSoortHint">Komt als gewone regel tussen de rest op de factuur.</div>
+          </div>
           <div class="rij2">
             <div class="veld"><label>Omschrijving</label><input type="text" id="erOmschrijving" placeholder="bv. Aanleg groepenkast — vaste prijs"></div>
             <div class="veld"><label>Datum</label><input type="date" id="erDatum"></div>
@@ -457,7 +465,12 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Aantal</label><input type="number" id="erAantal" step="0.5" min="0" value="1" inputmode="decimal"></div>
             <div class="veld"><label>Eenheid</label><input type="text" id="erEenheid" placeholder="leeg = vast bedrag"></div>
           </div>
-          <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="erPrijs" step="0.01" min="0" inputmode="decimal"></div>
+          <div class="rij2">
+            <div class="veld"><label>Prijs excl. (€)</label><input type="number" id="erPrijs" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld" id="erInclVeld" style="display:none"><label>Of: bedrag incl. btw van de bon</label>
+              <input type="number" id="erIncl" step="0.01" min="0" inputmode="decimal" placeholder="bv. 80,00">
+              <div class="hint">Rekent om naar excl. — de btw komt er op de factuur weer bij.</div></div>
+          </div>
           <button class="knop" id="erOpslaan">Regel opslaan</button>
           <button class="knop klein stil" id="erAnnuleer" style="display:none">Wijzigen annuleren</button>
         </div>
@@ -882,13 +895,14 @@ nav.onderbalk{display:none}
               </table>
             </div>
           </div>
-          <div class="veld" id="prExtraBlok" style="display:none"><label>Extra regels op dit project</label>
+          <div class="veld" id="prExtraBlok" style="display:none"><label>Extra regels en kosten op dit project</label>
             <div class="tbl-wrap">
               <table>
                 <thead><tr><th>Datum</th><th>Omschrijving</th><th class="r">Aantal</th><th class="r">Bedrag</th><th></th></tr></thead>
                 <tbody id="prExtraBody"></tbody>
               </table>
             </div>
+            <button class="knop klein stil" id="prKostenpost" style="margin-top:8px">+ Kostenpost (bv. tanken)</button>
           </div>
           <div class="veld" id="prFacturenBlok" style="display:none"><label>Facturen van dit project</label>
             <div class="tbl-wrap">
@@ -1821,9 +1835,17 @@ function schakel(idAan, idUit){
   $(idAan).classList.add("aan");
   $(idUit).classList.remove("aan");
 }
+/* uren.soort: werk, reis of kantoor. Reisuren gaan net als werkuren mee
+   op de factuur (als "Reisuren — …" in plaats van "Arbeid — …"). */
 let urenSoort = "werk";
-$("uSoortWerk").addEventListener("click", () => { urenSoort = "werk"; schakel("uSoortWerk","uSoortKantoor"); });
-$("uSoortKantoor").addEventListener("click", () => { urenSoort = "kantoor"; schakel("uSoortKantoor","uSoortWerk"); });
+const UREN_SOORTEN = { werk: "uSoortWerk", reis: "uSoortReis", kantoor: "uSoortKantoor" };
+function zetUrenSoort(s){
+  urenSoort = UREN_SOORTEN[s] ? s : "werk";
+  Object.entries(UREN_SOORTEN).forEach(([k, id]) => $(id).classList.toggle("aan", k === urenSoort));
+}
+Object.keys(UREN_SOORTEN).forEach(s => $(UREN_SOORTEN[s]).addEventListener("click", () => zetUrenSoort(s)));
+const urenSoortChip = s => s === "werk" ? '<span class="chip groen">WERK</span>'
+  : s === "reis" ? '<span class="chip amber">REIS</span>' : '<span class="chip grijs">KANTOOR</span>';
 let kmZakelijk = true;
 $("kZakelijk").addEventListener("click", () => { kmZakelijk = true; schakel("kZakelijk","kPrive"); });
 $("kPrive").addEventListener("click", () => { kmZakelijk = false; schakel("kPrive","kZakelijk"); });
@@ -2392,8 +2414,8 @@ function controleMeldingen(){
         (g[0].omschrijving ? " · " + g[0].omschrijving : ""), open: () => startUrenBewerken(g[0].id) }));
   urenData.forEach(u => {
     const wat = fmtDatum(u.datum) + ", " + Number(u.aantal).toLocaleString("nl-NL") + " uur" + (u.omschrijving ? " · " + u.omschrijving : "");
-    if (u.soort === "werk" && !u.project_id && !u.klant_id && !u.klus_id)
-      m.push({ sleutel: "uzonder:" + u.id, soort: "Uren", tekst: "Werkuren zonder project of klant (worden nergens gefactureerd): " + wat,
+    if ((u.soort === "werk" || u.soort === "reis") && !u.project_id && !u.klant_id && !u.klus_id)
+      m.push({ sleutel: "uzonder:" + u.id, soort: "Uren", tekst: (u.soort === "reis" ? "Reisuren" : "Werkuren") + " zonder project of klant (worden nergens gefactureerd): " + wat,
         open: () => startUrenBewerken(u.id) });
     if (!(Number(u.aantal) > 0) || Number(u.aantal) > 14)
       m.push({ sleutel: "uaantal:" + u.id + ":" + u.aantal, soort: "Uren", tekst: "Vreemd aantal uren: " + wat,
@@ -2747,7 +2769,9 @@ function maandPosten(jaar, maand){
 
 /* Inkoopwaarde van het materiaal op één verkoopfactuur (aantal x huidige inkoopprijs). */
 function factuurKostprijs(factuurId){
-  return (cache.regels || []).filter(r => r.factuur_id === factuurId && r.mutatie_id).reduce((t, r) => {
+  return (cache.regels || []).filter(r => r.factuur_id === factuurId && (r.mutatie_id || r.kostenpost)).reduce((t, r) => {
+    // doorberekende kosten (tanken e.d.): kostprijs = wat je ervoor vraagt
+    if (r.kostenpost) return t + Number(r.aantal || 0) * Number(r.prijs || 0);
     const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
     const p = m && cache.producten.find(x => x.id === m.product_id);
     return t + (p ? Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0) : 0);
@@ -2941,8 +2965,7 @@ function startUrenBewerken(id){
   $("uDatum").value = u.datum;
   $("uAantal").value = u.aantal;
   $("uTarief").value = u.tarief ?? "";
-  urenSoort = u.soort;
-  if (u.soort === "werk") schakel("uSoortWerk","uSoortKantoor"); else schakel("uSoortKantoor","uSoortWerk");
+  zetUrenSoort(u.soort);
   $("uProject").value = u.project_id || "";
   vulKlusSelect("uProject", "uKlus");
   $("uKlus").value = u.klus_id || "";
@@ -2987,7 +3010,8 @@ function renderUren(){
     .filter(u => new Date(u.datum) >= vanaf)
     .reduce((s,u) => s + Number(u.aantal || 0) * Number(u.tarief || 0), 0);
   const fmt = n => n.toLocaleString("nl-NL");
-  const sub = vanaf => fmt(som(vanaf,"werk")) + " werk · " + fmt(som(vanaf,"kantoor")) + " kantoor · " + eur(somBedrag(vanaf));
+  const sub = vanaf => fmt(som(vanaf,"werk")) + " werk · " + (som(vanaf,"reis") ? fmt(som(vanaf,"reis")) + " reis · " : "") +
+    fmt(som(vanaf,"kantoor")) + " kantoor · " + eur(somBedrag(vanaf));
 
   $("uwWeek").textContent = fmt(som(p.maandag));
   $("uwWeekSub").textContent = sub(p.maandag);
@@ -3007,7 +3031,7 @@ function renderUren(){
     const wie = projectNaam(u.project_id) || klantNaam(u.klant_id) || "—";
     return '<tr class="klik" data-uedit="' + u.id + '">' +
       '<td>' + fmtDatum(u.datum) + '</td>' +
-      '<td><span class="chip ' + (u.soort === "werk" ? "groen" : "grijs") + '">' + (u.soort === "werk" ? "WERK" : "KANTOOR") + '</span>' + (u.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
+      '<td>' + urenSoortChip(u.soort) + (u.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
       '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
       '<td class="r">' + (u.tarief ? eur2(u.tarief) : "—") + '</td>' +
       '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td>' +
@@ -3661,8 +3685,31 @@ function renderKlanten(){
    vaste prijs voor een deel van het werk), niet gekoppeld aan uren/km/
    producten. Werkt verder net als de andere invulformulieren: opslaan,
    bewerken, verwijderen, en ze komen mee bij het factureren van het project.
+   Een kostenpost (kostenpost = true, bv. tanken of parkeren) is een bedrag
+   dat je zonder marge doorberekent: op de factuur in een eigen blok
+   "Kosten" met subtotaal, en in de winstoverzichten staat er een even grote
+   kostprijs tegenover.
    ===================================================== */
 let bewerkExtraRegelId = null;
+let erKostenpost = false;
+
+function zetErKostenpost(aan){
+  erKostenpost = !!aan;
+  schakel(aan ? "erSoortKosten" : "erSoortRegel", aan ? "erSoortRegel" : "erSoortKosten");
+  $("erInclVeld").style.display = aan ? "block" : "none";
+  $("erOmschrijving").placeholder = aan ? "bv. Tanken" : "bv. Aanleg groepenkast — vaste prijs";
+  $("erSoortHint").textContent = aan
+    ? "Komt los onder \"Kosten\" op de factuur, zonder marge — vul het bedrag in zoals het op de bon staat."
+    : "Komt als gewone regel tussen de rest op de factuur.";
+  if (!aan) $("erIncl").value = "";
+}
+$("erSoortRegel").addEventListener("click", () => zetErKostenpost(false));
+$("erSoortKosten").addEventListener("click", () => zetErKostenpost(true));
+$("erIncl").addEventListener("input", () => {
+  const incl = parseFloat($("erIncl").value);
+  $("erPrijs").value = incl > 0 ? r2(incl / (1 + btwPct() / 100)) : "";
+});
+$("erPrijs").addEventListener("input", () => { $("erIncl").value = ""; });
 
 function stopExtraRegelBewerken(){
   bewerkExtraRegelId = null;
@@ -3670,6 +3717,7 @@ function stopExtraRegelBewerken(){
   $("erAnnuleer").style.display = "none";
   $("erOmschrijving").value = ""; $("erAantal").value = 1; $("erEenheid").value = ""; $("erPrijs").value = "";
   $("erDatum").value = vandaagISO();
+  zetErKostenpost(false);
 }
 $("erAnnuleer").addEventListener("click", stopExtraRegelBewerken);
 
@@ -3683,6 +3731,7 @@ function startExtraRegelBewerken(r){
   $("erAantal").value = r.aantal;
   $("erEenheid").value = r.eenheid || "";
   $("erPrijs").value = r.prijs;
+  zetErKostenpost(r.kostenpost);
   $("erOpslaan").textContent = "Wijziging opslaan";
   $("erAnnuleer").style.display = "block";
   toonTab("invullen");
@@ -3699,7 +3748,7 @@ $("erOpslaan").addEventListener("click", async () => {
   if (!omschrijving || !(aantal > 0) || !(prijs >= 0)) { toast("Vul omschrijving, aantal en prijs in"); return; }
   const rij = {
     project_id: projectId, klus_id: $("erKlus").value || null, omschrijving, datum,
-    aantal, prijs: r2(prijs), eenheid: $("erEenheid").value.trim() || null
+    aantal, prijs: r2(prijs), eenheid: $("erEenheid").value.trim() || null, kostenpost: erKostenpost
   };
   $("erOpslaan").disabled = true;
   let fout;
@@ -3714,6 +3763,18 @@ $("erOpslaan").addEventListener("click", async () => {
   stopExtraRegelBewerken();
   if (bewerkProjectId) laadProjectExtraRegels(bewerkProjectId);
   toast(wasBewerken ? "Regel bijgewerkt" : "Regel opgeslagen");
+});
+
+/* vanaf een project meteen een kostenpost toevoegen */
+$("prKostenpost").addEventListener("click", () => {
+  if (!bewerkProjectId) return;
+  stopExtraRegelBewerken();
+  $("erProject").value = bewerkProjectId;
+  vulKlusSelect("erProject", "erKlus");
+  zetErKostenpost(true);
+  toonTab("invullen");
+  kiesSub("sub-extra");
+  $("erOmschrijving").focus();
 });
 
 /* =====================================================
@@ -3737,7 +3798,7 @@ function laadProjectUren(projectId){
     ? '<tr><td colspan="5" class="leeg">Nog geen uren op dit project.</td></tr>'
     : lijst.map(u =>
         '<tr class="klik" data-prueid="' + u.id + '"><td>' + fmtDatum(u.datum) + '</td>' +
-        '<td><span class="chip ' + (u.soort === "werk" ? "groen" : "grijs") + '">' + (u.soort === "werk" ? "WERK" : "KANTOOR") + '</span>' +
+        '<td>' + urenSoortChip(u.soort) +
           (u.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
         '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
         '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td>' +
@@ -4127,13 +4188,14 @@ async function laadProjectExtraRegels(projectId){
   if (error){ console.error(error); body.innerHTML = '<tr><td colspan="5" class="leeg">Kon de regels niet laden.</td></tr>'; return; }
   const lijst = data || [];
   if (!lijst.length){
-    body.innerHTML = '<tr><td colspan="5" class="leeg">Nog geen extra regels bij dit project.</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" class="leeg">Nog geen extra regels of kosten bij dit project.</td></tr>';
     return;
   }
   body.innerHTML = lijst.map(r =>
     '<tr' + (r.gefactureerd ? '' : ' class="klik" data-eredit="' + r.id + '"') + '>' +
       '<td>' + fmtDatum(r.datum) + '</td>' +
-      '<td class="tekst">' + esc(r.omschrijving) + (r.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
+      '<td class="tekst">' + esc(r.omschrijving) + (r.kostenpost ? ' <span class="chip amber">KOSTEN</span>' : '') +
+        (r.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
       '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + (r.eenheid ? " " + esc(r.eenheid) : "") + '</td>' +
       '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td>' +
       '<td class="r">' + (r.gefactureerd ? '' : '<button class="verwijder" data-erid="' + r.id + '" title="Verwijderen">✕</button>') + '</td>' +
@@ -5613,7 +5675,7 @@ async function startFacturering(projectId){
     const verborgen = !!(u.klus_id && teFactIdSet.has(u.klus_id));
     if (!u.tarief && !verborgen) zonderTarief++;
     regels.push({
-      omschrijving: "Arbeid" + (u.omschrijving ? " — " + u.omschrijving : ""),
+      omschrijving: (u.soort === "reis" ? "Reisuren" : "Arbeid") + (u.omschrijving ? " — " + u.omschrijving : ""),
       datum: u.datum, eenheid: "uur",
       aantal: Number(u.aantal), prijs: verborgen ? 0 : Number(u.tarief || 0),
       uren_id: u.id, mutatie_id: null, km_id: null, extra_id: null, klus_id: u.klus_id || null, verborgen
@@ -5644,13 +5706,15 @@ async function startFacturering(projectId){
     });
   });
   // extra regels (bv. een afgesproken vaste prijs voor een deel van de klus,
-  // via Invulformulier > Extra regel) komen gewoon als eigen regel(s) mee
+  // via Invulformulier > Extra regel) komen gewoon als eigen regel(s) mee;
+  // kostenposten (tanken e.d.) houden die vlag, voor het blok "Kosten"
   extra.forEach(r => {
     regels.push({
       omschrijving: r.omschrijving,
       datum: r.datum, eenheid: r.eenheid || "",
       aantal: Number(r.aantal), prijs: Number(r.prijs),
-      uren_id: null, mutatie_id: null, km_id: null, extra_id: r.id, klus_id: r.klus_id || null, verborgen: false
+      uren_id: null, mutatie_id: null, km_id: null, extra_id: r.id, klus_id: r.klus_id || null, verborgen: false,
+      kostenpost: !!r.kostenpost
     });
   });
   // per afgeronde vaste-prijs klus: één regel met de vaste prijs, gedateerd
@@ -5737,16 +5801,21 @@ function voegKleinMateriaalSamen(regels){
    klus later omzet. Zonder meerwerk-regels is er één blok zonder kopje —
    dan ziet de factuur er precies zo uit als vroeger. */
 const isMeerwerkKlus = id => !!(id && (cache.klussen.find(k => k.id === id) || {}).meerwerk);
+/* Kostenposten (factuur_regels.kostenpost, bv. tanken) staan altijd onderaan
+   in een eigen blok "Kosten", ook als ze bij een meerwerk-klus horen. */
 function factuurBlokken(regels){
   const zichtbaar = regels.filter(r => !r.verborgen)
     .sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")));
   const som = lijst => r2(lijst.reduce((s, r) => s + Number(r.aantal) * Number(r.prijs), 0));
-  const meer = zichtbaar.filter(r => r.meerwerk);
-  if (!meer.length) return [{ titel: null, regels: zichtbaar, subtotaal: som(zichtbaar) }];
-  const opdracht = zichtbaar.filter(r => !r.meerwerk);
+  const kosten = zichtbaar.filter(r => r.kostenpost);
+  const werk = zichtbaar.filter(r => !r.kostenpost);
+  const meer = werk.filter(r => r.meerwerk);
+  if (!meer.length && !kosten.length) return [{ titel: null, regels: werk, subtotaal: som(werk) }];
+  const opdracht = werk.filter(r => !r.meerwerk);
   return [
     ...(opdracht.length ? [{ titel: "Opdracht", regels: opdracht, subtotaal: som(opdracht) }] : []),
-    { titel: "Meerwerk", regels: meer, subtotaal: som(meer) }
+    ...(meer.length ? [{ titel: "Meerwerk", regels: meer, subtotaal: som(meer) }] : []),
+    ...(kosten.length ? [{ titel: "Kosten", regels: kosten, subtotaal: som(kosten) }] : [])
   ];
 }
 
@@ -5776,7 +5845,7 @@ async function maakFactuurAan(){
     factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
     aantal: r.aantal, prijs: r.prijs,
     uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null, extra_id: r.extra_id || null,
-    klus_id: r.klus_id || null, verborgen: !!r.verborgen, meerwerk: !!r.meerwerk
+    klus_id: r.klus_id || null, verborgen: !!r.verborgen, meerwerk: !!r.meerwerk, kostenpost: !!r.kostenpost
   }));
   const { error: e2 } = await db.from("factuur_regels").insert(invoerRegels);
   if (e2){
@@ -6355,6 +6424,7 @@ function winstBronnen(jaar){
     materiaal:   { naam: "Materiaal",      omzet: 0, kost: 0 },
     werkperstuk: { naam: "Werk per stuk",  omzet: 0, kost: 0 },
     km:          { naam: "Kilometers",     omzet: 0, kost: 0 },
+    kosten:      { naam: "Doorberekende kosten", omzet: 0, kost: 0 },
     overig:      { naam: "Overige regels", omzet: 0, kost: 0 }
   };
   (cache.regels || []).filter(r => facturen.has(r.factuur_id)).forEach(r => {
@@ -6375,6 +6445,7 @@ function winstBronnen(jaar){
     const bedrag = Number(r.aantal || 0) * Number(r.prijs || 0);
     if (r.uren_id) bron.uren.omzet += bedrag;
     else if (r.km_id) bron.km.omzet += bedrag;
+    else if (r.kostenpost){ bron.kosten.omzet += bedrag; bron.kosten.kost += bedrag; }
     else bron.overig.omzet += bedrag;
   });
   return bron;
@@ -6872,7 +6943,7 @@ function genereerFactuurPdf(f, k, I, regels){
     // alles op datum onder elkaar, niet gegroepeerd per soort (uren/materiaal/km/extra),
     // de klus staat erbij in de datumkolom, en 'verborgen' regels (opgegaan in
     // de vaste prijs van een klus) blijven van de factuur zelf af
-    // Met meerwerk: blok "Opdracht" en blok "Meerwerk", elk met kopje en subtotaal
+    // Met meerwerk/kostenposten: blokken "Opdracht", "Meerwerk", "Kosten", elk met kopje en subtotaal
     body: factuurBlokken(regels).flatMap(b => [
       ...(b.titel ? [[{ content: b.titel, colSpan: 5,
         styles: { fontStyle: "bold", fontSize: 10, cellPadding: { top: 5, bottom: 2, left: 2, right: 2 }, lineWidth: 0 } }]] : []),
