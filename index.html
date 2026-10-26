@@ -471,6 +471,9 @@ nav.onderbalk{display:none}
               <input type="number" id="erIncl" step="0.01" min="0" inputmode="decimal" placeholder="bv. 80,00">
               <div class="hint">Rekent om naar excl. — de btw komt er op de factuur weer bij.</div></div>
           </div>
+          <div class="veld" id="erOpslagVeld" style="display:none"><label>Opslag % (optioneel)</label>
+            <input type="number" id="erOpslag" step="1" min="0" inputmode="decimal" placeholder="leeg = zonder opslag">
+            <div class="hint" id="erOpslagHint"></div></div>
           <button class="knop" id="erOpslaan">Regel opslaan</button>
           <button class="knop klein stil" id="erAnnuleer" style="display:none">Wijzigen annuleren</button>
         </div>
@@ -1265,6 +1268,8 @@ nav.onderbalk{display:none}
               <div class="veld"><label>Project</label><div class="lees" id="fdiProject">—</div></div>
             </div>
             <div class="veld"><label>Notitie</label><div class="lees" id="fdiNotitie">—</div></div>
+            <div class="veld" id="fdiBijlageVeld" style="display:none"><label>Bijlage</label>
+              <button type="button" class="knop klein stil" id="fdiBijlage">📎 Bon / factuur bekijken</button></div>
             <div class="veld" id="fdiRegelsVeld" style="display:none"><label>Wat zat erin</label>
               <div id="fdiRegels"></div>
             </div>
@@ -1337,6 +1342,27 @@ nav.onderbalk{display:none}
           </div>
           <div class="veld"><label>Tegenpartij</label><input type="text" id="bpLosTegen" list="ikLevLijst" placeholder="bv. Hornbach"></div>
           <div class="veld"><label>Omschrijving</label><input type="text" id="bpLosOms" placeholder="wat je in je bank-app ziet staan"></div>
+          <div class="rij2">
+            <div class="veld"><label id="bpLosSoortLabel">Kostensoort</label><select id="bpLosSoort"></select></div>
+            <div class="veld"><label>Btw-tarief</label>
+              <select id="bpLosBtwPct">
+                <option value="21">21%</option>
+                <option value="9">9%</option>
+                <option value="0">0% / geen btw</option>
+              </select></div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Bedrag excl. btw</label><input type="number" step="0.01" min="0" id="bpLosExcl" inputmode="decimal" placeholder="0,00"></div>
+            <div class="veld"><label>Btw-bedrag</label><input type="number" step="0.01" min="0" id="bpLosBtw" inputmode="decimal" placeholder="0,00"></div>
+          </div>
+          <div class="hint" id="bpLosBtwHint" style="margin:-6px 0 14px"></div>
+          <div class="veld"><label>Bon of factuur (PDF of foto)</label>
+            <div id="bpLosBijlageHuidig" style="display:none;margin-bottom:8px;gap:8px;flex-wrap:wrap;align-items:center">
+              <button type="button" class="knop klein stil" id="bpLosBijlageOpen">📎 Bekijken</button>
+              <button type="button" class="knop klein stil" id="bpLosBijlageWeg">Weghalen</button>
+            </div>
+            <input type="file" id="bpLosBijlage" accept="application/pdf,image/*">
+          </div>
           <div class="veld" id="bpLosKoppelVeld" style="display:none"><label>Factuur is er nu — koppelen</label>
             <div style="display:flex;gap:6px">
               <select id="bpLosKoppel" style="flex:1"></select>
@@ -2757,6 +2783,11 @@ function maandPosten(jaar, maand){
       open: () => { toonTab("omzet"); $("owCorrectiesBody").scrollIntoView({ block: "center" }); } };
     (c.type === "omzet" ? omzet : kosten).push(post);
   });
+  bpTellend().forEach(p => {
+    if (!inMaand(p.datum)) return;
+    if (p.richting === "in") omzet.push({ datum: p.datum, wat: bpWat(p.l), soort: "Losse betaling", bedrag: p.excl, open: bpOpen(p.l) });
+    else kosten.push({ datum: p.datum, wat: bpWat(p.l), soort: kostenNaam(p.categorie), bedrag: p.excl, open: bpOpen(p.l) });
+  });
   cache.vasteLasten.forEach(vl => {
     vasteLastDatumsInJaar(vl, jaar).forEach(datum => {
       if (new Date(datum).getMonth() === maand)
@@ -2770,8 +2801,8 @@ function maandPosten(jaar, maand){
 /* Inkoopwaarde van het materiaal op één verkoopfactuur (aantal x huidige inkoopprijs). */
 function factuurKostprijs(factuurId){
   return (cache.regels || []).filter(r => r.factuur_id === factuurId && (r.mutatie_id || r.kostenpost)).reduce((t, r) => {
-    // doorberekende kosten (tanken e.d.): kostprijs = wat je ervoor vraagt
-    if (r.kostenpost) return t + Number(r.aantal || 0) * Number(r.prijs || 0);
+    // doorberekende kosten (tanken e.d.): kostprijs = bon-bedrag, zonder opslag
+    if (r.kostenpost) return t + Number(r.aantal || 0) * Number(r.kostprijs ?? r.prijs ?? 0);
     const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
     const p = m && cache.producten.find(x => x.id === m.product_id);
     return t + (p ? Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0) : 0);
@@ -3235,6 +3266,9 @@ function autoKostenPosten(jaar){
   cache.vasteLasten.filter(vl => vl.categorie === "vervoer").forEach(vl =>
     vasteLastDatumsInJaar(vl, jaar).forEach(datum => posten.push({ maand: new Date(datum).getMonth(), datum,
       wat: vl.naam, soort: "Vaste last", bedrag: Number(vl.bedrag || 0), open: () => startVasteLastBewerken(vl.id) })));
+  bpTellend().filter(p => p.richting === "uit" && p.categorie === "vervoer" && new Date(p.datum).getFullYear() === jaar)
+    .forEach(p => posten.push({ maand: new Date(p.datum).getMonth(), datum: p.datum,
+      wat: bpWat(p.l), soort: "Losse betaling", bedrag: p.excl, open: bpOpen(p.l) }));
   return posten;
 }
 
@@ -3697,19 +3731,31 @@ function zetErKostenpost(aan){
   erKostenpost = !!aan;
   schakel(aan ? "erSoortKosten" : "erSoortRegel", aan ? "erSoortRegel" : "erSoortKosten");
   $("erInclVeld").style.display = aan ? "block" : "none";
-  $("erOmschrijving").placeholder = aan ? "bv. Tanken" : "bv. Aanleg groepenkast — vaste prijs";
+  $("erOpslagVeld").style.display = aan ? "block" : "none";
+  $("erOmschrijving").placeholder = aan ? "zelf invullen, bv. Tanken of Parkeren" : "bv. Aanleg groepenkast — vaste prijs";
   $("erSoortHint").textContent = aan
-    ? "Komt los onder \"Kosten\" op de factuur, zonder marge — vul het bedrag in zoals het op de bon staat."
+    ? "Komt los onder \"Kosten\" op de factuur — vul het bedrag in zoals het op de bon staat."
     : "Komt als gewone regel tussen de rest op de factuur.";
-  if (!aan) $("erIncl").value = "";
+  if (!aan){ $("erIncl").value = ""; $("erOpslag").value = ""; }
+  erOpslagHint();
+}
+/* prijs op de factuur van een kostenpost: kostprijs + opslag */
+const metOpslag = (prijs, pct) => r2(Number(prijs || 0) * (1 + Number(pct || 0) / 100));
+function erOpslagHint(){
+  const prijs = parseFloat($("erPrijs").value), pct = parseFloat($("erOpslag").value);
+  $("erOpslagHint").textContent = !(pct > 0) ? "Zonder opslag: precies het bedrag van de bon (excl. btw)."
+    : prijs > 0 ? "Op de factuur: " + eur2(metOpslag(prijs, pct)) + " per stuk (kostprijs " + eur2(prijs) + " + " + pct.toLocaleString("nl-NL") + "%)"
+    : "Standaard marge in Instellingen is " + (cache.inst.standaard_marge_pct || "—") + "%.";
 }
 $("erSoortRegel").addEventListener("click", () => zetErKostenpost(false));
 $("erSoortKosten").addEventListener("click", () => zetErKostenpost(true));
 $("erIncl").addEventListener("input", () => {
   const incl = parseFloat($("erIncl").value);
   $("erPrijs").value = incl > 0 ? r2(incl / (1 + btwPct() / 100)) : "";
+  erOpslagHint();
 });
-$("erPrijs").addEventListener("input", () => { $("erIncl").value = ""; });
+$("erPrijs").addEventListener("input", () => { $("erIncl").value = ""; erOpslagHint(); });
+$("erOpslag").addEventListener("input", erOpslagHint);
 
 function stopExtraRegelBewerken(){
   bewerkExtraRegelId = null;
@@ -3718,8 +3764,19 @@ function stopExtraRegelBewerken(){
   $("erOmschrijving").value = ""; $("erAantal").value = 1; $("erEenheid").value = ""; $("erPrijs").value = "";
   $("erDatum").value = vandaagISO();
   zetErKostenpost(false);
+  zetErGefactureerd(false);
 }
 $("erAnnuleer").addEventListener("click", stopExtraRegelBewerken);
+
+/* Al gefactureerd: alleen de omschrijving mag nog anders (die gaat dan ook
+   op de factuur mee); bedragen liggen vast omdat de factuur al bestaat. */
+let erGefactureerd = false;
+const ER_VAST = ["erProject","erKlus","erDatum","erAantal","erEenheid","erPrijs","erIncl","erOpslag","erSoortRegel","erSoortKosten"];
+function zetErGefactureerd(aan){
+  erGefactureerd = !!aan;
+  ER_VAST.forEach(id => { $(id).disabled = erGefactureerd; });
+  if (erGefactureerd) $("erSoortHint").textContent = "Al gefactureerd — alleen de omschrijving kun je nog aanpassen, die verandert dan ook op de factuur.";
+}
 
 function startExtraRegelBewerken(r){
   bewerkExtraRegelId = r.id;
@@ -3732,6 +3789,9 @@ function startExtraRegelBewerken(r){
   $("erEenheid").value = r.eenheid || "";
   $("erPrijs").value = r.prijs;
   zetErKostenpost(r.kostenpost);
+  $("erOpslag").value = r.opslag_pct ?? "";
+  erOpslagHint();
+  zetErGefactureerd(r.gefactureerd);
   $("erOpslaan").textContent = "Wijziging opslaan";
   $("erAnnuleer").style.display = "block";
   toonTab("invullen");
@@ -3744,11 +3804,28 @@ $("erOpslaan").addEventListener("click", async () => {
   const aantal = parseFloat($("erAantal").value);
   const prijs = parseFloat($("erPrijs").value);
   const datum = $("erDatum").value || vandaagISO();
+  if (erGefactureerd && bewerkExtraRegelId){
+    if (!omschrijving) { toast("Vul een omschrijving in"); return; }
+    $("erOpslaan").disabled = true;
+    const [a, b] = await Promise.all([
+      db.from("project_extra_regels").update({ omschrijving }).eq("id", bewerkExtraRegelId),
+      db.from("factuur_regels").update({ omschrijving }).eq("extra_id", bewerkExtraRegelId)
+    ]);
+    $("erOpslaan").disabled = false;
+    if (a.error || b.error) { console.error(a.error || b.error); toast("Opslaan mislukt"); return; }
+    stopExtraRegelBewerken();
+    if (bewerkProjectId) laadProjectExtraRegels(bewerkProjectId);
+    await herlaadFacturen();
+    toast("Omschrijving aangepast, ook op de factuur");
+    return;
+  }
   if (!projectId) { toast("Kies een project"); return; }
   if (!omschrijving || !(aantal > 0) || !(prijs >= 0)) { toast("Vul omschrijving, aantal en prijs in"); return; }
+  const opslag = parseFloat($("erOpslag").value);
   const rij = {
     project_id: projectId, klus_id: $("erKlus").value || null, omschrijving, datum,
-    aantal, prijs: r2(prijs), eenheid: $("erEenheid").value.trim() || null, kostenpost: erKostenpost
+    aantal, prijs: r2(prijs), eenheid: $("erEenheid").value.trim() || null, kostenpost: erKostenpost,
+    opslag_pct: erKostenpost && opslag > 0 ? opslag : null
   };
   $("erOpslaan").disabled = true;
   let fout;
@@ -4191,13 +4268,15 @@ async function laadProjectExtraRegels(projectId){
     body.innerHTML = '<tr><td colspan="5" class="leeg">Nog geen extra regels of kosten bij dit project.</td></tr>';
     return;
   }
+  // ook gefactureerde regels zijn aan te klikken: de omschrijving kan altijd nog anders
   body.innerHTML = lijst.map(r =>
-    '<tr' + (r.gefactureerd ? '' : ' class="klik" data-eredit="' + r.id + '"') + '>' +
+    '<tr class="klik" data-eredit="' + r.id + '">' +
       '<td>' + fmtDatum(r.datum) + '</td>' +
       '<td class="tekst">' + esc(r.omschrijving) + (r.kostenpost ? ' <span class="chip amber">KOSTEN</span>' : '') +
+        (r.opslag_pct ? ' <span class="chip grijs">+' + Number(r.opslag_pct).toLocaleString("nl-NL") + '%</span>' : '') +
         (r.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
       '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + (r.eenheid ? " " + esc(r.eenheid) : "") + '</td>' +
-      '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td>' +
+      '<td class="r">' + eur2(Number(r.aantal) * (r.kostenpost ? metOpslag(r.prijs, r.opslag_pct) : Number(r.prijs))) + '</td>' +
       '<td class="r">' + (r.gefactureerd ? '' : '<button class="verwijder" data-erid="' + r.id + '" title="Verwijderen">✕</button>') + '</td>' +
     '</tr>').join("");
   body.querySelectorAll("[data-eredit]").forEach(el => el.addEventListener("click", () => {
@@ -5707,14 +5786,15 @@ async function startFacturering(projectId){
   });
   // extra regels (bv. een afgesproken vaste prijs voor een deel van de klus,
   // via Invulformulier > Extra regel) komen gewoon als eigen regel(s) mee;
-  // kostenposten (tanken e.d.) houden die vlag, voor het blok "Kosten"
+  // kostenposten (tanken e.d.) houden die vlag, voor het blok "Kosten"; met
+  // opslag gaat de prijs omhoog en onthoudt de regel de kale kostprijs
   extra.forEach(r => {
     regels.push({
       omschrijving: r.omschrijving,
       datum: r.datum, eenheid: r.eenheid || "",
-      aantal: Number(r.aantal), prijs: Number(r.prijs),
+      aantal: Number(r.aantal), prijs: r.kostenpost ? metOpslag(r.prijs, r.opslag_pct) : Number(r.prijs),
       uren_id: null, mutatie_id: null, km_id: null, extra_id: r.id, klus_id: r.klus_id || null, verborgen: false,
-      kostenpost: !!r.kostenpost
+      kostenpost: !!r.kostenpost, kostprijs: r.kostenpost ? Number(r.prijs) : null
     });
   });
   // per afgeronde vaste-prijs klus: één regel met de vaste prijs, gedateerd
@@ -5845,7 +5925,8 @@ async function maakFactuurAan(){
     factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
     aantal: r.aantal, prijs: r.prijs,
     uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null, extra_id: r.extra_id || null,
-    klus_id: r.klus_id || null, verborgen: !!r.verborgen, meerwerk: !!r.meerwerk, kostenpost: !!r.kostenpost
+    klus_id: r.klus_id || null, verborgen: !!r.verborgen, meerwerk: !!r.meerwerk, kostenpost: !!r.kostenpost,
+    kostprijs: r.kostprijs ?? null
   }));
   const { error: e2 } = await db.from("factuur_regels").insert(invoerRegels);
   if (e2){
@@ -5967,7 +6048,21 @@ async function herlaadBetalingen(){
   const { data, error } = await db.from("losse_betalingen").select("*").order("betaald_op", { ascending:false });
   if (!error) losseBetalingen = data || [];
   renderBetalingen();
+  // losse betalingen met btw/kostensoort tellen mee in Financieel
+  renderFinancieel(); renderHoofd();
 }
+
+/* Losse betalingen die meetellen (kostensoort/omzet gekozen en btw ingevuld),
+   op de dag van betalen: { l, datum, richting, excl, btw, categorie } */
+function bpTellend(){
+  return losseBetalingen.filter(l => l.categorie && l.btw_bedrag != null).map(l => {
+    const btw = Number(l.btw_bedrag || 0);
+    return { l, datum: lokaleDag(new Date(l.betaald_op)), richting: l.richting,
+      excl: r2(Number(l.bedrag || 0) - btw), btw, categorie: l.categorie };
+  });
+}
+const bpWat = l => (l.tegenpartij || "—") + (l.omschrijving ? " · " + l.omschrijving : "") + " (losse betaling)";
+const bpOpen = l => () => { toonTab("betalingen"); openLosseBetaling(l.id); };
 
 /* alle posten als regels van een afschrift: { dag, tijd, sort, richting, bedrag, ... } */
 function bpPosten(){
@@ -5991,7 +6086,7 @@ function bpPosten(){
     posten.push({
       soort: "los", id: l.id, richting: l.richting,
       dag: lokaleDag(d), tijd: tijdVan(d), sort: d.getTime(),
-      naam: l.tegenpartij || "—", sub: l.omschrijving || "",
+      naam: (l.tegenpartij || "—") + (l.bijlage ? " 📎" : ""), sub: l.omschrijving || "",
       bedrag: Number(l.bedrag || 0)
     });
   });
@@ -6137,10 +6232,94 @@ $("bpFactNaarFactuur").addEventListener("click", () => {
   else { kiesFSub("fUit"); openFactuur(f.id); }
 });
 
-/* ---- losse betaling (factuur ontbreekt nog) ---- */
+/* ---- losse betaling (factuur ontbreekt nog) ----
+   Met btw en een kostensoort telt hij mee in Financieel: excl. als kosten
+   (of omzet, bij bijgeschreven), btw in het kwartaal van de betaaldatum.
+   categorie null = telt nergens mee (privé, overboeking, of oude regel waar
+   nog niets is ingevuld). Bij koppelen aan een factuur verdwijnt de losse
+   regel en telt de factuur — de bijlage gaat dan mee naar die factuur. */
+const BP_GEEN = "";   // waarde van "telt niet mee" in de kostensoort-select
+function vulBpSoort(keuze){
+  const geen = bpLosRichting === "uit" ? "Geen kosten (privé / overboeking)" : "Geen omzet (privé / overboeking)";
+  $("bpLosSoortLabel").textContent = bpLosRichting === "uit" ? "Kostensoort" : "Telt als";
+  $("bpLosSoort").innerHTML = (bpLosRichting === "uit"
+    ? KOSTEN.map(k => '<option value="' + k[0] + '">' + k[1] + '</option>').join("")
+    : '<option value="omzet">Omzet</option>') +
+    '<option value="' + BP_GEEN + '">' + geen + '</option>';
+  const opties = [...$("bpLosSoort").options].map(o => o.value);
+  $("bpLosSoort").value = keuze !== undefined && opties.includes(keuze) ? keuze : opties[0];
+}
+// incl. is leidend; tarief of incl. aanpassen rekent btw en excl. opnieuw uit
+function bpLosReken(){
+  const incl = Number($("bpLosBedrag").value) || 0;
+  const pct = Number($("bpLosBtwPct").value) || 0;
+  const btw = r2(incl * pct / (100 + pct));
+  $("bpLosBtw").value = incl ? btw.toFixed(2) : "";
+  $("bpLosExcl").value = incl ? r2(incl - btw).toFixed(2) : "";
+  bpLosHint();
+}
+function bpLosHint(){
+  const geen = $("bpLosSoort").value === BP_GEEN;
+  ["bpLosBtwPct","bpLosBtw","bpLosExcl"].forEach(id => { $(id).disabled = geen; });
+  $("bpLosBtwHint").textContent = geen ? "Telt niet mee bij kosten, omzet of btw."
+    : "Telt mee in " + (bpLosRichting === "uit" ? "je kosten" : "je omzet") + " (excl.) en bij de btw van het kwartaal van de betaaldatum.";
+}
+$("bpLosBtwPct").addEventListener("change", bpLosReken);
+$("bpLosExcl").addEventListener("input", () => {
+  const excl = Number($("bpLosExcl").value) || 0, pct = Number($("bpLosBtwPct").value) || 0;
+  const btw = r2(excl * pct / 100);
+  $("bpLosBtw").value = excl ? btw.toFixed(2) : "";
+  $("bpLosBedrag").value = excl ? r2(excl + btw).toFixed(2) : "";
+  vulBpKoppel();
+});
+// btw met de hand (bv. een bon met twee tarieven): excl. = incl. − btw
+$("bpLosBtw").addEventListener("input", () => {
+  const incl = Number($("bpLosBedrag").value) || 0, btw = Number($("bpLosBtw").value) || 0;
+  $("bpLosExcl").value = incl ? r2(incl - btw).toFixed(2) : "";
+});
+$("bpLosSoort").addEventListener("change", () => {
+  if ($("bpLosSoort").value === BP_GEEN){ $("bpLosBtwPct").value = "0"; bpLosReken(); }
+  bpLosHint();
+});
+// kostensoort van de vorige keer bij deze tegenpartij voorstellen
+$("bpLosTegen").addEventListener("change", () => {
+  if (bpLosRichting !== "uit") return;
+  const vorige = losseBetalingen.find(l => l.id !== bpLosId && l.categorie &&
+      String(l.tegenpartij || "").toLowerCase().trim() === $("bpLosTegen").value.toLowerCase().trim());
+  const eerder = vorige ? vorige.categorie : vorigeKostensoort($("bpLosTegen").value);
+  if (eerder){ $("bpLosSoort").value = eerder; bpLosHint(); }
+});
+
+/* bijlage (bon/factuur): in de afgeschermde opslag 'bijlagen', alleen met code */
+let bpLosBijlagePad = null, bpLosBijlageWeg = false;
+function toonBpBijlage(){
+  $("bpLosBijlageHuidig").style.display = bpLosBijlagePad && !bpLosBijlageWeg ? "flex" : "none";
+}
+async function openBijlage(pad){
+  // venster meteen openen, anders blokkeert de telefoon het na het wachten
+  const w = window.open("", "_blank");
+  const { data, error } = await db.storage.from("bijlagen").createSignedUrl(pad, 300);
+  if (error || !data){ if (w) w.close(); toast("Bijlage openen mislukt"); return; }
+  if (w) w.location = data.signedUrl; else window.location.href = data.signedUrl;
+}
+$("bpLosBijlageOpen").addEventListener("click", () => { if (bpLosBijlagePad) openBijlage(bpLosBijlagePad); });
+$("bpLosBijlageWeg").addEventListener("click", () => {
+  if (!confirm("Bijlage weghalen? Dat gebeurt bij Opslaan.")) return;
+  bpLosBijlageWeg = true; toonBpBijlage();
+});
+async function uploadBijlage(bestand){
+  const naam = String(bestand.name || "bijlage").normalize("NFD").replace(/[^\w.\-]+/g, "_").slice(-60);
+  const pad = "losse-betalingen/" + Date.now() + "-" + naam;
+  const { error } = await db.storage.from("bijlagen").upload(pad, bestand, { contentType: bestand.type || undefined });
+  if (error){ console.error(error); return null; }
+  return pad;
+}
+
 function zetBpRichting(r){
   bpLosRichting = r;
   schakel(r === "uit" ? "bpLosUit" : "bpLosIn", r === "uit" ? "bpLosIn" : "bpLosUit");
+  vulBpSoort();
+  bpLosHint();
   vulBpKoppel();
 }
 $("bpLosUit").addEventListener("click", () => zetBpRichting("uit"));
@@ -6159,14 +6338,16 @@ function vulBpKoppel(){
     esc(type === "inkoop" ? (f.leverancier || "—") : (klantNaam(f.klant_id) || "—")) +
     " · " + fmtDatum(f.datum) + " · " + eur2(bpIncl(f)) + (f.status === "betaald" ? " (betaald, tijd ?)" : "") + '</option>').join("");
 }
-$("bpLosBedrag").addEventListener("input", vulBpKoppel);
+$("bpLosBedrag").addEventListener("input", () => { bpLosReken(); vulBpKoppel(); });
 
 function bpLosLeeg(){
   bpLosId = null;
   $("bpLosTitel").textContent = "Betaling zonder factuur";
   $("bpLosWanneer").value = naarLokaalInput(null);
-  ["bpLosBedrag","bpLosTegen","bpLosOms"].forEach(id => $(id).value = "");
+  ["bpLosBedrag","bpLosTegen","bpLosOms","bpLosExcl","bpLosBtw","bpLosBijlage"].forEach(id => $(id).value = "");
+  $("bpLosBtwPct").value = String(btwPct());
   zetBpRichting("uit");
+  bpLosBijlagePad = null; bpLosBijlageWeg = false; toonBpBijlage();
   $("bpLosKoppelVeld").style.display = "none";
   $("bpLosVerwijder").style.display = "none";
 }
@@ -6186,7 +6367,21 @@ function openLosseBetaling(id){
   $("bpLosBedrag").value = l.bedrag;
   $("bpLosTegen").value = l.tegenpartij || "";
   $("bpLosOms").value = l.omschrijving || "";
+  $("bpLosBijlage").value = "";
   zetBpRichting(l.richting);
+  if (l.btw_bedrag == null){
+    // oude regel, btw nog nooit ingevuld: voorstel met het standaardtarief
+    $("bpLosBtwPct").value = String(btwPct());
+    bpLosReken();
+    $("bpLosBtwHint").textContent = "Btw was nog niet ingevuld — dit is een voorstel, telt pas mee na Opslaan.";
+  } else {
+    vulBpSoort(l.categorie ?? BP_GEEN);
+    $("bpLosBtwPct").value = String(Number(l.btw_pct ?? 0));
+    $("bpLosBtw").value = Number(l.btw_bedrag).toFixed(2);
+    $("bpLosExcl").value = r2(Number(l.bedrag) - Number(l.btw_bedrag)).toFixed(2);
+    bpLosHint();
+  }
+  bpLosBijlagePad = l.bijlage || null; bpLosBijlageWeg = false; toonBpBijlage();
   $("bpLosKoppelVeld").style.display = "block";
   $("bpLosVerwijder").style.display = "inline-block";
   $("bpLosForm").style.display = "block";
@@ -6196,24 +6391,45 @@ $("bpLosSluit").addEventListener("click", () => { $("bpLosForm").style.display =
 $("bpLosOpslaan").addEventListener("click", async () => {
   const bedrag = Number($("bpLosBedrag").value);
   if (!$("bpLosWanneer").value || !(bedrag > 0)){ toast("Vul datum/tijd en een bedrag in"); return; }
+  const geen = $("bpLosSoort").value === BP_GEEN;
+  const btw = geen ? 0 : r2(Number($("bpLosBtw").value) || 0);
+  if (btw < 0 || btw > bedrag){ toast("Btw-bedrag klopt niet met het bedrag incl."); return; }
   const rij = {
     betaald_op: new Date($("bpLosWanneer").value).toISOString(),
     richting: bpLosRichting, bedrag: r2(bedrag),
     tegenpartij: $("bpLosTegen").value.trim() || null,
-    omschrijving: $("bpLosOms").value.trim() || null
+    omschrijving: $("bpLosOms").value.trim() || null,
+    categorie: geen ? null : $("bpLosSoort").value,
+    btw_pct: geen ? 0 : Number($("bpLosBtwPct").value) || 0,
+    btw_bedrag: btw
   };
+  $("bpLosOpslaan").disabled = true;
+  const oudPad = bpLosBijlagePad;
+  const bestand = $("bpLosBijlage").files[0];
+  if (bestand){
+    const pad = await uploadBijlage(bestand);
+    if (!pad){ $("bpLosOpslaan").disabled = false; toast("Bijlage uploaden mislukt — niets opgeslagen"); return; }
+    rij.bijlage = pad;
+  } else if (bpLosBijlageWeg) rij.bijlage = null;
   const { error } = bpLosId
     ? await db.from("losse_betalingen").update(rij).eq("id", bpLosId)
     : await db.from("losse_betalingen").insert(rij);
-  if (error){ toast("Opslaan mislukt"); return; }
+  $("bpLosOpslaan").disabled = false;
+  if (error){
+    if (rij.bijlage) await db.storage.from("bijlagen").remove([rij.bijlage]);
+    toast("Opslaan mislukt"); return;
+  }
+  // vervangen of weggehaald: het oude bestand hoeft niet te blijven staan
+  if (oudPad && rij.bijlage !== undefined && rij.bijlage !== oudPad) await db.storage.from("bijlagen").remove([oudPad]);
   toast(bpLosId ? "Betaling bijgewerkt" : "Betaling toegevoegd — factuur ontbreekt nog");
   $("bpLosForm").style.display = "none"; bpLosId = null;
   await herlaadBetalingen();
 });
 $("bpLosVerwijder").addEventListener("click", async () => {
-  if (!bpLosId || !confirm("Deze losse betaling verwijderen?")) return;
+  if (!bpLosId || !confirm("Deze losse betaling verwijderen?" + (bpLosBijlagePad ? " De bijlage gaat ook weg." : ""))) return;
   const { error } = await db.from("losse_betalingen").delete().eq("id", bpLosId);
   if (error){ toast("Verwijderen mislukt"); return; }
+  if (bpLosBijlagePad) await db.storage.from("bijlagen").remove([bpLosBijlagePad]);
   toast("Verwijderd");
   $("bpLosForm").style.display = "none"; bpLosId = null;
   await herlaadBetalingen();
@@ -6223,7 +6439,11 @@ $("bpLosKoppelKnop").addEventListener("click", async () => {
   const fid = $("bpLosKoppel").value;
   const l = losseBetalingen.find(x => x.id === bpLosId);
   if (!fid || !l){ toast("Kies eerst een factuur"); return; }
-  const { error } = await db.from("facturen").update({ status: "betaald", betaald_op: l.betaald_op }).eq("id", fid);
+  const f = factData.find(x => x.id === fid);
+  const upd = { status: "betaald", betaald_op: l.betaald_op };
+  // bon/factuur-bijlage gaat mee, tenzij de factuur er al een heeft
+  if (l.bijlage && f && !f.bestand_url) upd.bestand_url = l.bijlage;
+  const { error } = await db.from("facturen").update(upd).eq("id", fid);
   if (error){ toast("Koppelen mislukt"); return; }
   const { error: fout } = await db.from("losse_betalingen").delete().eq("id", l.id);
   if (fout) toast("Factuur betaald, maar losse regel niet verwijderd");
@@ -6257,6 +6477,7 @@ function openInkoop(id){
   $("fdiCategorie").textContent = kostenNaam(f.categorie) + (f.is_investering ? "  (investering / KIA)" : "");
   $("fdiProject").textContent = projectNaam(f.project_id) || "\u2014";
   $("fdiNotitie").textContent = f.notities || "\u2014";
+  $("fdiBijlageVeld").style.display = f.bestand_url ? "block" : "none";
   $("fdiBetaaldOp").textContent = f.status !== "betaald" ? ""
     : f.betaald_op ? "Betaald op " + new Date(f.betaald_op).toLocaleString("nl-NL", { dateStyle:"medium", timeStyle:"short" }) + " — aanpassen kan in Betalingen"
     : "Betaaltijd niet vastgelegd — vul 'm in via Betalingen";
@@ -6265,6 +6486,11 @@ function openInkoop(id){
   laadInkoopRegels(id);
   window.scrollTo(0, 0);
 }
+
+$("fdiBijlage").addEventListener("click", () => {
+  const f = factData.find(x => x.id === bekijkInkoopId);
+  if (f && f.bestand_url) openBijlage(f.bestand_url);
+});
 
 /* toont wat er in de inkoopfactuur zat, ook als je bij het verwerken op
    "overslaan" klikte en er dus geen product van gemaakt is */
@@ -6381,6 +6607,13 @@ function financieelJaar(jaar){
     if (c.type === "omzet"){ omzet[k] += Number(c.bedrag_excl || 0); btwUit[k] += Number(c.btw || 0); }
     else { kosten[k] += Number(c.bedrag_excl || 0); btwIn[k] += Number(c.btw || 0); }
   });
+  // losse betalingen (factuur ontbreekt) met btw en kostensoort: op betaaldatum
+  bpTellend().forEach(p => {
+    if (new Date(p.datum).getFullYear() !== jaar) return;
+    const k = kwartaalVan(p.datum);
+    if (p.richting === "in"){ omzet[k] += p.excl; btwUit[k] += p.btw; }
+    else { kosten[k] += p.excl; btwIn[k] += p.btw; }
+  });
   // vaste lasten tellen mee als kosten (Omzet/winst, Belasting) maar niet bij
   // de btw (BTW-tab) — daar zit geen factuur en dus geen btw achter
   cache.vasteLasten.forEach(vl => {
@@ -6445,7 +6678,7 @@ function winstBronnen(jaar){
     const bedrag = Number(r.aantal || 0) * Number(r.prijs || 0);
     if (r.uren_id) bron.uren.omzet += bedrag;
     else if (r.km_id) bron.km.omzet += bedrag;
-    else if (r.kostenpost){ bron.kosten.omzet += bedrag; bron.kosten.kost += bedrag; }
+    else if (r.kostenpost){ bron.kosten.omzet += bedrag; bron.kosten.kost += Number(r.aantal || 0) * Number(r.kostprijs ?? r.prijs ?? 0); }
     else bron.overig.omzet += bedrag;
   });
   return bron;
@@ -6696,6 +6929,12 @@ function btwBronnenKwartaal(jaar, k){
       excl: Number(c.bedrag_excl || 0), btw: Number(c.btw || 0)
     });
   });
+  bpTellend().forEach(p => {
+    if (new Date(p.datum).getFullYear() !== jaar) return;
+    if (k !== -1 && kwartaalVan(p.datum) !== k) return;
+    items.push({ datum: p.datum, omschrijving: p.l.tegenpartij || "—", nummer: "losse betaling",
+      richting: p.richting === "in" ? "uit" : "in", excl: p.excl, btw: p.btw });
+  });
   return items.sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
 }
 
@@ -6761,13 +7000,22 @@ function renderKostensoorten(){
     .flatMap(vl => vasteLastDatumsInJaar(vl, jaar).map(datum =>
       ({ soort: "vast", vl, datum, bedrag: Number(vl.bedrag || 0) })));
 
-  const lijst = [...inkoopRegels, ...vasteLastRegels].sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  const losRegels = bpTellend()
+    .filter(p => p.richting === "uit" && p.categorie === ksActief && new Date(p.datum).getFullYear() === jaar)
+    .map(p => ({ soort: "los", l: p.l, datum: p.datum, bedrag: p.excl }));
+
+  const lijst = [...inkoopRegels, ...vasteLastRegels, ...losRegels].sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
   const totaal = lijst.reduce((s, r) => s + r.bedrag, 0);
   const rijen = lijst.length
     ? lijst.map(r => r.soort === "inkoop"
         ? '<tr class="klik" data-ksfid="' + r.f.id + '"><td>' + fmtDatum(r.datum) + '</td>' +
           '<td class="tekst">' + esc(r.f.leverancier || "—") + '</td>' +
           '<td class="tekst">' + esc(r.f.nummer || "—") + '</td>' +
+          '<td class="r">' + eur2(r.bedrag) + '</td></tr>'
+        : r.soort === "los"
+        ? '<tr class="klik" data-kslid="' + r.l.id + '"><td>' + fmtDatum(r.datum) + '</td>' +
+          '<td class="tekst">' + esc(r.l.tegenpartij || "—") + (r.l.bijlage ? ' 📎' : '') + '</td>' +
+          '<td class="tekst"><span class="chip amber">LOSSE BETALING</span></td>' +
           '<td class="r">' + eur2(r.bedrag) + '</td></tr>'
         : '<tr class="klik" data-ksvlid="' + r.vl.id + '"><td>' + fmtDatum(r.datum) + '</td>' +
           '<td class="tekst">' + esc(r.vl.naam) + '</td>' +
@@ -6793,6 +7041,10 @@ function renderKostensoorten(){
     toonTab("facturen");
     kiesFSub("fIn");
     openInkoop(r.dataset.ksfid);
+  }));
+  $("ksBlok").querySelectorAll("[data-kslid]").forEach(r => r.addEventListener("click", () => {
+    toonTab("betalingen");
+    openLosseBetaling(r.dataset.kslid);
   }));
   // klik op een vaste last springt naar het Invulformulier om 'm te bewerken
   $("ksBlok").querySelectorAll("[data-ksvlid]").forEach(r => r.addEventListener("click", () =>
