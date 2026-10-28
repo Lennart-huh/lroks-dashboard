@@ -2489,10 +2489,7 @@ function controleMeldingen(){
     toonTab("klanten"); renderKlanten();
     const r = document.querySelector('[data-klid="' + id + '"]'); if (r) r.click();
   };
-  const openProduct = id => () => {
-    toonTab("voorraad"); $("vFilter").value = ""; $("vZoek").value = ""; renderVoorraad();
-    const r = document.querySelector('[data-vid="' + id + '"]'); if (r) r.click();
-  };
+  const openProduct = id => () => openProductInVoorraad(id);
   groepeer(cache.klanten, k => String(k.naam || "").trim().toLowerCase())
     .forEach(g => m.push({ sleutel: "kldubbel:" + g.map(k => k.id).sort().join(","), soort: "Dubbel",
       tekst: "Klant " + g.length + "× aangemaakt: " + g[0].naam, open: openKlant(g[0].id) }));
@@ -7573,11 +7570,22 @@ function renderOffBestellijst(){
     const status = tekort > 0
       ? '<span class="chip amber">BESTELLEN — ' + tekort.toLocaleString("nl-NL") + ' tekort</span>'
       : '<span class="chip groen">OP VOORRAAD</span>';
-    return '<tr><td class="tekst">' + esc(prod ? prod.naam : r.omschrijving) + '</td>' +
+    return '<tr' + (prod ? ' class="klik" data-bestelpid="' + prod.id + '" title="Open product in Voorraad"' : '') + '>' +
+      '<td class="tekst">' + esc(prod ? prod.naam : r.omschrijving) + '</td>' +
       '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td>' +
       '<td class="r">' + voorraad.toLocaleString("nl-NL") + '</td>' +
       '<td>' + status + '</td></tr>';
   }).join("");
+  // klik → het product zelf, voor de volledige naam en waar je 'm bestelt
+  $("offBestelBody").querySelectorAll("[data-bestelpid]").forEach(r =>
+    r.addEventListener("click", () => openProductInVoorraad(r.dataset.bestelpid)));
+}
+
+/* Naar Voorraad en het product daar openen (filters leeg, anders staat
+   de rij er misschien niet). Gedeeld door Controle en de bestellijst. */
+function openProductInVoorraad(id){
+  toonTab("voorraad"); kiesVSub("vProducten"); $("vFilter").value = ""; $("vZoek").value = ""; renderVoorraad();
+  const r = document.querySelector('[data-vid="' + id + '"]'); if (r) r.click();
 }
 
 function toonOffRegels(){
