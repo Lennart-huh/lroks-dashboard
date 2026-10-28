@@ -882,14 +882,6 @@ nav.onderbalk{display:none}
               </table>
             </div>
           </div>
-          <div class="veld" id="prVerwachtBlok" style="display:none"><label>Nog te gebruiken (uit offerte)</label>
-            <div class="tbl-wrap">
-              <table>
-                <thead><tr><th>Product</th><th class="r">Verwacht aantal</th></tr></thead>
-                <tbody id="prVerwachtBody"></tbody>
-              </table>
-            </div>
-          </div>
           <div class="veld" id="prGebruikBlok" style="display:none"><label>Gebruikte producten (per dag)</label>
             <div class="tbl-wrap">
               <table>
@@ -1833,7 +1825,18 @@ let factData = [];
 /* =====================================================
    NAVIGATIE
    ===================================================== */
-function toonTab(naam){
+/* Terug-sprong: spring je vanuit de app zelf naar een ander tabblad (een
+   product openen vanuit een offerte, een melding in Controle, …), dan
+   onthouden we waar je stond. Sluit je daar een formulier met het kruisje,
+   dan ga je terug — het tabblad waar je vandaan kwam is alleen verborgen
+   geweest, dus een open offerte staat er nog precies zo (ook niet-opgeslagen
+   wijzigingen). Kiezen in het menu wist dit: dan ben je bewust ergens heen. */
+let terugStapel = [];
+const huidigeTab = () => { const t = document.querySelector(".tab.actief"); return t ? t.id.replace(/^tab-/, "") : null; };
+function toonTab(naam, viaMenu){
+  const van = huidigeTab();
+  if (viaMenu) terugStapel = [];
+  else if (van && van !== naam) terugStapel.push({ van, naar: naam, y: window.scrollY });
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("actief"));
   const doel = $("tab-" + naam);
   if (doel) doel.classList.add("actief");
@@ -1844,12 +1847,26 @@ function toonTab(naam){
 }
 document.querySelectorAll("[data-tab]").forEach(k =>
   k.addEventListener("click", () => {
-    toonTab(k.dataset.tab);
+    toonTab(k.dataset.tab, true);
     if (k.dataset.tab === "auto") renderAuto();
     if (k.dataset.tab === "betalingen") herlaadBetalingen();
     if (k.dataset.tab === "klussen"){ $("klVergelijkBlok").style.display = "none"; renderKlussenTab(); }
   }));
 $("meerKnop").addEventListener("click", () => $("meerSheet").classList.toggle("open"));
+// na de eigen klik-afhandeling van het kruisje (dat sluit het formulier):
+// kwam je via een sprong op dit tabblad, dan terug naar waar je stond.
+// Pop-ups (.overlay) tellen niet mee, die sluiten alleen zichzelf.
+document.addEventListener("click", e => {
+  const knop = e.target.closest(".sluitX, [id$='Sluit'], [id$='Annuleer']");
+  if (!knop || knop.closest(".overlay")) return;
+  const laatste = terugStapel[terugStapel.length - 1];
+  if (!laatste || laatste.naar !== huidigeTab()) return;
+  terugStapel.pop();
+  const y = laatste.y;
+  toonTab(laatste.van, false);
+  terugStapel.pop(); // de terugstap zelf is geen nieuwe sprong
+  window.scrollTo(0, y);
+});
 
 function kiesSub(subId){
   document.querySelectorAll("[data-sub]").forEach(b => b.classList.toggle("aan", b.dataset.sub === subId));
@@ -4213,22 +4230,6 @@ function laadKlusRegels(klusId){
   }));
 }
 
-/* Verwachte materialen uit de offerte waaruit dit project is ontstaan — puur
-   ter referentie, geen voorraad-koppeling. Wat je echt gebruikt, log je zoals
-   altijd los via het Invulformulier (kan meer of minder zijn dan verwacht). */
-async function laadProjectVerwacht(projectId){
-  const body = $("prVerwachtBody");
-  const { data, error } = await db.from("project_verwacht_materiaal")
-    .select("*").eq("project_id", projectId).order("naam");
-  if (error){ console.error(error); $("prVerwachtBlok").style.display = "none"; return; }
-  const lijst = data || [];
-  if (!lijst.length){ $("prVerwachtBlok").style.display = "none"; return; }
-  $("prVerwachtBlok").style.display = "block";
-  body.innerHTML = lijst.map(r =>
-    '<tr><td class="tekst">' + esc(r.naam) + '</td>' +
-    '<td class="r">' + Number(r.aantal).toLocaleString("nl-NL") + '</td></tr>').join("");
-}
-
 async function laadProjectGebruik(projectId){
   const body = $("prGebruikBody");
   body.innerHTML = '<tr><td colspan="4" class="leeg">Laden…</td></tr>';
@@ -4377,7 +4378,6 @@ $("projNieuw").addEventListener("click", () => {
   $("prKlussenBlok").style.display = "none";
   $("prUrenBlok").style.display = "none";
   $("prKmBlok").style.display = "none";
-  $("prVerwachtBlok").style.display = "none";
   $("prGebruikBlok").style.display = "none";
   $("prExtraBlok").style.display = "none";
   $("prFacturenBlok").style.display = "none";
@@ -4495,7 +4495,6 @@ function openProjectDetail(id){
     laadProjectUren(p.id);
     $("prKmBlok").style.display = "block";
     laadProjectKm(p.id);
-    laadProjectVerwacht(p.id);
     $("prGebruikBlok").style.display = "block";
     laadProjectGebruik(p.id);
     $("prExtraBlok").style.display = "block";
@@ -7501,9 +7500,8 @@ function zetOfferteStatus(s){
    'Geschat' bij) en vult geschatte uren/km in, maar de offertetotaal komt
    niet uit die regels: die vaste prijs bepaal je zelf, los ervan. Wordt bij
    accepteren een klus met die vaste prijs, gevuld met dezelfde schatting
-   voor de vergelijking 'vaste prijs vs. werkelijk'. In beide gevallen komen
-   gekoppelde producten in het project te staan als 'nog te gebruiken' (zie
-   laadProjectVerwacht) — puur ter referentie. */
+   voor de vergelijking 'vaste prijs vs. werkelijk'. Wat je voor gekoppelde
+   producten moet bestellen staat in de offerte zelf (renderOffBestellijst). */
 let offertePrijstype = "product";
 function zetOffertePrijstype(t){
   offertePrijstype = t;
@@ -7832,10 +7830,9 @@ $("offKlantKopieer").addEventListener("click", async () => {
    de offertetotaal als vaste prijs — een klus hangt altijd in een project,
    dus eerst vraagt kiesKlusProject in welk project van dezelfde klant
    (of een nieuw project voor die klant, als laatste optie).
-   In beide gevallen gaan gekoppelde producten mee als 'nog te gebruiken'-
-   lijstje in het project (puur ter referentie, geen voorraad-koppeling) —
-   bij 'vast' voeden ze ook de geschatte materiaalkosten (kostprijs) voor de
-   vergelijking 'vaste prijs vs. werkelijk' bij de klus. */
+   Gekoppelde producten blijven in de offerte (bestellijst); bij 'vast'
+   voeden ze de geschatte materiaalkosten (kostprijs) voor de vergelijking
+   'vaste prijs vs. werkelijk' bij de klus. */
 async function accepteerOfferte(o){
   const naam = o.naam || o.nummer || "Nieuw project";
   const vast = o.prijstype === "vast";
@@ -7872,11 +7869,6 @@ async function accepteerOfferte(o){
     }).select().single();
     if (klusFout) console.error(klusFout);
     nieuweKlus = klusData;
-  }
-  if (producten.length){
-    await db.from("project_verwacht_materiaal").insert(producten.map(r => ({
-      project_id: nieuw.id, product_id: r.product_id, naam: r.omschrijving, aantal: r.aantal
-    })));
   }
   await db.from("offertes").update({ status: "geaccepteerd", project_id: nieuw.id }).eq("id", o.id);
   // alleen de nieuwe klus: het project kan al bestaan en dan staan de
