@@ -1896,8 +1896,7 @@ let factData = [];
       gewaarschuwd.set(k, nu);
       const m = melding(k), knop = opslaanKnop(k);
       m.innerHTML = '<span>Wil je dit opslaan?</span>' +
-        (knop ? '<button type="button">Opslaan</button>' : '') +
-        '<span>Nog een keer op × = weggooien.</span>';
+        (knop ? '<button type="button">Opslaan</button>' : '');
       if (knop) m.querySelector("button").onclick = () => knop.click();
       m.classList.add("open");
       return;
