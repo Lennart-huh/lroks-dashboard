@@ -1492,7 +1492,19 @@ nav.onderbalk{display:none}
           <div style="display:flex;gap:10px">
             <button class="knop klein" id="vOpslaan">Opslaan</button>
             <button class="knop klein stil" id="vAnnuleer">Annuleren</button>
-            <button class="knop klein gevaar" id="vVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+            <button class="knop klein stil" id="vSamenToon" style="display:none;margin-left:auto">Samenvoegen…</button>
+            <button class="knop klein gevaar" id="vVerwijder" style="display:none">Verwijderen</button>
+          </div>
+          <div class="veld" id="vSamenBlok" data-geen-wijziging style="display:none;margin-top:16px;margin-bottom:0">
+            <label>Samenvoegen met ander product</label>
+            <div class="hint" style="margin:0 0 8px">Staat dit product dubbel? Kies het goede product: alles van dit
+              product (gebruik bij projecten, offertes, facturen, inkoopprijzen, onderdelen) gaat daarheen, de
+              voorraad wordt erbij opgeteld en dit product verdwijnt.</div>
+            <input type="search" id="vSamenZoek" placeholder="Zoek het goede product" autocomplete="off" style="margin-bottom:8px">
+            <select id="vSamenDoel" size="6"></select>
+            <div style="display:flex;gap:10px;margin-top:10px">
+              <button class="knop klein" id="vSamenGa">Samenvoegen</button>
+            </div>
           </div>
         </div>
 
@@ -1859,7 +1871,7 @@ let factData = [];
   const extra = k => k.querySelector("#offRegelsBody") ? JSON.stringify(offerteRegels) : "";
   const stand = k => JSON.stringify([
     [...k.querySelectorAll("input, select, textarea")]
-      .filter(v => v.type !== "search" && v.type !== "file" && !/Zoek/.test(v.id))
+      .filter(v => v.type !== "search" && v.type !== "file" && !/Zoek/.test(v.id) && !v.closest("[data-geen-wijziging]"))
       .map(v => v.type === "checkbox" || v.type === "radio" ? v.checked : v.value),
     [...k.querySelectorAll(".schakel button")].map(b => b.classList.contains("aan")),
     extra(k)
@@ -4651,6 +4663,7 @@ $("vNieuw").addEventListener("click", () => {
   $("vPrijzenBlok").style.display = "none";
   $("vOnderdelenBlok").style.display = "none";
   $("vVerwijder").style.display = "none";
+  $("vSamenToon").style.display = "none"; $("vSamenBlok").style.display = "none";
   $("vVerpPrijs").value = ""; $("vVerpAantal").value = ""; $("vVerpNaam").value = "";
   $("vVolledigeNaam").value = ""; bijwerkVerpHint();
   $("vForm").style.display = "block";
@@ -4746,6 +4759,78 @@ $("vVerwijder").addEventListener("click", async () => {
   await herlaadProducten();
 });
 
+/* ---- dubbel product samenvoegen met het goede ----
+   Alles wat naar dit product (bron) verwijst gaat naar het gekozen product
+   (doel); de voorraad komt erbij en de bron wordt verwijderd. Volgorde: eerst
+   alle verwijzingen omzetten, pas als dat allemaal gelukt is de bron weg —
+   gaat er halverwege iets mis, dan staat de bron er nog en is er niets kwijt. */
+function vulSamenDoel(){
+  const term = $("vSamenZoek").value.trim().toLowerCase();
+  const lijst = cache.producten.filter(p => p.id !== bewerkProductId && (!term ||
+    term.split(/\s+/).every(w => [p.naam, p.volledige_naam, p.leverancier].filter(Boolean).join(" ").toLowerCase().includes(w))));
+  $("vSamenDoel").innerHTML = lijst.map(p =>
+    '<option value="' + p.id + '">' + esc(p.naam) + (p.op_voorraad === false ? "" : " (" + Number(p.voorraad || 0).toLocaleString("nl-NL") + ")") + '</option>').join("");
+}
+$("vSamenToon").addEventListener("click", () => {
+  const b = $("vSamenBlok");
+  b.style.display = b.style.display === "none" ? "block" : "none";
+  if (b.style.display === "block"){ $("vSamenZoek").value = ""; vulSamenDoel(); $("vSamenZoek").focus(); }
+});
+$("vSamenZoek").addEventListener("input", vulSamenDoel);
+
+$("vSamenGa").addEventListener("click", async () => {
+  const bron = cache.producten.find(p => p.id === bewerkProductId);
+  const doel = cache.producten.find(p => p.id === $("vSamenDoel").value);
+  if (!bron) return;
+  if (!doel) { toast("Kies het goede product"); return; }
+  const bronVoorraad = bron.op_voorraad === false ? 0 : Number(bron.voorraad || 0);
+  const doelTelt = doel.op_voorraad !== false;
+  if (!confirm("'" + bron.naam + "' samenvoegen met '" + doel.naam + "'?\n\n" +
+    "Alles van '" + bron.naam + "' gaat naar '" + doel.naam + "'" +
+    (bronVoorraad && doelTelt ? ", voorraad " + bronVoorraad.toLocaleString("nl-NL") + " komt erbij" : "") +
+    ". Daarna wordt '" + bron.naam + "' verwijderd. Dit kun je niet terugdraaien.")) return;
+  $("vSamenGa").disabled = true;
+  const omzetten = ["voorraad_mutaties", "product_prijzen", "factuur_regels", "factuur_inkoop_regels",
+                    "offerte_regels", "project_verwacht_materiaal"]
+    .map(t => db.from(t).update({ product_id: doel.id }).eq("product_id", bron.id));
+  // onderdelen: uniek per (product, onderdeel) — wat het doel al heeft, of
+  // wat naar zichzelf zou verwijzen, vervalt; de rest gaat mee
+  const heeftDoel = new Set(onderdelenVan(doel.id).map(o => o.component_id));
+  const weg = [], mee = [];
+  cache.onderdelen.forEach(o => {
+    if (o.product_id === bron.id) (heeftDoel.has(o.component_id) || o.component_id === doel.id ? weg : mee).push({ id: o.id, product_id: doel.id });
+    else if (o.component_id === bron.id){
+      const dubbel = o.product_id === doel.id ||
+        cache.onderdelen.some(x => x.product_id === o.product_id && x.component_id === doel.id);
+      (dubbel ? weg : mee).push({ id: o.id, component_id: doel.id });
+    }
+  });
+  if (weg.length) omzetten.push(db.from("product_onderdelen").delete().in("id", weg.map(o => o.id)));
+  mee.forEach(o => { const { id, ...wijziging } = o; omzetten.push(db.from("product_onderdelen").update(wijziging).eq("id", id)); });
+  const res = await Promise.all(omzetten);
+  const fout = res.find(r => r.error);
+  if (fout){
+    $("vSamenGa").disabled = false;
+    console.error(fout.error);
+    toast("Samenvoegen mislukt — er is niets verwijderd, probeer het nog eens");
+    return;
+  }
+  if (bronVoorraad && doelTelt){
+    const { error } = await db.from("producten").update({ voorraad: Number(doel.voorraad || 0) + bronVoorraad }).eq("id", doel.id);
+    if (error){ $("vSamenGa").disabled = false; console.error(error); toast("Voorraad bijwerken mislukt — '" + bron.naam + "' staat er nog"); return; }
+  }
+  const { error: delFout } = await db.from("producten").delete().eq("id", bron.id);
+  $("vSamenGa").disabled = false;
+  if (delFout){ console.error(delFout); toast("Alles staat bij '" + doel.naam + "', maar '" + bron.naam + "' verwijderen mislukte"); }
+  else toast("Samengevoegd met '" + doel.naam + "'");
+  $("vForm").style.display = "none";
+  const [po, mut] = await Promise.all([db.from("product_onderdelen").select("*"), db.from("voorraad_mutaties").select("*")]);
+  cache.onderdelen = po.data || [];
+  cache.mutaties = mut.data || [];
+  await herlaadPrijzen();
+  await herlaadProducten();
+});
+
 async function herlaadProducten(){
   const { data } = await db.from("producten").select("*").order("naam");
   cache.producten = data || [];
@@ -4812,6 +4897,7 @@ function renderVoorraad(){
     $("vEenheid").value = p.eenheid || "";
     $("vLeverancier").value = p.leverancier || "";
     $("vVerwijder").style.display = "inline-block";
+    $("vSamenToon").style.display = "inline-block"; $("vSamenBlok").style.display = "none";
     $("vPrijzenBlok").style.display = "block";
     renderVPrijzen(p.id);
     $("vOnderdelenBlok").style.display = "block";
