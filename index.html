@@ -4447,7 +4447,10 @@ $("prVerwijder").addEventListener("click", async () => {
   toast("Project verwijderd" + (mutaties && mutaties.length ? " — voorraad bijgewerkt" : ""));
   const { data } = await db.from("projecten").select("*").order("aangemaakt_op", { ascending:false });
   cache.projecten = data || [];
-  vulSelects(); renderProjecten(); renderHoofd();
+  // klussen gaan in de database mee met het project (cascade) — hier ook,
+  // anders blijven ze tot herladen in het Klussen-tabblad staan met project '—'
+  cache.klussen = cache.klussen.filter(k => k.project_id !== bewerkProjectId);
+  vulSelects(); renderProjecten(); renderHoofd(); renderKlussenTab();
 });
 
 function renderProjecten(){
@@ -7849,16 +7852,18 @@ async function accepteerOfferte(o){
     nieuw = data;
     cache.projecten.push(nieuw);
   }
+  let nieuweKlus = null;
   if (vast){
-    const { error: klusFout } = await db.from("klussen").insert({
+    const { data: klusData, error: klusFout } = await db.from("klussen").insert({
       project_id: nieuw.id, naam, prijstype: "vast", status: "open",
       vaste_prijs: o.bedrag_excl || 0,
       // reisuren schrijf je in het project als gewone uren, dus die tellen mee
       geschat_uren: (Number(o.geschat_uren || 0) + Number(o.geschat_reisuren || 0)) || null,
       geschat_kosten: r2(geschatKosten),
       geschat_km: o.geschat_km || null
-    });
+    }).select().single();
     if (klusFout) console.error(klusFout);
+    nieuweKlus = klusData;
   }
   if (producten.length){
     await db.from("project_verwacht_materiaal").insert(producten.map(r => ({
@@ -7866,10 +7871,9 @@ async function accepteerOfferte(o){
     })));
   }
   await db.from("offertes").update({ status: "geaccepteerd", project_id: nieuw.id }).eq("id", o.id);
-  if (vast){
-    const { data: klussenData } = await db.from("klussen").select("*").eq("project_id", nieuw.id);
-    cache.klussen.push(...(klussenData || []));
-  }
+  // alleen de nieuwe klus: het project kan al bestaan en dan staan de
+  // klussen die er al in zaten ook al in de cache
+  if (nieuweKlus) cache.klussen.push(nieuweKlus);
   vulSelects();
   ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
     vulKlusSelect(projId, ["uKlus","kKlus","pKlus","erKlus"][i]));
