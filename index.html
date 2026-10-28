@@ -1084,7 +1084,7 @@ nav.onderbalk{display:none}
             </div>
           </div>
           <div class="veld"><label>Naam</label><input type="text" id="offNaam" placeholder="bv. Groepenkast vervangen">
-            <div class="hint">Komt op de offerte onder het nummer, en wordt de projectnaam bij accepteren.</div></div>
+            <div class="hint">Komt op de offerte onder het nummer, en wordt bij accepteren de naam van de klus (vaste prijs) of het project.</div></div>
           <div class="rij2">
             <div class="veld"><label>Datum</label><input type="date" id="offDatum"></div>
             <div class="veld"><label>Geldig tot</label><input type="date" id="offGeldigTot"></div>
@@ -1172,7 +1172,7 @@ nav.onderbalk{display:none}
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="knop klein" id="offOpslaan">Opslaan</button>
             <button class="knop klein stil" id="offPdf">PDF downloaden</button>
-            <button class="knop klein stil" id="offAccepteren" style="display:none">Accepteren → nieuw project</button>
+            <button class="knop klein stil" id="offAccepteren" style="display:none">Accepteren</button>
             <button class="knop klein stil" id="offSluit">Sluiten</button>
             <button class="knop klein gevaar" id="offVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
           </div>
@@ -1181,6 +1181,20 @@ nav.onderbalk{display:none}
           <thead><tr><th>Nr</th><th>Naam</th><th>Klant</th><th>Datum</th><th>Status</th><th class="r">Excl.</th></tr></thead>
           <tbody id="offBody"></tbody>
         </table></div>
+
+        <!-- pop-up: in welk project komt de klus van een geaccepteerde vaste-prijs-offerte -->
+        <div class="overlay" id="offProjectOverlay">
+          <div class="form-card heeft-sluit">
+            <button type="button" class="knop klein stil sluitX" id="offProjectSluit" title="Annuleren">×</button>
+            <h3 style="font-size:.92rem;margin-bottom:4px">In welk project komt deze klus?</h3>
+            <div class="hint" style="margin-bottom:14px" id="offProjectSub">—</div>
+            <div class="veld"><label>Project</label><select id="offProjectKeuze"></select></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="knop klein" id="offProjectOk">Klus aanmaken</button>
+              <button class="knop klein stil" id="offProjectAnnuleer">Annuleren</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="tab" id="tab-facturen">
@@ -7804,10 +7818,9 @@ $("offKlantKopieer").addEventListener("click", async () => {
    te drukken).
    Offerte-prijstype bepaalt wat er ontstaat: 'product' wordt een gewoon
    project waar je per regel/product factureert. 'vast' wordt een klus met
-   de offertetotaal als vaste prijs — die klus moet ergens in een project
-   hangen, dus er komt (voorlopig) een eigen nieuw project met dezelfde naam
-   omheen; versleep 'm later gerust naar een bestaand project via het
-   Project-veld bij de klus zelf (Invulformulier > Klus, of Klussen-tabblad).
+   de offertetotaal als vaste prijs — een klus hangt altijd in een project,
+   dus eerst vraagt kiesKlusProject in welk project van dezelfde klant
+   (of een nieuw project voor die klant, als laatste optie).
    In beide gevallen gaan gekoppelde producten mee als 'nog te gebruiken'-
    lijstje in het project (puur ter referentie, geen voorraad-koppeling) —
    bij 'vast' voeden ze ook de geschatte materiaalkosten (kostprijs) voor de
@@ -7815,17 +7828,27 @@ $("offKlantKopieer").addEventListener("click", async () => {
 async function accepteerOfferte(o){
   const naam = o.naam || o.nummer || "Nieuw project";
   const vast = o.prijstype === "vast";
+  let projectId = null;
+  if (vast){
+    projectId = await kiesKlusProject(o);
+    if (projectId === null){ toast("Niet geaccepteerd — geen project gekozen"); return; }
+  }
   const { data: regelsData } = await db.from("offerte_regels").select("*").eq("offerte_id", o.id);
   const producten = (regelsData || []).filter(r => r.product_id);
   const geschatKosten = producten.reduce((s, r) => {
     const p = cache.producten.find(x => x.id === r.product_id);
     return s + Number(r.aantal || 0) * Number(p ? (p.inkoopprijs || 0) : 0);
   }, 0);
-  const { data: nieuw, error } = await db.from("projecten").insert({
-    naam, klant_id: o.klant_id || null, status: "open",
-    omschrijving: "Ontstaan uit offerte " + (o.nummer || "")
-  }).select().single();
-  if (error || !nieuw){ console.error(error); toast("Project aanmaken mislukt"); return; }
+  let nieuw = cache.projecten.find(p => p.id === projectId);
+  if (!nieuw){
+    const { data, error } = await db.from("projecten").insert({
+      naam, klant_id: o.klant_id || null, status: "open",
+      omschrijving: "Ontstaan uit offerte " + (o.nummer || "")
+    }).select().single();
+    if (error || !data){ console.error(error); toast("Project aanmaken mislukt"); return; }
+    nieuw = data;
+    cache.projecten.push(nieuw);
+  }
   if (vast){
     const { error: klusFout } = await db.from("klussen").insert({
       project_id: nieuw.id, naam, prijstype: "vast", status: "open",
@@ -7843,7 +7866,6 @@ async function accepteerOfferte(o){
     })));
   }
   await db.from("offertes").update({ status: "geaccepteerd", project_id: nieuw.id }).eq("id", o.id);
-  cache.projecten.push(nieuw);
   if (vast){
     const { data: klussenData } = await db.from("klussen").select("*").eq("project_id", nieuw.id);
     cache.klussen.push(...(klussenData || []));
@@ -7851,19 +7873,48 @@ async function accepteerOfferte(o){
   vulSelects();
   ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
     vulKlusSelect(projId, ["uKlus","kKlus","pKlus","erKlus"][i]));
-  toast(vast ? "Klus '" + naam + "' aangemaakt" : "Project '" + naam + "' aangemaakt");
+  toast(vast ? "Klus '" + naam + "' aangemaakt in " + nieuw.naam : "Project '" + naam + "' aangemaakt");
   $("offDetail").style.display = "none";
   await herlaadOffertes();
-  toonTab("projecten");
+  toonTab(vast ? "klussen" : "projecten");
   renderProjecten();
   renderKlussenTab();
+}
+
+/* Pop-up bij een vaste-prijs-offerte: in welk project komt de klus? Alleen
+   projecten van dezelfde klant (open eerst, dan nieuwste), met 'nieuw
+   project' als laatste keuze. Geeft het project-id terug, "nieuw", of null
+   bij annuleren. */
+function kiesKlusProject(o){
+  const klant = cache.klanten.find(k => k.id === o.klant_id);
+  const lijst = cache.projecten
+    .filter(p => o.klant_id ? p.klant_id === o.klant_id : !p.klant_id)
+    .sort((a, b) => ((a.status === "open" ? 0 : 1) - (b.status === "open" ? 0 : 1))
+      || String(b.aangemaakt_op || "").localeCompare(String(a.aangemaakt_op || "")));
+  $("offProjectKeuze").innerHTML = lijst.map(p =>
+    '<option value="' + p.id + '">' + esc(p.naam) + (p.status === "open" ? "" : " (" + esc(p.status) + ")") + '</option>'
+  ).join("") + '<option value="nieuw">+ Nieuw project "' + esc(o.naam || o.nummer || "Nieuw project") + '"</option>';
+  $("offProjectSub").textContent = (klant ? "Projecten van " + klant.naam : "Deze offerte heeft geen klant — projecten zonder klant")
+    + (lijst.length ? "" : " (nog geen, dus er komt een nieuw project)") + ".";
+  $("offProjectOverlay").classList.add("open");
+  return new Promise(resolve => {
+    const klaar = waarde => {
+      $("offProjectOverlay").classList.remove("open");
+      $("offProjectOk").onclick = $("offProjectAnnuleer").onclick = $("offProjectSluit").onclick = $("offProjectOverlay").onclick = null;
+      resolve(waarde);
+    };
+    $("offProjectOk").onclick = () => klaar($("offProjectKeuze").value);
+    $("offProjectAnnuleer").onclick = $("offProjectSluit").onclick = () => klaar(null);
+    $("offProjectOverlay").onclick = e => { if (e.target === $("offProjectOverlay")) klaar(null); };
+  });
 }
 
 $("offAccepteren").addEventListener("click", async () => {
   if (!bewerkOfferteId) return;
   const o = offerteData.find(x => x.id === bewerkOfferteId);
   if (!o) return;
-  if (!confirm("Offerte accepteren en een nieuw project aanmaken? Alles is daarna nog aan te passen in het project zelf.")) return;
+  // bij vaste prijs vraagt de pop-up al om bevestiging (met annuleren)
+  if (o.prijstype !== "vast" && !confirm("Offerte accepteren en een nieuw project aanmaken? Alles is daarna nog aan te passen in het project zelf.")) return;
   await accepteerOfferte(o);
 });
 
