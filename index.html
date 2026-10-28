@@ -1895,7 +1895,7 @@ let factData = [];
       e.stopImmediatePropagation(); e.preventDefault();
       gewaarschuwd.set(k, nu);
       const m = melding(k), knop = opslaanKnop(k);
-      m.innerHTML = '<span>Niet opgeslagen — wil je dit opslaan?</span>' +
+      m.innerHTML = '<span>Wil je dit opslaan?</span>' +
         (knop ? '<button type="button">Opslaan</button>' : '') +
         '<span>Nog een keer op × = weggooien.</span>';
       if (knop) m.querySelector("button").onclick = () => knop.click();
