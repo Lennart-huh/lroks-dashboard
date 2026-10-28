@@ -75,6 +75,10 @@ button{font-family:inherit}
 .form-card.heeft-sluit{padding-top:52px}
 .knop.sluitX{position:absolute;top:10px;right:10px;width:38px;height:38px;padding:0;
   text-align:center;line-height:36px;font-size:1.35rem;font-weight:400;border-radius:9px;z-index:3}
+.niet-opgeslagen{position:absolute;top:10px;left:16px;right:58px;min-height:38px;display:none;align-items:center;flex-wrap:wrap;gap:4px 8px;
+  padding:6px 10px;border-radius:8px;background:var(--amber-bg);color:var(--amber);font-family:'IBM Plex Mono',monospace;font-size:.72rem;line-height:1.35;z-index:3}
+.niet-opgeslagen.open{display:flex}
+.niet-opgeslagen button{background:var(--amber);color:var(--bg);border:none;border-radius:6px;padding:4px 10px;font:inherit;font-weight:600;cursor:pointer}
 .link-knop{background:none;border:none;color:var(--ink2);font-size:.78rem;text-decoration:underline;cursor:pointer;padding:0;margin-top:2px}
 
 /* ---------- app-layout ---------- */
@@ -1820,6 +1824,86 @@ let factData = [];
     new MutationObserver(sync).observe(knop, { attributes:true, attributeFilter:["style"] });
     sync();
   });
+})();
+
+/* =====================================================
+   NIET-OPGESLAGEN WAARSCHUWING
+   Klik je op het kruisje terwijl je iets hebt veranderd, dan sluit het
+   formulier nog niet: er komt een melding met 'Opslaan', en pas een tweede
+   klik op het kruisje gooit het echt weg. Niets veranderd → gewoon dicht.
+   'Veranderd' = de velden (en schakelknoppen, en offerteregels) wijken af
+   van hoe ze stonden toen je het formulier voor het eerst aanraakte — zo
+   telt alles wat de app zelf (ook later, async) invult niet mee, en iets
+   intypen en weer terugzetten ook niet.
+   ===================================================== */
+(function(){
+  const basis = new WeakMap();        // kaart → stand bij eerste aanraking
+  const gewaarschuwd = new WeakMap(); // kaart → stand toen de melding kwam
+  const kaartVan = el => {
+    const k = el.closest(".form-card");
+    return k && !k.closest(".overlay") && k.querySelector(":scope > .sluitX") ? k : null;
+  };
+  // geheugen in JS i.p.v. in velden (regels die je toevoegt/weghaalt)
+  const extra = k => k.querySelector("#offRegelsBody") ? JSON.stringify(offerteRegels) : "";
+  const stand = k => JSON.stringify([
+    [...k.querySelectorAll("input, select, textarea")]
+      .filter(v => v.type !== "search" && v.type !== "file" && !/Zoek/.test(v.id))
+      .map(v => v.type === "checkbox" || v.type === "radio" ? v.checked : v.value),
+    [...k.querySelectorAll(".schakel button")].map(b => b.classList.contains("aan")),
+    extra(k)
+  ]);
+  const melding = k => {
+    let m = k.querySelector(":scope > .niet-opgeslagen");
+    if (!m){
+      m = document.createElement("div");
+      m.className = "niet-opgeslagen";
+      k.insertBefore(m, k.firstChild);
+    }
+    return m;
+  };
+  const opslaanKnop = k => [...k.querySelectorAll("[id$='Opslaan']")].find(b => b.offsetParent !== null);
+  const vergeet = k => {
+    basis.delete(k); gewaarschuwd.delete(k);
+    const m = k.querySelector(":scope > .niet-opgeslagen"); if (m) m.classList.remove("open");
+  };
+
+  // eerste aanraking legt de beginstand vast
+  ["pointerdown", "focusin"].forEach(soort => document.addEventListener(soort, e => {
+    const k = kaartVan(e.target);
+    if (k && !basis.has(k)) basis.set(k, stand(k));
+  }, true));
+
+  // formulier geopend/gesloten (kaart of kruisje verschijnt/verdwijnt) →
+  // ander record of klaar, dus opnieuw beginnen
+  document.querySelectorAll(".form-card > .sluitX").forEach(x => {
+    const k = x.closest(".form-card");
+    if (k.closest(".overlay")) return;
+    const obs = new MutationObserver(() => vergeet(k));
+    obs.observe(k, { attributes:true, attributeFilter:["style"] });
+    obs.observe(x, { attributes:true, attributeFilter:["style"] });
+  });
+
+  document.addEventListener("click", e => {
+    const k = kaartVan(e.target);
+    if (!k) return;
+    if (e.target.closest("[id$='Opslaan']")){ vergeet(k); return; }
+    if (!e.target.closest(".sluitX")) return;
+    const nu = stand(k);
+    const veranderd = basis.has(k) && basis.get(k) !== nu;
+    if (veranderd && gewaarschuwd.get(k) !== nu){
+      // niet sluiten (ook geen terug-sprong): eerst de melding
+      e.stopImmediatePropagation(); e.preventDefault();
+      gewaarschuwd.set(k, nu);
+      const m = melding(k), knop = opslaanKnop(k);
+      m.innerHTML = '<span>Niet opgeslagen — wil je dit opslaan?</span>' +
+        (knop ? '<button type="button">Opslaan</button>' : '') +
+        '<span>Nog een keer op × = weggooien.</span>';
+      if (knop) m.querySelector("button").onclick = () => knop.click();
+      m.classList.add("open");
+      return;
+    }
+    vergeet(k);
+  }, true);
 })();
 
 /* =====================================================
