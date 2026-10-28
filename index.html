@@ -359,7 +359,7 @@ nav.onderbalk{display:none}
         <!-- UREN -->
         <div class="subform actief form-card" id="sub-uren">
           <div class="rij2">
-            <div class="veld"><label>Datum</label><input type="date" id="uDatum"></div>
+            <div class="veld"><label>Datum en tijd</label><div style="display:flex;gap:6px"><input type="date" id="uDatum" style="flex:1;min-width:0"><input type="time" id="uTijd" style="width:auto" title="Leeg = het moment van opslaan"></div></div>
             <div class="veld"><label>Aantal uur</label><input type="number" id="uAantal" step="0.25" min="0" inputmode="decimal" placeholder="bv. 8"></div>
           </div>
           <div class="rij2">
@@ -385,7 +385,7 @@ nav.onderbalk{display:none}
         <!-- KM -->
         <div class="subform form-card" id="sub-km">
           <div class="rij2">
-            <div class="veld"><label>Datum</label><input type="date" id="kDatum"></div>
+            <div class="veld"><label>Datum en tijd</label><div style="display:flex;gap:6px"><input type="date" id="kDatum" style="flex:1;min-width:0"><input type="time" id="kTijd" style="width:auto" title="Leeg = het moment van opslaan"></div></div>
             <div class="veld"><label>KM-stand nu</label><input type="number" id="kStand" min="0" inputmode="numeric" placeholder="bv. 84213"></div>
           </div>
           <div class="hint" id="kVorige">Vorige stand: —</div>
@@ -427,7 +427,7 @@ nav.onderbalk{display:none}
             <input type="number" id="pCm" step="1" min="0" inputmode="decimal" placeholder="bv. 30">
             <div class="hint">Rekent automatisch om naar het Aantal-veld hierboven (in meter).</div>
           </div>
-          <div class="veld"><label>Datum</label><input type="date" id="pDatum"></div>
+          <div class="veld"><label>Datum en tijd</label><div style="display:flex;gap:6px"><input type="date" id="pDatum" style="flex:1;min-width:0"><input type="time" id="pTijd" style="width:auto" title="Leeg = het moment van opslaan"></div></div>
           <button class="knop" id="pOpslaan">Gebruik opslaan</button>
           <button class="knop klein stil" id="pAnnuleer" style="display:none">Wijzigen annuleren</button>
           <button class="knop klein stil" id="pNieuwToon" style="margin-top:12px">+ Nieuw product toevoegen</button>
@@ -463,7 +463,7 @@ nav.onderbalk{display:none}
           </div>
           <div class="rij2">
             <div class="veld"><label>Omschrijving</label><input type="text" id="erOmschrijving" placeholder="bv. Aanleg groepenkast — vaste prijs"></div>
-            <div class="veld"><label>Datum</label><input type="date" id="erDatum"></div>
+            <div class="veld"><label>Datum en tijd</label><div style="display:flex;gap:6px"><input type="date" id="erDatum" style="flex:1;min-width:0"><input type="time" id="erTijd" style="width:auto" title="Leeg = het moment van opslaan"></div></div>
           </div>
           <div class="rij2">
             <div class="veld"><label>Aantal</label><input type="number" id="erAantal" step="0.5" min="0" value="1" inputmode="decimal"></div>
@@ -1747,6 +1747,18 @@ function fmtDatum(iso){
   const [j,m,d] = iso.split("-");
   return d + "-" + m + "-" + j.slice(2);
 }
+/* Tijd bij uren/km/gebruik/extra regels (kolom 'tijd', "14:32:00") — puur
+   eigen registratie en de volgorde binnen een dag op de factuur, komt zelf
+   nergens op de factuur. Leeg tijdveld = niet meesturen: bij nieuw geeft de
+   database het moment van opslaan, bij wijzigen blijft de oude tijd staan. */
+const fmtTijd = t => t ? String(t).slice(0, 5) : "";
+function metTijd(rij, veldId){
+  if ($(veldId).value) rij.tijd = $(veldId).value;
+  return rij;
+}
+// datum (+ tijd) als sorteersleutel, voor "op volgorde van invullen"
+const datumTijd = r => String(r.datum || "") + " " + String(r.tijd || "");
+const fmtDatumTijd = r => fmtDatum(r.datum) + (r.tijd ? ' <span style="color:var(--ink3)">' + fmtTijd(r.tijd) + '</span>' : "");
 // "2 meter" i.p.v. kaal "2"; en "€ 0,36 / meter" i.p.v. kaal "€ 0,36" —
 // alleen als de regel een eenheid heeft (arbeid=uur, kilometers=km, product=eigen eenheid)
 const fmtAantal = r => r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") + " " + r.eenheid : "—";
@@ -3069,7 +3081,7 @@ function stopUrenBewerken(){
   $("uOpslaan").textContent = "Uren opslaan";
   $("uAnnuleer").style.display = "none";
   $("uAantal").value = ""; $("uOmschrijving").value = "";
-  $("uDatum").value = vandaagISO();
+  $("uDatum").value = vandaagISO(); $("uTijd").value = "";
 }
 $("uAnnuleer").addEventListener("click", stopUrenBewerken);
 
@@ -3086,6 +3098,7 @@ $("uOpslaan").addEventListener("click", async () => {
     klus_id: $("uKlus").value || null,
     omschrijving: $("uOmschrijving").value.trim() || null
   };
+  metTijd(rij, "uTijd");
   $("uOpslaan").disabled = true;
   let fout;
   if (bewerkUrenId){
@@ -3104,7 +3117,7 @@ function startUrenBewerken(id){
   const u = urenData.find(x => x.id === id);
   if (!u) return;
   bewerkUrenId = id;
-  $("uDatum").value = u.datum;
+  $("uDatum").value = u.datum; $("uTijd").value = fmtTijd(u.tijd);
   $("uAantal").value = u.aantal;
   $("uTarief").value = u.tarief ?? "";
   zetUrenSoort(u.soort);
@@ -3249,7 +3262,7 @@ function stopKmBewerken(){
   $("kKlant").value = "";
   $("kProject").value = "";
   $("kPrijs").value = Number(cache.inst.km_prijs || 0.35).toFixed(2);
-  $("kDatum").value = vandaagISO();
+  $("kDatum").value = vandaagISO(); $("kTijd").value = "";
   kmZakelijk = true; schakel("kZakelijk","kPrive");
   bijwerkKmHint();
 }
@@ -3274,6 +3287,7 @@ $("kOpslaan").addEventListener("click", async () => {
     km_prijs: ($("kPrijs").value !== "" && parseFloat($("kPrijs").value) >= 0 ? parseFloat($("kPrijs").value) : null),
     zakelijk: kmZakelijk
   };
+  metTijd(rij, "kTijd");
   $("kOpslaan").disabled = true;
   let fout;
   if (bewerkKmId){
@@ -3312,7 +3326,7 @@ function startKmBewerken(id){
   if (!k) return;
   if (k.gefactureerd) { toast("Deze dag staat al op een factuur"); return; }
   bewerkKmId = id;
-  $("kDatum").value = k.datum;
+  $("kDatum").value = k.datum; $("kTijd").value = fmtTijd(k.tijd);
   $("kStand").value = k.km_stand;
   $("kOmschrijving").value = k.omschrijving || "";
   $("kKlant").value = k.klant_id || "";
@@ -3532,7 +3546,7 @@ function stopGebruikBewerken(){
   $("pAnnuleer").style.display = "none";
   $("pAantal").value = "";
   $("pCm").value = "";
-  $("pDatum").value = vandaagISO();
+  $("pDatum").value = vandaagISO(); $("pTijd").value = "";
 }
 $("pAnnuleer").addEventListener("click", stopGebruikBewerken);
 
@@ -3553,7 +3567,7 @@ function startGebruikBewerken(g){
   bijwerkPCmZichtbaarheid();
   $("pAantal").value = Math.abs(Number(g.aantal));
   $("pCm").value = "";
-  $("pDatum").value = g.datum;
+  $("pDatum").value = g.datum; $("pTijd").value = fmtTijd(g.tijd);
   $("pOpslaan").textContent = "Wijziging opslaan";
   $("pAnnuleer").style.display = "block";
   toonTab("invullen");
@@ -3681,9 +3695,9 @@ $("pOpslaan").addEventListener("click", async () => {
   $("pOpslaan").disabled = true;
   let fout;
   if (bewerkGebruikRow){
-    ({ error: fout } = await db.from("voorraad_mutaties").update({
+    ({ error: fout } = await db.from("voorraad_mutaties").update(metTijd({
       product_id: productId, aantal: -aantal, project_id: projectId, datum, klus_id: klusId
-    }).eq("id", bewerkGebruikRow.id));
+    }, "pTijd")).eq("id", bewerkGebruikRow.id));
     if (!fout){
       // oude afboeking (en die van eventuele onderdelen) terugdraaien, nieuwe doorvoeren
       await boekVoorraadTerug(bewerkGebruikRow.product_id, Math.abs(Number(bewerkGebruikRow.aantal)));
@@ -3704,10 +3718,10 @@ $("pOpslaan").addEventListener("click", async () => {
         aantal: Number(bestaand.aantal) - aantal
       }).eq("id", bestaand.id));
     } else {
-      ({ error: fout } = await db.from("voorraad_mutaties").insert({
+      ({ error: fout } = await db.from("voorraad_mutaties").insert(metTijd({
         product_id: productId, aantal: -aantal, type: "gebruik",
         project_id: projectId, datum, klus_id: klusId
-      }));
+      }, "pTijd")));
     }
     if (!fout) await boekVoorraadAf(productId, aantal);
   }
@@ -3873,7 +3887,7 @@ function stopExtraRegelBewerken(){
   $("erOpslaan").textContent = "Regel opslaan";
   $("erAnnuleer").style.display = "none";
   $("erOmschrijving").value = ""; $("erAantal").value = 1; $("erEenheid").value = ""; $("erPrijs").value = "";
-  $("erDatum").value = vandaagISO();
+  $("erDatum").value = vandaagISO(); $("erTijd").value = "";
   zetErKostenpost(false);
   zetErGefactureerd(false);
 }
@@ -3895,7 +3909,7 @@ function startExtraRegelBewerken(r){
   vulKlusSelect("erProject", "erKlus");
   $("erKlus").value = r.klus_id || "";
   $("erOmschrijving").value = r.omschrijving || "";
-  $("erDatum").value = r.datum || vandaagISO();
+  $("erDatum").value = r.datum || vandaagISO(); $("erTijd").value = fmtTijd(r.tijd);
   $("erAantal").value = r.aantal;
   $("erEenheid").value = r.eenheid || "";
   $("erPrijs").value = r.prijs;
@@ -3938,6 +3952,7 @@ $("erOpslaan").addEventListener("click", async () => {
     aantal, prijs: r2(prijs), eenheid: $("erEenheid").value.trim() || null, kostenpost: erKostenpost,
     opslag_pct: erKostenpost && opslag > 0 ? opslag : null
   };
+  metTijd(rij, "erTijd");
   $("erOpslaan").disabled = true;
   let fout;
   if (bewerkExtraRegelId){
@@ -3981,11 +3996,11 @@ function productNaam(id){
 function laadProjectUren(projectId){
   const body = $("prUrenBody");
   const lijst = urenData.filter(u => u.project_id === projectId && !u.klus_id)
-    .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+    .sort((a, b) => datumTijd(b).localeCompare(datumTijd(a)));
   body.innerHTML = !lijst.length
     ? '<tr><td colspan="5" class="leeg">Nog geen uren op dit project.</td></tr>'
     : lijst.map(u =>
-        '<tr class="klik" data-prueid="' + u.id + '"><td>' + fmtDatum(u.datum) + '</td>' +
+        '<tr class="klik" data-prueid="' + u.id + '"><td>' + fmtDatumTijd(u) + '</td>' +
         '<td>' + urenSoortChip(u.soort) +
           (u.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
         '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
@@ -4005,11 +4020,11 @@ function laadProjectUren(projectId){
 function laadProjectKm(projectId){
   const body = $("prKmBody");
   const lijst = kmRegels().filter(k => k.project_id === projectId && !k.klus_id && k.zakelijk && k.gereden > 0)
-    .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+    .sort((a, b) => datumTijd(b).localeCompare(datumTijd(a)));
   body.innerHTML = !lijst.length
     ? '<tr><td colspan="5" class="leeg">Nog geen kilometers op dit project.</td></tr>'
     : lijst.map(k =>
-        '<tr class="klik" data-prkeid="' + k.id + '"><td>' + fmtDatum(k.datum) + '</td>' +
+        '<tr class="klik" data-prkeid="' + k.id + '"><td>' + fmtDatumTijd(k) + '</td>' +
         '<td class="tekst">' + esc(k.omschrijving || "—") + (k.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
         '<td class="r">' + Number(k.gereden).toLocaleString("nl-NL") + '</td>' +
         '<td class="r">' + eur2(Number(k.gereden) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0))) + '</td>' +
@@ -4262,11 +4277,11 @@ $("klVergelijkSluit").addEventListener("click", () => { $("klVergelijkBlok").sty
 /* itemized uren/km/producten van deze klus, aanklikbaar om te wijzigen
    (springt naar het Invulformulier, net als vanuit de gewone lijsten) */
 function laadKlusRegels(klusId){
-  const urenLijst = urenData.filter(u => u.klus_id === klusId).sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  const urenLijst = urenData.filter(u => u.klus_id === klusId).sort((a, b) => datumTijd(b).localeCompare(datumTijd(a)));
   $("klUrenBody").innerHTML = !urenLijst.length
     ? '<tr><td colspan="4" class="leeg">Geen uren op deze klus.</td></tr>'
     : urenLijst.map(u =>
-        '<tr class="klik" data-klueid="' + u.id + '"><td>' + fmtDatum(u.datum) + '</td>' +
+        '<tr class="klik" data-klueid="' + u.id + '"><td>' + fmtDatumTijd(u) + '</td>' +
         '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
         '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td>' +
         '<td class="r"><button class="verwijder" data-kluid="' + u.id + '" title="Verwijderen">✕</button></td></tr>').join("");
@@ -4281,11 +4296,11 @@ function laadKlusRegels(klusId){
     laadKlusRegels(klusId);
   }));
 
-  const kmLijst = kmRegels().filter(k => k.klus_id === klusId && k.zakelijk && k.gereden > 0).sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  const kmLijst = kmRegels().filter(k => k.klus_id === klusId && k.zakelijk && k.gereden > 0).sort((a, b) => datumTijd(b).localeCompare(datumTijd(a)));
   $("klKmBody").innerHTML = !kmLijst.length
     ? '<tr><td colspan="4" class="leeg">Geen kilometers op deze klus.</td></tr>'
     : kmLijst.map(k =>
-        '<tr class="klik" data-klkeid="' + k.id + '"><td>' + fmtDatum(k.datum) + '</td>' +
+        '<tr class="klik" data-klkeid="' + k.id + '"><td>' + fmtDatumTijd(k) + '</td>' +
         '<td class="r">' + Number(k.gereden).toLocaleString("nl-NL") + '</td>' +
         '<td class="r">' + eur2(Number(k.gereden) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0))) + '</td>' +
         '<td class="r">' + (k.gefactureerd ? '' : '<button class="verwijder" data-klkid="' + k.id + '" title="Verwijderen">✕</button>') + '</td></tr>').join("");
@@ -4318,7 +4333,7 @@ async function laadProjectGebruik(projectId){
   body.innerHTML = '<tr><td colspan="4" class="leeg">Laden…</td></tr>';
   const { data, error } = await db.from("voorraad_mutaties")
     .select("*").eq("project_id", projectId).eq("type", "gebruik").is("klus_id", null)
-    .order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false });
+    .order("datum", { ascending:false }).order("tijd", { ascending:false }).order("aangemaakt_op", { ascending:false });
   if (error){ console.error(error); body.innerHTML = '<tr><td colspan="4" class="leeg">Kon het gebruik niet laden.</td></tr>'; return; }
   const lijst = data || [];
   if (!lijst.length){
@@ -4327,7 +4342,7 @@ async function laadProjectGebruik(projectId){
   }
   body.innerHTML = lijst.map(g =>
     '<tr' + (g.gefactureerd ? '' : ' class="klik" data-gedit="' + g.id + '"') + '>' +
-      '<td>' + fmtDatum(g.datum) + '</td>' +
+      '<td>' + fmtDatumTijd(g) + '</td>' +
       '<td class="tekst">' + esc(productNaam(g.product_id)) + (g.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
       '<td class="r">' + Math.abs(Number(g.aantal)).toLocaleString("nl-NL") + '</td>' +
       '<td class="r">' + (g.gefactureerd ? '' : '<button class="verwijder" data-gid="' + g.id + '" title="Verwijderen">✕</button>') + '</td>' +
@@ -4356,7 +4371,7 @@ async function laadProjectExtraRegels(projectId){
   body.innerHTML = '<tr><td colspan="5" class="leeg">Laden…</td></tr>';
   const { data, error } = await db.from("project_extra_regels")
     .select("*").eq("project_id", projectId)
-    .order("datum", { ascending:false }).order("aangemaakt_op", { ascending:false });
+    .order("datum", { ascending:false }).order("tijd", { ascending:false }).order("aangemaakt_op", { ascending:false });
   if (error){ console.error(error); body.innerHTML = '<tr><td colspan="5" class="leeg">Kon de regels niet laden.</td></tr>'; return; }
   const lijst = data || [];
   if (!lijst.length){
@@ -4366,7 +4381,7 @@ async function laadProjectExtraRegels(projectId){
   // ook gefactureerde regels zijn aan te klikken: de omschrijving kan altijd nog anders
   body.innerHTML = lijst.map(r =>
     '<tr class="klik" data-eredit="' + r.id + '">' +
-      '<td>' + fmtDatum(r.datum) + '</td>' +
+      '<td>' + fmtDatumTijd(r) + '</td>' +
       '<td class="tekst">' + esc(r.omschrijving) + (r.kostenpost ? ' <span class="chip amber">KOSTEN</span>' : '') +
         (r.opslag_pct ? ' <span class="chip grijs">+' + Number(r.opslag_pct).toLocaleString("nl-NL") + '%</span>' : '') +
         (r.gefactureerd ? ' <span class="chip grijs">FACT</span>' : '') + '</td>' +
@@ -5748,7 +5763,7 @@ async function openFactuur(id){
   $("fdPrint").style.display = "inline-block";
   $("fDetail").style.display = "block";
   const { data } = await db.from("factuur_regels").select("*")
-    .eq("factuur_id", id).order("aangemaakt_op");
+    .eq("factuur_id", id).order("volgorde", { nullsFirst: false }).order("aangemaakt_op");
   huidigeRegels = data || [];
   toonFdRegels(huidigeRegels);
   window.scrollTo(0, 0);
@@ -5851,7 +5866,7 @@ async function startFacturering(projectId){
     if (!u.tarief && !verborgen) zonderTarief++;
     regels.push({
       omschrijving: (u.soort === "reis" ? "Reisuren" : "Arbeid") + (u.omschrijving ? " — " + u.omschrijving : ""),
-      datum: u.datum, eenheid: "uur",
+      datum: u.datum, tijd: u.tijd, eenheid: "uur",
       aantal: Number(u.aantal), prijs: verborgen ? 0 : Number(u.tarief || 0),
       uren_id: u.id, mutatie_id: null, km_id: null, extra_id: null, klus_id: u.klus_id || null, verborgen
     });
@@ -5862,7 +5877,7 @@ async function startFacturering(projectId){
     const prod = cache.producten.find(p => p.id === g.product_id);
     regels.push({
       omschrijving: prod ? prod.naam : "Product",
-      datum: g.datum, eenheid: (prod && prod.eenheid) || "",
+      datum: g.datum, tijd: g.tijd, eenheid: (prod && prod.eenheid) || "",
       aantal: Math.abs(Number(g.aantal)),
       prijs: verborgen ? 0 : Number(prod ? (prod.verkoopprijs || 0) : 0),
       uren_id: null, mutatie_id: g.id, km_id: null, extra_id: null, klus_id: g.klus_id || null, verborgen,
@@ -5874,7 +5889,7 @@ async function startFacturering(projectId){
     const verborgen = !!(r.klus_id && teFactIdSet.has(r.klus_id));
     regels.push({
       omschrijving: "Kilometers" + (r.omschrijving ? " — " + r.omschrijving : ""),
-      datum: r.datum, eenheid: "km",
+      datum: r.datum, tijd: r.tijd, eenheid: "km",
       aantal: r.gereden,
       prijs: verborgen ? 0 : Number(r.km_prijs ?? (cache.inst.km_prijs || 0)),
       uren_id: null, mutatie_id: null, km_id: r.id, extra_id: null, klus_id: r.klus_id || null, verborgen
@@ -5887,7 +5902,7 @@ async function startFacturering(projectId){
   extra.forEach(r => {
     regels.push({
       omschrijving: r.omschrijving,
-      datum: r.datum, eenheid: r.eenheid || "",
+      datum: r.datum, tijd: r.tijd, eenheid: r.eenheid || "",
       aantal: Number(r.aantal), prijs: r.kostenpost ? metOpslag(r.prijs, r.opslag_pct) : Number(r.prijs),
       uren_id: null, mutatie_id: null, km_id: null, extra_id: r.id, klus_id: r.klus_id || null, verborgen: false,
       kostenpost: !!r.kostenpost, kostprijs: r.kostenpost ? Number(r.prijs) : null
@@ -5908,8 +5923,9 @@ async function startFacturering(projectId){
   // materiaalregels met een regeltotaal onder KLEIN_MAT_GRENS samen als één
   // regel "Klein materiaal" — zie voegKleinMateriaalSamen
   voegKleinMateriaalSamen(regels);
-  // alles door elkaar op datum, niet gegroepeerd per soort (uren/materiaal/km/extra)
-  regels.sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")));
+  // alles door elkaar op datum en tijd van invullen, niet gegroepeerd per
+  // soort (uren/materiaal/km/extra) — zo staat 'van plek naar plek' onder elkaar
+  regels.sort((a, b) => datumTijd(a).localeCompare(datumTijd(b)));
   pendingFactuur = { projectId, regels };
   bewerkFactuurId = null;
   huidigeRegels = [];
@@ -6017,8 +6033,10 @@ async function maakFactuurAan(){
     toast("Aanmaken mislukt: " + (error.message || "onbekende fout"));
     return;
   }
-  const invoerRegels = pendingFactuur.regels.map(r => ({
-    factuur_id: nieuw.id, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
+  // volgorde: alle regels krijgen bij één insert dezelfde aangemaakt_op, dus
+  // zonder dit nummer weet de database de volgorde (datum + tijd) niet meer
+  const invoerRegels = pendingFactuur.regels.map((r, i) => ({
+    factuur_id: nieuw.id, volgorde: i, omschrijving: r.omschrijving, datum: r.datum || null, eenheid: r.eenheid || null,
     aantal: r.aantal, prijs: r.prijs,
     uren_id: r.uren_id || null, mutatie_id: r.mutatie_id || null, km_id: r.km_id || null, extra_id: r.extra_id || null,
     klus_id: r.klus_id || null, verborgen: !!r.verborgen, meerwerk: !!r.meerwerk, kostenpost: !!r.kostenpost,
