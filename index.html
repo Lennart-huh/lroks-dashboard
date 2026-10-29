@@ -582,6 +582,13 @@ nav.onderbalk{display:none}
             </div>
           </div>
           <div class="veld"><label>Notitie</label><input type="text" id="ikNotities" placeholder="optioneel"></div>
+          <div class="veld"><label>Bon of factuur (PDF of foto)</label>
+            <div id="ikBijlageHuidig" style="display:none;margin-bottom:8px;gap:8px;flex-wrap:wrap;align-items:center">
+              <button type="button" class="knop klein stil" id="ikBijlageOpen">📎 Bekijken</button>
+              <button type="button" class="knop klein stil" id="ikBijlageWeg">Weghalen</button>
+            </div>
+            <input type="file" id="ikBijlage" accept="application/pdf,image/*">
+          </div>
           <button class="knop" id="ikOpslaan">Inkoopfactuur opslaan</button>
           <button class="knop klein stil" id="ikAnnuleer" style="display:none">Wijzigen annuleren</button>
         </div>
@@ -2021,6 +2028,16 @@ $("prAfgerond").addEventListener("click", () => { projStatus = "afgerond"; schak
 let ikInvestering = false, ikStatus = "open";
 let bewerkInkoopId = null;
 let inkoopStatus = "open";
+/* bijlage (bon/factuur) in de opslag 'bijlagen', pad in facturen.bestand_url */
+let ikBijlagePad = null, ikBijlageWeg = false;
+function toonIkBijlage(){
+  $("ikBijlageHuidig").style.display = ikBijlagePad && !ikBijlageWeg ? "flex" : "none";
+}
+$("ikBijlageOpen").addEventListener("click", () => { if (ikBijlagePad) openBijlage(ikBijlagePad); });
+$("ikBijlageWeg").addEventListener("click", () => {
+  if (!confirm("Bijlage weghalen? Dat gebeurt bij Opslaan.")) return;
+  ikBijlageWeg = true; toonIkBijlage();
+});
 let pfInvestering = false, pfStatus = "open";
 
 $("ikInvNee").addEventListener("click", () => {
@@ -2063,7 +2080,8 @@ $("ikLeverancier").addEventListener("change", () => {
 
 function ikFormLeeg(){
   bewerkInkoopId = null;
-  ["ikLeverancier","ikNummer","ikVervaldatum","ikBedrag","ikBtw","ikNotities","ikAfschrijf"].forEach(id => $(id).value = "");
+  ["ikLeverancier","ikNummer","ikVervaldatum","ikBedrag","ikBtw","ikNotities","ikAfschrijf","ikBijlage"].forEach(id => $(id).value = "");
+  ikBijlagePad = null; ikBijlageWeg = false; toonIkBijlage();
   $("ikDatum").value = vandaagISO();
   $("ikCategorie").value = "materiaal";
   $("ikProject").value = "";
@@ -2086,6 +2104,8 @@ function ikVulFormulier(f){
   $("ikCategorie").value = f.categorie || "materiaal";
   $("ikProject").value = f.project_id || "";
   $("ikNotities").value = f.notities || "";
+  $("ikBijlage").value = "";
+  ikBijlagePad = f.bestand_url || null; ikBijlageWeg = false; toonIkBijlage();
   ikInvestering = !!f.is_investering;
   schakel(ikInvestering ? "ikInvJa" : "ikInvNee", ikInvestering ? "ikInvNee" : "ikInvJa");
   $("ikAfschrijfVeld").style.display = ikInvestering ? "block" : "none";
@@ -2122,6 +2142,13 @@ $("ikOpslaan").addEventListener("click", async () => {
     notities: $("ikNotities").value.trim() || null
   };
   $("ikOpslaan").disabled = true;
+  const oudPad = ikBijlagePad;
+  const bestand = $("ikBijlage").files[0];
+  if (bestand){
+    const pad = await uploadBijlage(bestand, "inkoopfacturen");
+    if (!pad){ $("ikOpslaan").disabled = false; toast("Bijlage uploaden mislukt — niets opgeslagen"); return; }
+    rij.bestand_url = pad;
+  } else if (ikBijlageWeg) rij.bestand_url = null;
   let fout;
   if (bewerkInkoopId){
     ({ error: fout } = await db.from("facturen").update(rij).eq("id", bewerkInkoopId));
@@ -2129,7 +2156,13 @@ $("ikOpslaan").addEventListener("click", async () => {
     ({ error: fout } = await db.from("facturen").insert(rij));
   }
   $("ikOpslaan").disabled = false;
-  if (fout){ console.error(fout); toast("Opslaan mislukt"); return; }
+  if (fout){
+    console.error(fout);
+    if (rij.bestand_url) await db.storage.from("bijlagen").remove([rij.bestand_url]);
+    toast("Opslaan mislukt"); return;
+  }
+  // vervangen of weggehaald: het oude bestand hoeft niet te blijven staan
+  if (oudPad && rij.bestand_url !== undefined && rij.bestand_url !== oudPad) await db.storage.from("bijlagen").remove([oudPad]);
   const wasWijziging = !!bewerkInkoopId;
   ikFormLeeg();
   toast(wasWijziging ? "Wijziging opgeslagen" : "Inkoopfactuur opgeslagen");
@@ -5205,6 +5238,7 @@ async function herlaadCategorieen(){
 
 /* ---- PDF-inlezer ---- */
 let pfParsed = null;
+let pfBestand = null;   // het ingelezen bestand; gaat bij Verwerken als bijlage mee
 
 function ikModus(pdf){
   $("ikModusPdf").classList.toggle("aan", pdf);
@@ -5269,6 +5303,7 @@ $("pdfLees").addEventListener("click", async () => {
     const tekst = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
     const schoon = tekst.replace(/```json|```/g, "").trim();
     pfParsed = JSON.parse(schoon);
+    pfBestand = file;
     $("pfLeverancier").value = pfParsed.leverancier || "";
     $("pfNummer").value = pfParsed.factuurnummer || "";
     $("pfDatum").value = pfParsed.datum || vandaagISO();
@@ -5304,6 +5339,7 @@ $("pdfLees").addEventListener("click", async () => {
 $("pfAnnuleer").addEventListener("click", () => {
   $("pdfResultaat").style.display = "none";
   $("pdfBestand").value = "";
+  pfBestand = null;
   $("pdfStatus").textContent = "";
 });
 
@@ -5418,6 +5454,13 @@ $("pfVerwerk").addEventListener("click", async () => {
   const status = $("pdfStatus");
   status.textContent = "Bezig met verwerken…";
 
+  // de PDF/foto zelf bewaren, zodat je hem later bij de factuur terugziet
+  let bijlagePad = null;
+  if (pfBestand){
+    bijlagePad = await uploadBijlage(pfBestand, "inkoopfacturen");
+    if (!bijlagePad){ $("pfVerwerk").disabled = false; status.textContent = "Bijlage uploaden mislukt — niets opgeslagen. Probeer opnieuw."; return; }
+  }
+
   const { data: nieuweFactuur, error: fFout } = await db.from("facturen").insert({
     type: "inkoop", leverancier: lev,
     nummer: $("pfNummer").value.trim() || "-",
@@ -5427,9 +5470,13 @@ $("pfVerwerk").addEventListener("click", async () => {
     categorie: $("pfCategorie").value || "materiaal",
     project_id: $("pfProject").value || null,
     is_investering: pfInvestering,
-    notities: "Automatisch ingelezen uit PDF"
+    notities: "Automatisch ingelezen uit PDF",
+    bestand_url: bijlagePad
   }).select().single();
-  if (fFout){ $("pfVerwerk").disabled = false; status.textContent = "Inkoopfactuur opslaan mislukt."; return; }
+  if (fFout){
+    if (bijlagePad) await db.storage.from("bijlagen").remove([bijlagePad]);
+    $("pfVerwerk").disabled = false; status.textContent = "Inkoopfactuur opslaan mislukt."; return;
+  }
   const factuurId = nieuweFactuur ? nieuweFactuur.id : null;
   /* zet een trigger betaald_op toch op "nu", dan alsnog het echte
      betaalmoment erin — net als bij aanpassen in Betalingen */
@@ -5501,7 +5548,7 @@ $("pfVerwerk").addEventListener("click", async () => {
   $("pfVerwerk").disabled = false;
   $("pdfResultaat").style.display = "none";
   $("pdfBestand").value = "";
-  pfParsed = null;
+  pfParsed = null; pfBestand = null;
   status.textContent = "";
   toast(verwerkt + " regel(s) verwerkt" + (nieuw ? ", " + nieuw + " nieuw product(en)" : ""));
   await herlaadProducten();
@@ -6507,9 +6554,9 @@ $("bpLosBijlageWeg").addEventListener("click", () => {
   if (!confirm("Bijlage weghalen? Dat gebeurt bij Opslaan.")) return;
   bpLosBijlageWeg = true; toonBpBijlage();
 });
-async function uploadBijlage(bestand){
+async function uploadBijlage(bestand, map = "losse-betalingen"){
   const naam = String(bestand.name || "bijlage").normalize("NFD").replace(/[^\w.\-]+/g, "_").slice(-60);
-  const pad = "losse-betalingen/" + Date.now() + "-" + naam;
+  const pad = map + "/" + Date.now() + "-" + naam;
   const { error } = await db.storage.from("bijlagen").upload(pad, bestand, { contentType: bestand.type || undefined });
   if (error){ console.error(error); return null; }
   return pad;
@@ -6743,9 +6790,12 @@ $("fdiBewerk").addEventListener("click", () => {
 
 $("fdiVerwijder").addEventListener("click", async () => {
   if (!bekijkInkoopId) return;
-  if (!confirm("Deze inkoopfactuur verwijderen?")) return;
+  const f = factData.find(x => x.id === bekijkInkoopId);
+  const pad = f && f.bestand_url;
+  if (!confirm("Deze inkoopfactuur verwijderen?" + (pad ? " De bijlage gaat ook weg." : ""))) return;
   const { error } = await db.from("facturen").delete().eq("id", bekijkInkoopId);
   if (error){ toast("Verwijderen mislukt"); return; }
+  if (pad) await db.storage.from("bijlagen").remove([pad]);
   $("fiDetail").style.display = "none";
   bekijkInkoopId = null;
   toast("Inkoopfactuur verwijderd");
