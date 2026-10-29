@@ -5089,7 +5089,7 @@ function renderVPrijzen(pid){
   body.innerHTML = lijst.map(r =>
     '<tr>' +
       '<td class="tekst">' + esc(r.leverancier) + (g && g.id === r.id ? ' <span class="chip groen">GOEDKOOPST</span>' : '') + '</td>' +
-      '<td class="r">' + eur2(r.prijs) + '</td>' +
+      '<td class="r">' + eurP(r.prijs) + '</td>' +
       '<td>' + fmtDatum(r.datum) + '</td>' +
       '<td class="r"><button class="verwijder" data-vpid="' + r.id + '">✕</button></td>' +
     '</tr>').join("");
@@ -5288,11 +5288,12 @@ $("pdfLees").addEventListener("click", async () => {
         max_tokens: 32000,
         output_config: { effort: "max" },
         messages: [{ role: "user", content: [ blok, { type: "text", text:
-          'Lees dit inkoopdocument van een elektrotechnisch installatiebedrijf — dit kan een inkoopfactuur van een leverancier zijn, of een kassabon/bonnetje van een winkel. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","vervaldatum":"JJJJ-MM-DD of null","bedrag_excl":0,"btw_bedrag":0,"categorie":"","is_investering":false,"betaald":false,"betaald_op":"JJJJ-MM-DDTHH:MM of null","regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0}]} ' +
+          'Lees dit inkoopdocument van een elektrotechnisch installatiebedrijf — dit kan een inkoopfactuur van een leverancier zijn, of een kassabon/bonnetje van een winkel. Antwoord ALLEEN met geldige JSON, zonder tekst eromheen en zonder markdown: {"leverancier":"","factuurnummer":"","datum":"JJJJ-MM-DD","vervaldatum":"JJJJ-MM-DD of null","bedrag_excl":0,"btw_bedrag":0,"categorie":"","is_investering":false,"betaald":false,"betaald_op":"JJJJ-MM-DDTHH:MM of null","regels":[{"omschrijving":"","aantal":0,"prijs_per_stuk":0,"stuks_per_eenheid":1}]} ' +
           '"datum" is de datum waarop er daadwerkelijk gekocht/afgerekend is (de bon- of transactiedatum, vaak bovenaan met een tijdstip erbij). Gebruik NOOIT een latere factuur-, verzend- of documentdatum als die afwijkt van de aankoopdatum — bij een kassabon staat meestal maar één datum en is die de juiste. ' +
           '"betaald" is true als uit het document blijkt dat er al betaald is: een kassabon, of een factuur met "voldaan", "betaald", een pin-, iDEAL-, creditcard- of PayPal-betaling, of een openstaand bedrag van 0. Bij een gewone factuur met een betaaltermijn of vervaldatum is het false. ' +
           '"betaald_op" is het moment van betalen zoals het op het document staat (bij een kassabon de transactiedatum en -tijd); alleen een datum zonder tijd → "JJJJ-MM-DD". Staat er geen betaalmoment op, of is het niet betaald: null. ' +
           'Alle bedragen excl. btw met een punt als decimaalteken. prijs_per_stuk is de stukprijs, niet het regeltotaal. Neem ook verzendkosten en statiegeld op als regel. ' +
+          '"aantal" en "prijs_per_stuk" zijn per eenheid zoals gefactureerd. "stuks_per_eenheid" is hoeveel losse stuks er in één gefactureerde eenheid zitten: een doos, zak of verpakking van 100 (bv. "per 100", "à 100 st", "100 st/doos", "VE 100") → 100; gewoon per stuk, per meter of per rol → 1. Staat er een prijs per 100 of per 1000 terwijl het aantal al in losse stuks is, reken prijs_per_stuk dan om naar de prijs per los stuk en zet stuks_per_eenheid op 1. ' +
           'Bij verlegde btw: btw_bedrag 0. ' +
           'Kies categorie uit exact deze lijst: ' + KOSTEN.map(k => k[0]).join(", ") + '. ' +
           'Zet is_investering op true als het om een los bedrijfsmiddel boven 450 euro gaat dat meerdere jaren meegaat, zoals een machine, meetapparatuur of duur gereedschap. Bij normaal installatiemateriaal is het false.' } ] }]
@@ -5410,6 +5411,8 @@ function toonPfRegels(regels){
         '<div class="veld"><label>Aantal</label><input type="number" class="pfr-aantal" step="0.5" value="' + (r.aantal || 1) + '"></div>' +
         '<div class="veld"><label>Prijs p/st excl. (€)</label><input type="number" class="pfr-prijs" step="0.01" value="' + (r.prijs_per_stuk || 0) + '"></div>' +
       '</div>' +
+      '<div class="veld"><label>Stuks per eenheid op de factuur</label><input type="number" class="pfr-per" step="1" min="1" value="' + Math.max(1, Number(r.stuks_per_eenheid) || 1) + '">' +
+        '<div class="hint pfr-per-hint"></div></div>' +
     '</div>';
   }).join("");
 
@@ -5424,7 +5427,15 @@ function toonPfRegels(regels){
       const n = cat.value ? cache.producten.filter(p => p.categorie_id === cat.value).length : 0;
       hint.textContent = !cat.value ? "" : n === 0 ? "Nog geen producten in deze categorie"
         : n + " product" + (n === 1 ? "" : "en") + " in deze categorie — staan bovenaan bij Koppel aan";
+      /* per doos van 100 gefactureerd: voorraad en inkoopprijs gaan per stuk */
+      const per = Math.max(1, parseFloat(el.querySelector(".pfr-per").value) || 1);
+      const aantal = parseFloat(el.querySelector(".pfr-aantal").value) || 0;
+      const prijs = parseFloat(el.querySelector(".pfr-prijs").value) || 0;
+      el.querySelector(".pfr-per-hint").textContent = per > 1
+        ? "= " + (aantal * per).toLocaleString("nl-NL") + " stuks à € " + r4(prijs / per).toLocaleString("nl-NL", { minimumFractionDigits:2, maximumFractionDigits:4 }) + " — zo gaat het in voorraad en inkoopprijs."
+        : "Per stuk gefactureerd. Staat er bv. 'per 100' of een doos van 100? Vul dan 100 in.";
     };
+    el.querySelectorAll(".pfr-per, .pfr-aantal, .pfr-prijs").forEach(i => i.addEventListener("input", bijwerk));
     /* andere categorie: koppellijst opnieuw sorteren, keuze behouden */
     cat.addEventListener("change", () => { sel.innerHTML = pfKoppelOpties(cat.value, sel.value); bijwerk(); });
     /* bestaand product gekozen: zijn categorie overnemen */
@@ -5492,6 +5503,9 @@ $("pfVerwerk").addEventListener("click", async () => {
     const aantal = parseFloat(el.querySelector(".pfr-aantal").value) || 0;
     const prijs = r2(parseFloat(el.querySelector(".pfr-prijs").value) || 0);
     const catId = el.querySelector(".pfr-cat").value || null;
+    // gefactureerd per doos/zak: voorraad in losse stuks, inkoopprijs per stuk
+    const per = Math.max(1, parseFloat(el.querySelector(".pfr-per").value) || 1);
+    const stuks = aantal * per, stukprijs = per > 1 ? r4(prijs / per) : prijs;
     let productId = null;
 
     if (keuze !== "_skip"){
@@ -5499,10 +5513,11 @@ $("pfVerwerk").addEventListener("click", async () => {
       if (keuze === "_nieuw" && naam){
         const kort = el.querySelector(".pfr-kort").value.trim() || korteNaam(naam);
         const { data: np, error: npF } = await db.from("producten").insert({
-          naam: kort.slice(0, 120), volledige_naam: naam, inkoopprijs: prijs,
+          naam: kort.slice(0, 120), volledige_naam: naam, inkoopprijs: stukprijs,
           categorie_id: catId,
           marge_pct: stdMarge > 0 ? stdMarge : null,
-          verkoopprijs: stdMarge > 0 ? r2(prijs * (1 + stdMarge / 100)) : 0,
+          verkoopprijs: stdMarge > 0 ? r2(stukprijs * (1 + stdMarge / 100)) : 0,
+          verpakking_aantal: per > 1 ? per : null,
           op_voorraad: true, voorraad: 0, leverancier: lev
         }).select().single();
         productId = (!npF && np) ? np.id : null;
@@ -5511,26 +5526,28 @@ $("pfVerwerk").addEventListener("click", async () => {
         productId = null;
       }
       if (productId){
-        if (aantal > 0){
+        if (stuks > 0){
           await db.from("voorraad_mutaties").insert({
-            product_id: productId, aantal: aantal, type: "inkoop", datum
+            product_id: productId, aantal: stuks, type: "inkoop", datum
           });
         }
         const prod = cache.producten.find(p => p.id === productId);
         if (prod){
-          const updates = { inkoopprijs: prijs };
+          const updates = { inkoopprijs: stukprijs };
           if (catId && catId !== prod.categorie_id) updates.categorie_id = catId;
           if (!prod.volledige_naam && naam) updates.volledige_naam = naam;
-          if (prod.marge_pct != null) updates.verkoopprijs = r2(prijs * (1 + Number(prod.marge_pct) / 100));
-          if (prod.op_voorraad !== false && aantal > 0) updates.voorraad = Number(prod.voorraad || 0) + aantal;
+          if (per > 1 && !prod.verpakking_aantal) updates.verpakking_aantal = per;
+          if (prod.marge_pct != null) updates.verkoopprijs = r2(stukprijs * (1 + Number(prod.marge_pct) / 100));
+          if (prod.op_voorraad !== false && stuks > 0) updates.voorraad = Number(prod.voorraad || 0) + stuks;
           await db.from("producten").update(updates).eq("id", productId);
-          prod.inkoopprijs = prijs;
+          prod.inkoopprijs = stukprijs;
+          if (updates.verpakking_aantal !== undefined) prod.verpakking_aantal = updates.verpakking_aantal;
           if (updates.categorie_id !== undefined) prod.categorie_id = updates.categorie_id;
           if (updates.verkoopprijs !== undefined) prod.verkoopprijs = updates.verkoopprijs;
           if (updates.voorraad !== undefined) prod.voorraad = updates.voorraad;
         }
         await db.from("product_prijzen").insert({
-          product_id: productId, leverancier: lev, prijs, datum, factuur_id: factuurId
+          product_id: productId, leverancier: lev, prijs: stukprijs, datum, factuur_id: factuurId
         });
         verwerkt++;
       }
