@@ -6315,15 +6315,17 @@ $("fdOpslaan").addEventListener("click", async () => {
 
 $("fdVerwijder").addEventListener("click", async () => {
   if (!bewerkFactuurId) return;
-  if (!confirm("Deze factuur verwijderen? De uren en producten komen dan weer klaar te staan om opnieuw te factureren.")) return;
+  if (!confirm("Deze factuur verwijderen? De uren, producten en extra regels/kosten komen dan weer klaar te staan om opnieuw te factureren.")) return;
   const { data: regels } = await db.from("factuur_regels")
-    .select("uren_id,mutatie_id,km_id").eq("factuur_id", bewerkFactuurId);
+    .select("uren_id,mutatie_id,km_id,extra_id").eq("factuur_id", bewerkFactuurId);
   const urenIds = (regels || []).map(r => r.uren_id).filter(Boolean);
   const mutIds = (regels || []).map(r => r.mutatie_id).filter(Boolean);
   const kmIds = (regels || []).map(r => r.km_id).filter(Boolean);
+  const extraIds = (regels || []).map(r => r.extra_id).filter(Boolean);
   if (urenIds.length) await db.from("uren").update({ gefactureerd: false }).in("id", urenIds);
   if (mutIds.length) await db.from("voorraad_mutaties").update({ gefactureerd: false }).in("id", mutIds);
   if (kmIds.length) await db.from("km_registratie").update({ gefactureerd: false }).in("id", kmIds);
+  if (extraIds.length) await db.from("project_extra_regels").update({ gefactureerd: false }).in("id", extraIds);
   const { error } = await db.from("facturen").delete().eq("id", bewerkFactuurId);
   if (error){ toast("Verwijderen mislukt"); return; }
   toast("Factuur verwijderd");
@@ -6331,6 +6333,7 @@ $("fdVerwijder").addEventListener("click", async () => {
   await herlaadFacturen();
   await herlaadUren();
   await herlaadKm();
+  if (bewerkProjectId) laadProjectExtraRegels(bewerkProjectId);
 });
 
 /* ---- Factureren vanaf een project ---- */
