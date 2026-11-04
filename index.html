@@ -1445,10 +1445,11 @@ nav.onderbalk{display:none}
           <button data-bpf="uit">Afgeschreven</button>
           <button data-bpf="in">Bijgeschreven</button>
           <button data-bpf="mist">Factuur ontbreekt</button>
+          <button data-bpf="vast">Vaste lasten</button>
           <select id="bpMaand" style="margin-left:auto;padding:8px 12px;border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--ink);font-size:.84rem"></select>
         </div>
         <div id="bpLijst"></div>
-        <div class="hint" style="margin-top:10px">Bedragen incl. btw, zoals ze op je bankafschrift staan. Facturen die al betaald waren vóór dit tabblad bestond hebben geen betaaltijd; die staan op hun factuurdatum met "tijd ?" — klik erop om de echte datum en tijd in te vullen.</div>
+        <div class="hint" style="margin-top:10px">Bedragen incl. btw, zoals ze op je bankafschrift staan. Facturen die al betaald waren vóór dit tabblad bestond hebben geen betaaltijd; die staan op hun factuurdatum met "tijd ?" — klik erop om de echte datum en tijd in te vullen. Vaste lasten staan erin op de dag dat ze volgens schema worden afgeschreven (aanpassen via Invulformulier &gt; Vaste last); wat later deze maand nog komt staat er lichter bij als "gepland" en telt nog niet mee.</div>
       </div>
       <div class="tab" id="tab-voorraad">
         <div class="tab-kop"><h2>Voorraad</h2>
@@ -3233,7 +3234,7 @@ $("vlOpslaan").addEventListener("click", async () => {
   vlFormLeeg();
   const { data } = await db.from("vaste_lasten").select("*").eq("actief", true);
   cache.vasteLasten = data || [];
-  renderTeBetalen(); renderKostensoorten();
+  renderTeBetalen(); renderKostensoorten(); renderBetalingen();
   toast(wasBewerken ? "Vaste last bijgewerkt" : "Vaste last opgeslagen");
 });
 
@@ -3246,7 +3247,7 @@ $("vlVerwijder").addEventListener("click", async () => {
   toast("Verwijderd");
   vlFormLeeg();
   cache.vasteLasten = cache.vasteLasten.filter(x => x.id !== weg);
-  renderTeBetalen(); renderKostensoorten();
+  renderTeBetalen(); renderKostensoorten(); renderBetalingen();
 });
 
 /* Omzet en winst per maand, zelfde rekenwijze als financieelJaar() maar dan
@@ -6728,7 +6729,41 @@ function bpPosten(){
       bedrag: Number(l.bedrag || 0)
     });
   });
+  /* vaste lasten: elke afschrijving vanaf de startdatum t/m het eind van deze
+     maand. Er is geen bankkoppeling, dus we nemen aan dat ze volgens schema
+     zijn afgeschreven; wat na vandaag valt staat er als "gepland" bij en
+     telt (nog) niet mee in Betaald. */
+  const nu = new Date(), vandaag = vandaagISO();
+  const eindMaand = isoDatum(new Date(nu.getFullYear(), nu.getMonth() + 1, 0));
+  cache.vasteLasten.forEach(vl => {
+    vasteLastDatumsTot(vl, eindMaand).forEach(dag => {
+      posten.push({
+        soort: "vast", id: vl.id, richting: "uit", dag, tijd: null,
+        sort: new Date(dag + "T00:00:00").getTime() - 2,
+        gepland: dag > vandaag,
+        naam: vl.naam || "—", sub: vl.categorie ? kostenNaam(vl.categorie) : "",
+        bedrag: Number(vl.bedrag || 0)
+      });
+    });
+  });
   return posten.sort((a, b) => b.sort - a.sort);
+}
+/* alle afschrijfdatums van een vaste last van start_datum t/m 'eind' (ISO) */
+function vasteLastDatumsTot(vl, eind){
+  const datums = [];
+  if (!vl.start_datum) return datums;
+  const d = new Date(vl.start_datum + "T00:00:00");
+  const aantal = Math.max(1, Number(vl.interval_aantal) || 1);
+  let guard = 0;
+  while (isoDatum(d) <= eind && guard < 5000){
+    datums.push(isoDatum(d));
+    if (vl.interval_eenheid === "dag") d.setDate(d.getDate() + aantal);
+    else if (vl.interval_eenheid === "week") d.setDate(d.getDate() + aantal * 7);
+    else if (vl.interval_eenheid === "jaar") d.setFullYear(d.getFullYear() + aantal);
+    else d.setMonth(d.getMonth() + aantal); // maand = standaard
+    guard++;
+  }
+  return datums;
 }
 
 function renderBetalingen(){
@@ -6748,7 +6783,8 @@ function renderBetalingen(){
 
   const inMaand = alle.filter(p => !bpMaandKeuze || p.dag.startsWith(bpMaandKeuze));
   const label = bpMaandKeuze ? MAANDEN_LANG[Number(bpMaandKeuze.slice(5)) - 1] : "totaal";
-  const uit = inMaand.filter(p => p.richting === "uit"), bij = inMaand.filter(p => p.richting === "in");
+  const geweest = inMaand.filter(p => !p.gepland);
+  const uit = geweest.filter(p => p.richting === "uit"), bij = geweest.filter(p => p.richting === "in");
   $("bpUit").textContent = eur2(uit.reduce((s, p) => s + p.bedrag, 0));
   $("bpUitSub").textContent = label + " · " + uit.length + " posten";
   $("bpIn").textContent = eur2(bij.reduce((s, p) => s + p.bedrag, 0));
@@ -6766,7 +6802,7 @@ function renderBetalingen(){
   renderBpOpen();
 
   const lijst = inMaand.filter(p =>
-    bpFilter === "alles" ? true : bpFilter === "mist" ? p.soort === "los" : p.richting === bpFilter);
+    bpFilter === "alles" ? true : bpFilter === "mist" ? p.soort === "los" : bpFilter === "vast" ? p.soort === "vast" : p.richting === bpFilter);
   if (!lijst.length){
     $("bpLijst").innerHTML = '<div class="card leeg">Geen betalingen in deze periode.</div>';
     return;
@@ -6780,16 +6816,21 @@ function renderBetalingen(){
   });
   $("bpLijst").innerHTML = perDag.map(g => {
     const d = new Date(g.dag + "T00:00:00");
-    const saldo = g.posten.reduce((s, p) => s + (p.richting === "in" ? p.bedrag : -p.bedrag), 0);
+    const telt = g.posten.filter(p => !p.gepland);
+    const saldo = telt.reduce((s, p) => s + (p.richting === "in" ? p.bedrag : -p.bedrag), 0);
     return '<div class="tbl-wrap" style="margin-bottom:12px"><table>' +
       '<thead><tr><th colspan="2">' + DAGEN[d.getDay()] + " " + d.getDate() + " " + MAANDEN_LANG[d.getMonth()] + " " + d.getFullYear() +
-      '</th><th class="r" style="color:' + (saldo < 0 ? "var(--rood)" : "var(--groen)") + '">' + (saldo < 0 ? "− " : "+ ") + eur2(Math.abs(saldo)).slice(2) + '</th></tr></thead><tbody>' +
+      '</th><th class="r" style="color:' + (!telt.length ? "var(--ink3)" : saldo < 0 ? "var(--rood)" : "var(--groen)") + '">' +
+        (!telt.length ? "gepland" : (saldo < 0 ? "− " : "+ ") + eur2(Math.abs(saldo)).slice(2)) + '</th></tr></thead><tbody>' +
       g.posten.map(p =>
-        '<tr class="klik" data-bpsoort="' + p.soort + '" data-bpid="' + p.id + '">' +
-          '<td class="mono" style="width:62px;color:var(--ink2)">' + (p.tijd || '<span title="Tijd niet vastgelegd — klik om in te vullen">tijd ?</span>') + '</td>' +
+        '<tr class="klik" data-bpsoort="' + p.soort + '" data-bpid="' + p.id + '"' + (p.gepland ? ' style="opacity:.55"' : '') + '>' +
+          '<td class="mono" style="width:62px;color:var(--ink2)">' + (p.tijd || (p.soort === "vast"
+            ? '<span title="Vaste last — afgeschreven volgens schema">vast</span>'
+            : '<span title="Tijd niet vastgelegd — klik om in te vullen">tijd ?</span>')) + '</td>' +
           // label onder de naam i.p.v. eigen kolom, anders valt het bedrag op mobiel buiten beeld
           '<td class="tekst"><b>' + esc(p.naam) + '</b><div class="hint" style="margin-top:3px">' +
-            (p.soort === "los" ? '<span class="chip rood">FACTUUR ONTBREEKT</span> ' : '') + esc(p.sub) + '</div></td>' +
+            (p.soort === "los" ? '<span class="chip rood">FACTUUR ONTBREEKT</span> ' : '') +
+            (p.soort === "vast" ? '<span class="chip grijs">' + (p.gepland ? "GEPLAND" : "VASTE LAST") + '</span> ' : '') + esc(p.sub) + '</div></td>' +
           '<td class="r mono" style="white-space:nowrap;color:' + (p.richting === "in" ? "var(--groen)" : "var(--ink)") + '">' +
             (p.richting === "in" ? "+ " : "− ") + eur2(p.bedrag).slice(2) + '</td>' +
         '</tr>').join("") +
@@ -6797,6 +6838,7 @@ function renderBetalingen(){
   }).join("");
   $("bpLijst").querySelectorAll("[data-bpid]").forEach(r => r.addEventListener("click", () => {
     if (r.dataset.bpsoort === "los") openLosseBetaling(r.dataset.bpid);
+    else if (r.dataset.bpsoort === "vast") startVasteLastBewerken(r.dataset.bpid);
     else openBpFactuur(r.dataset.bpid);
   }));
 }
