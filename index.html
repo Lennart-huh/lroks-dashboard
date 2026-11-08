@@ -61,6 +61,7 @@ button{font-family:inherit}
 .veld input:focus,.veld select:focus,.veld textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
 .veld input[readonly]{color:var(--ink2);background:var(--surface2);cursor:default}
 .rij2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rij3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 .knop{width:100%;padding:13px;border:none;border-radius:8px;background:var(--accent);color:var(--bg);font-weight:600;font-size:.95rem;cursor:pointer;letter-spacing:.03em;margin-top:4px}
 .knop:disabled{opacity:.55;cursor:wait}
 .knop.klein{width:auto;padding:9px 16px;font-size:.82rem}
@@ -189,7 +190,7 @@ nav.onderbalk{display:none}
   main{padding:20px 16px calc(var(--nav-h) + 30px)}
   .grid{grid-template-columns:repeat(2,1fr)}
   .grid4{grid-template-columns:repeat(2,1fr)}
-  .rij2{grid-template-columns:1fr}
+  .rij2,.rij3{grid-template-columns:1fr}
   .datum{display:none}
   nav.onderbalk{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
   nav.onderbalk button{flex:1;border:none;background:none;color:var(--ink3);font-size:.64rem;font-weight:600;letter-spacing:.03em;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
@@ -1558,9 +1559,18 @@ nav.onderbalk{display:none}
           <button class="knop klein stil" id="catSluit">Sluiten</button>
         </div>
 
-        <div class="rij2" style="max-width:600px">
+        <div class="rij3" style="max-width:860px">
           <div class="veld"><label>Zoeken</label><input type="text" id="vZoek" placeholder="Naam, volledige naam of leverancier"></div>
           <div class="veld"><label>Filter op categorie</label><select id="vFilter"></select></div>
+          <div class="veld"><label>Sorteren</label><select id="vSorteer">
+            <option value="">Naam (A–Z)</option>
+            <option value="prijs:af">Prijs: hoog naar laag</option>
+            <option value="prijs:op">Prijs: laag naar hoog</option>
+            <option value="winst:af">Hoogste winst</option>
+            <option value="winst:op">Laagste winst</option>
+            <option value="marge:af">Hoogste winstmarge</option>
+            <option value="marge:op">Laagste winstmarge</option>
+          </select></div>
         </div>
         <div id="vSelBalk" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:11px 14px;margin-bottom:12px">
           <span id="vSelAantal" style="font-size:.85rem"></span>
@@ -5055,8 +5065,12 @@ $("vInkoop").addEventListener("input", herberekenVerkoopForm);
 function vulVoorraadSelects(){
   $("vCategorie").innerHTML = '<option value="">— geen —</option>' +
     cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
-  $("vFilter").innerHTML = '<option value="">Alle categorieën</option>' +
+  /* Gekozen filter bewaren: deze lijst wordt opnieuw opgebouwd na elke productwijziging. */
+  const gekozenFilter = $("vFilter").value;
+  $("vFilter").innerHTML = '<option value="">Alle categorieën</option><option value="geen">Geen categorie</option>' +
     cache.categorieen.map(c => '<option value="' + c.id + '">' + esc(c.naam) + '</option>').join("");
+  $("vFilter").value = gekozenFilter;
+  if ($("vFilter").selectedIndex < 0) $("vFilter").value = "";
 }
 
 $("vNieuw").addEventListener("click", () => {
@@ -5246,17 +5260,47 @@ async function herlaadProducten(){
 
 $("vFilter").addEventListener("change", renderVoorraad);
 $("vZoek").addEventListener("input", renderVoorraad);
+$("vSorteer").addEventListener("change", renderVoorraad);
+
+/* Winstmarge in % op de inkoopprijs, net als het veld Marge % op het product.
+   null = niet te berekenen omdat de inkoop- of verkoopprijs ontbreekt. */
+function margePctVan(p){
+  const ink = Number(p.inkoopprijs || 0), verk = Number(p.verkoopprijs || 0);
+  return ink > 0 && verk > 0 ? (verk - ink) / ink * 100 : null;
+}
+
+function voorraadSorteerWaarde(p, soort){
+  const ink = Number(p.inkoopprijs || 0), verk = Number(p.verkoopprijs || 0);
+  if (soort === "prijs") return verk > 0 ? verk : null;
+  if (soort === "marge") return margePctVan(p);
+  return ink > 0 && verk > 0 ? verk - ink : null;
+}
+
+/* Producten zonder bruikbare prijs komen altijd onderaan, in beide richtingen:
+   anders staan ze bovenaan met een schijnwinst. Gelijke waarden blijven op naam. */
+function sorteerVoorraad(lijst, keuze){
+  if (!keuze) return lijst;
+  const [soort, richting] = keuze.split(":");
+  const teken = richting === "op" ? 1 : -1;
+  return lijst
+    .map(p => ({ p, w: voorraadSorteerWaarde(p, soort) }))
+    .sort((a, b) => {
+      if (a.w === null || b.w === null) return (a.w === null) - (b.w === null);
+      return (a.w - b.w) * teken;
+    })
+    .map(x => x.p);
+}
 
 function renderVoorraad(){
   const filter = $("vFilter").value;
   const term = $("vZoek").value.trim().toLowerCase();
-  const lijst = cache.producten.filter(p => {
-    if (filter && p.categorie_id !== filter) return false;
+  const lijst = sorteerVoorraad(cache.producten.filter(p => {
+    if (filter === "geen" ? p.categorie_id : (filter && p.categorie_id !== filter)) return false;
     if (!term) return true;
     const hooi = [p.naam, p.volledige_naam, p.leverancier, catNaam(p.categorie_id)]
       .filter(Boolean).join(" ").toLowerCase();
     return term.split(/\s+/).every(woord => hooi.includes(woord));
-  });
+  }), $("vSorteer").value);
   const body = $("vBody");
   if (!lijst.length){
     body.innerHTML = '<tr><td colspan="8" class="leeg">Niets gevonden' + (filter || term ? " met dit filter" : " — voeg je eerste product toe") + '.</td></tr>';
@@ -5267,6 +5311,7 @@ function renderVoorraad(){
   body.innerHTML = lijst.map(p => {
     const marge = Number(p.verkoopprijs || 0) - Number(p.inkoopprijs || 0);
     const g = goedkoopsteVoor(p.id);
+    const pct = margePctVan(p);
     return '<tr class="klik" data-vid="' + p.id + '">' +
       '<td style="width:34px" data-geenklik="1"><input type="checkbox" class="vSel" data-sel="' + p.id + '"></td>' +
       '<td class="tekst">' + esc(p.naam) + '</td>' +
@@ -5274,7 +5319,7 @@ function renderVoorraad(){
       '<td class="r">' + (p.op_voorraad === false ? '<span class="chip grijs">DOORLOOP</span>' : Number(p.voorraad).toLocaleString("nl-NL") + ' ' + esc(p.eenheid || "") + verpakkingTekst(p)) + '</td>' +
       '<td class="r">' + eurP(p.inkoopprijs || 0) + '</td>' +
       '<td class="r">' + eurP(p.verkoopprijs || 0) + '</td>' +
-      '<td class="r" style="color:' + (marge > 0 ? "var(--groen)" : "var(--ink3)") + '">' + eurP(marge) + '</td>' +
+      '<td class="r" style="color:' + (marge > 0 ? "var(--groen)" : "var(--ink3)") + '">' + eurP(marge) + (pct === null ? "" : ' · ' + Math.round(pct).toLocaleString("nl-NL") + '%') + '</td>' +
       '<td class="tekst">' + (g ? esc(g.leverancier) + ' · ' + eurP(g.prijs) : "—") + '</td>' +
     '</tr>';
   }).join("");
