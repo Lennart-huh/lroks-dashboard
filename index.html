@@ -1096,7 +1096,7 @@ nav.onderbalk{display:none}
           <thead><tr><th>Datum</th><th>Wat</th><th>Soort</th><th class="r">Bedrag excl.</th><th class="r">Kostprijs</th><th class="r">Winst</th></tr></thead>
           <tbody id="mdOmzetBody"></tbody>
         </table></div>
-        <div class="hint" style="margin-bottom:20px">Kostprijs = het materiaal op de factuur tegen de inkoopprijs die nu bij het product staat. Uren en km hebben geen kostprijs; vaste lasten en overige kosten staan hieronder bij Kosten.</div>
+        <div class="hint" style="margin-bottom:20px">Kostprijs = het materiaal op de factuur tegen de inkoopprijs die nu bij het product staat. Uren en km hebben geen kostprijs; vaste lasten en overige kosten staan hieronder bij Kosten. Klik op het vraagteken bij een kostprijs om te zien wat erin zit.</div>
         <h3 style="font-size:.95rem;margin:0 0 10px">Kosten</h3>
         <div class="tbl-wrap" style="margin-bottom:20px"><table>
           <thead><tr><th>Datum</th><th>Wat</th><th>Soort</th><th class="r">Bedrag excl.</th></tr></thead>
@@ -1722,6 +1722,21 @@ nav.onderbalk{display:none}
             <table>
               <thead><tr><th>Datum</th><th>Omschrijving</th><th></th><th class="r">Bedrag excl.</th><th class="r">Btw</th></tr></thead>
               <tbody id="btwUitlegBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- pop-up: welke regels er in een kostprijs op het maandoverzicht zitten -->
+      <div class="overlay" id="kostUitlegOverlay">
+        <div class="form-card heeft-sluit">
+          <button type="button" class="knop klein stil sluitX" id="kostUitlegSluit" title="Sluiten">×</button>
+          <h3 style="font-size:.92rem;margin-bottom:4px" id="kostUitlegTitel">—</h3>
+          <div class="hint" style="margin-bottom:14px">Klik op een regel om het product of de factuur te openen. De kostprijs rekent met de inkoopprijs die nu bij het product staat: pas je die aan, dan verandert de kostprijs ook op eerdere facturen met dat product.</div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Product</th><th>Factuur</th><th class="r">Aantal</th><th class="r">Inkoop</th><th class="r">Kostprijs</th></tr></thead>
+              <tbody id="kostUitlegBody"></tbody>
             </table>
           </div>
         </div>
@@ -3311,8 +3326,12 @@ function maandPosten(jaar, maand){
   factData.forEach(f => {
     const excl = Number(f.bedrag_excl || 0);
     if (f.type === "verkoop"){
-      if (inMaand(f.datum)) omzet.push({ datum: f.datum, wat: "Factuur " + (f.nummer || "") + " · " + (klantNaam(f.klant_id) || "—"),
-        soort: "Factuur", bedrag: excl, kost: factuurKostprijs(f.id), open: () => { toonTab("facturen"); kiesFSub("fUit"); openFactuur(f.id); } });
+      if (inMaand(f.datum)){
+        const kostRegels = factuurKostprijsRegels(f.id);
+        omzet.push({ datum: f.datum, wat: "Factuur " + (f.nummer || "") + " · " + (klantNaam(f.klant_id) || "—"),
+          soort: "Factuur", bedrag: excl, kost: kostRegels.reduce((t, r) => t + r.kost, 0), kostRegels,
+          open: () => { toonTab("facturen"); kiesFSub("fUit"); openFactuur(f.id); } });
+      }
     } else if (f.type === "inkoop"){
       const jr = Number(f.afschrijf_jaren || 0);
       const fJaar = new Date(f.datum).getFullYear();
@@ -3348,16 +3367,50 @@ function maandPosten(jaar, maand){
   return { omzet: omzet.sort(opDatum), kosten: kosten.sort(opDatum) };
 }
 
-/* Inkoopwaarde van het materiaal op één verkoopfactuur (aantal x huidige inkoopprijs). */
-function factuurKostprijs(factuurId){
-  return (cache.regels || []).filter(r => r.factuur_id === factuurId && (r.mutatie_id || r.kostenpost)).reduce((t, r) => {
+/* De regels achter de kostprijs van één verkoopfactuur: materiaal tegen de
+   huidige inkoopprijs en doorberekende kosten tegen het bon-bedrag. */
+function factuurKostprijsRegels(factuurId){
+  return (cache.regels || []).filter(r => r.factuur_id === factuurId && (r.mutatie_id || r.kostenpost)).map(r => {
     // doorberekende kosten (tanken e.d.): kostprijs = bon-bedrag, zonder opslag
-    if (r.kostenpost) return t + Number(r.aantal || 0) * Number(r.kostprijs ?? r.prijs ?? 0);
+    if (r.kostenpost){
+      const aantal = Number(r.aantal || 0), inkoop = Number(r.kostprijs ?? r.prijs ?? 0);
+      return { naam: r.omschrijving || "Doorberekende kosten", productId: null, factuurId, aantal, eenheid: r.eenheid || "", inkoop, kost: aantal * inkoop };
+    }
     const m = (cache.mutaties || []).find(x => x.id === r.mutatie_id);
     const p = m && cache.producten.find(x => x.id === m.product_id);
-    return t + (p ? Math.abs(Number(m.aantal || 0)) * Number(p.inkoopprijs || 0) : 0);
-  }, 0);
+    const aantal = m ? Math.abs(Number(m.aantal || 0)) : Number(r.aantal || 0);
+    const inkoop = p ? Number(p.inkoopprijs || 0) : 0;
+    return { naam: p ? p.naam : (r.omschrijving || "Onbekend product"), productId: p ? p.id : null, factuurId, aantal, eenheid: p ? (p.eenheid || "") : (r.eenheid || ""), inkoop, kost: aantal * inkoop };
+  });
 }
+
+/* Pop-up achter het vraagteken bij een kostprijs: wat er precies in zit.
+   Een klik op een regel opent het product (of de factuur) om het aan te passen. */
+function toonKostprijsUitleg(titel, regels){
+  const lijst = regels.slice().sort((a, b) => b.kost - a.kost);
+  const factuurNr = id => { const f = factData.find(x => x.id === id); return f ? f.nummer || "—" : "—"; };
+  $("kostUitlegTitel").textContent = "Kostprijs · " + titel;
+  $("kostUitlegBody").innerHTML = lijst.map((r, i) =>
+    '<tr class="klik" data-kui="' + i + '" title="' + (r.productId ? "Product openen om de inkoopprijs aan te passen" : "Factuur openen") + '">' +
+      '<td class="tekst">' + esc(r.naam) + '</td>' +
+      '<td class="tekst">' + esc(factuurNr(r.factuurId)) + '</td>' +
+      '<td class="r">' + r.aantal.toLocaleString("nl-NL") + ' ' + esc(r.eenheid) + '</td>' +
+      '<td class="r">' + (r.inkoop > 0 ? eurP(r.inkoop) : '<span class="chip amber">GEEN PRIJS</span>') + '</td>' +
+      '<td class="r">' + eur2(r.kost) + '</td></tr>').join("") +
+    '<tr style="border-top:2px solid var(--line)"><td colspan="4"><b>Totaal</b></td><td class="r"><b>' +
+      eur2(lijst.reduce((t, r) => t + r.kost, 0)) + '</b></td></tr>';
+  $("kostUitlegBody").querySelectorAll("[data-kui]").forEach(rij => rij.addEventListener("click", () => {
+    const r = lijst[Number(rij.dataset.kui)];
+    $("kostUitlegOverlay").classList.remove("open");
+    if (r.productId) openProductInVoorraad(r.productId);
+    else { toonTab("facturen"); kiesFSub("fUit"); openFactuur(r.factuurId); }
+  }));
+  $("kostUitlegOverlay").classList.add("open");
+}
+$("kostUitlegSluit").addEventListener("click", () => $("kostUitlegOverlay").classList.remove("open"));
+$("kostUitlegOverlay").addEventListener("click", e => {
+  if (e.target === $("kostUitlegOverlay")) $("kostUitlegOverlay").classList.remove("open");
+});
 
 function openMaandDetail(jaar, maand){
   mdJaar = jaar; mdMaand = maand;
@@ -3378,19 +3431,29 @@ function renderMaandDetail(){
   $("mdMarge").textContent = o > 0 ? Math.round(w / o * 100) + "%" : "—";
   const tabel = (id, lijst, leeg, metWinst) => {
     const kostTot = lijst.reduce((t, p) => t + (p.kost || 0), 0);
-    const extra = p => !metWinst ? '' : p.kost === undefined
+    const alleKostRegels = lijst.flatMap(p => p.kostRegels || []);
+    const vraag = (attr, aanwezig) => !aanwezig ? '' :
+      '<button type="button" class="info-vraag" ' + attr + ' title="Bekijk wat er in deze kostprijs zit">?</button> ';
+    const extra = (p, i) => !metWinst ? '' : p.kost === undefined
       ? '<td class="r" style="color:var(--ink3)">—</td><td class="r">' + eur2(p.bedrag) + '</td>'
-      : '<td class="r">' + eur2(p.kost) + '</td><td class="r">' + eur2(p.bedrag - p.kost) +
+      : '<td class="r">' + vraag('data-mdk="' + i + '"', p.kostRegels.length) + eur2(p.kost) + '</td><td class="r">' + eur2(p.bedrag - p.kost) +
         (p.bedrag > 0 ? ' <span style="color:var(--ink3);font-size:.75rem">(' + Math.round((p.bedrag - p.kost) / p.bedrag * 100) + '%)</span>' : '') + '</td>';
     $(id).innerHTML = !lijst.length
       ? '<tr><td colspan="' + (metWinst ? 6 : 4) + '" class="leeg">' + leeg + '</td></tr>'
       : lijst.map((p, i) => '<tr class="klik" data-mdi="' + i + '"><td>' + fmtDatum(p.datum) + '</td>' +
           '<td class="tekst">' + esc(p.wat) + '</td>' +
           '<td><span class="chip grijs">' + esc(p.soort).toUpperCase() + '</span></td>' +
-          '<td class="r">' + eur2(p.bedrag) + '</td>' + extra(p) + '</tr>').join("") +
+          '<td class="r">' + eur2(p.bedrag) + '</td>' + extra(p, i) + '</tr>').join("") +
         '<tr style="border-top:2px solid var(--line)"><td colspan="3"><b>Totaal</b></td><td class="r"><b>' + eur2(som(lijst)) + '</b></td>' +
-        (metWinst ? '<td class="r"><b>' + eur2(kostTot) + '</b></td><td class="r"><b>' + eur2(som(lijst) - kostTot) + '</b></td>' : '') + '</tr>';
+        (metWinst ? '<td class="r">' + vraag('data-mdktot="1"', alleKostRegels.length) + '<b>' + eur2(kostTot) + '</b></td><td class="r"><b>' + eur2(som(lijst) - kostTot) + '</b></td>' : '') + '</tr>';
     $(id).querySelectorAll("[data-mdi]").forEach(r => r.addEventListener("click", () => lijst[Number(r.dataset.mdi)].open()));
+    $(id).querySelectorAll("[data-mdk]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation(); // de rij zelf opent de factuur
+      const p = lijst[Number(b.dataset.mdk)];
+      toonKostprijsUitleg(p.wat, p.kostRegels);
+    }));
+    $(id).querySelectorAll("[data-mdktot]").forEach(b => b.addEventListener("click", () =>
+      toonKostprijsUitleg(MAAND_NAMEN[mdMaand] + " " + mdJaar, alleKostRegels)));
   };
   tabel("mdOmzetBody", omzet, "Geen omzet in deze maand.", true);
   tabel("mdKostenBody", kosten, "Geen kosten in deze maand.");
