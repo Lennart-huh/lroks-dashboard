@@ -1107,7 +1107,22 @@ nav.onderbalk{display:none}
       <!-- ========== OFFERTES ========== -->
       <div class="tab" id="tab-offertes">
         <div class="tab-kop"><h2>Offertes</h2>
-          <button class="knop klein" id="offNieuw">+ Nieuwe offerte</button></div>
+          <div style="display:flex;gap:8px">
+            <button class="knop klein stil" id="cuOpen">ClickUp</button>
+            <button class="knop klein" id="offNieuw">+ Nieuwe offerte</button></div></div>
+        <div class="form-card" id="cuBlok" style="display:none;margin-bottom:18px;max-width:680px">
+          <div class="veld"><label>Offertes uit ClickUp</label>
+            <div class="hint" style="margin-top:0">Elke nieuwe taak in de gekoppelde ClickUp-lijst wordt automatisch uitgerekend — op basis van je eerdere offertes, wat klussen werkelijk kostten en je productprijzen — en staat daarna hieronder als concept. Er gaat niets vanzelf naar de klant.</div>
+            <div id="cuStatus" style="margin-top:10px;font-size:.88rem">Even kijken…</div></div>
+          <div class="veld" id="cuLijstVeld"><label>Link van de ClickUp-lijst</label>
+            <input type="text" id="cuLijst" placeholder="https://app.clickup.com/…/v/li/…" autocomplete="off">
+            <div class="hint">Open de lijst in ClickUp en kopieer de link uit de adresbalk.</div></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="knop klein" id="cuKoppel">Koppelen</button>
+            <button class="knop klein gevaar" id="cuOntkoppel" style="display:none">Ontkoppelen</button>
+            <button class="knop klein stil" id="cuSluit">Sluiten</button>
+          </div>
+        </div>
         <div class="form-card" id="offDetail" style="display:none;margin-bottom:18px;max-width:680px">
           <div class="rij2">
             <div class="veld"><label>Offertenummer</label><input type="text" id="offNummer"></div>
@@ -1202,6 +1217,14 @@ nav.onderbalk{display:none}
               <thead><tr><th>Product</th><th class="r">Nodig</th><th class="r">Op voorraad</th><th></th></tr></thead>
               <tbody id="offBestelBody"></tbody>
             </table></div>
+          </div>
+          <div class="veld" id="offAiBlok" style="display:none"><label>Berekening uit ClickUp</label>
+            <div id="offAiTekst" style="white-space:pre-wrap;font-size:.86rem;line-height:1.5;background:var(--surface2);border-radius:8px;padding:12px 14px"></div>
+            <div class="hint">Alleen voor jou — dit komt niet op de offerte. Kijk de regels en bedragen na voordat je hem verstuurt.</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+              <a class="knop klein stil" id="offAiLink" target="_blank" rel="noopener" style="text-decoration:none">Open taak in ClickUp</a>
+              <button type="button" class="knop klein stil" id="offAiOpnieuw">Opnieuw uitrekenen</button>
+            </div>
           </div>
           <div class="veld"><label>Notities</label><input type="text" id="offNotities"></div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -2011,6 +2034,8 @@ function toonTab(naam, viaMenu){
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("actief"));
   const doel = $("tab-" + naam);
   if (doel) doel.classList.add("actief");
+  // offertes uit ClickUp komen buiten het dashboard om binnen
+  if (naam === "offertes" && van !== naam && db) herlaadOffertes();
   document.querySelectorAll("[data-tab]").forEach(k =>
     k.classList.toggle("actief", k.dataset.tab === naam));
   $("meerSheet").classList.remove("open");
@@ -2878,7 +2903,7 @@ const AS_SCHEMA = [
   "project_verwacht_materiaal: project_id, product_id, naam, aantal",
   "uren: datum, tijd, soort (werk/reis/kantoor), aantal, tarief, project_id, klant_id, klus_id, omschrijving, gefactureerd",
   "km_registratie: datum, tijd, km_stand, omschrijving, klant_id, project_id, klus_id, zakelijk, km_prijs, gefactureerd",
-  "offertes: id, nummer, naam, klant_id, project_id, datum, geldig_tot, status, bedrag_excl, btw_bedrag, bedrag_incl, prijstype, geschat_uren, geschat_km",
+  "offertes: id, nummer, naam, klant_id, project_id, datum, geldig_tot, status, bedrag_excl, btw_bedrag, bedrag_incl, prijstype, geschat_uren, geschat_km, clickup_task_id (gevuld = automatisch uitgerekend uit een ClickUp-taak), clickup_url, ai_onderbouwing (hoe die berekening is opgebouwd)",
   "offerte_regels: offerte_id, omschrijving, eenheid, aantal, prijs, product_id",
   "vaste_lasten: naam, bedrag, interval_aantal, interval_eenheid, start_datum, actief, categorie",
   "financiele_correcties: type, omschrijving, bedrag_excl, btw, datum",
@@ -8245,7 +8270,7 @@ function renderOffertes(){
   body.innerHTML = offerteData.map(o =>
     '<tr class="klik" data-ofid="' + o.id + '">' +
       '<td>' + esc(o.nummer || "") + '</td>' +
-      '<td class="tekst">' + esc(o.naam || "") + '</td>' +
+      '<td class="tekst">' + esc(o.naam || "") + (o.clickup_task_id ? ' <span class="chip grijs">CLICKUP</span>' : '') + '</td>' +
       '<td class="tekst">' + esc(klantNaam(o.klant_id) || "—") + '</td>' +
       '<td>' + fmtDatum(o.datum) + '</td>' +
       '<td>' + chip(o.status) + '</td>' +
@@ -8464,6 +8489,7 @@ function offerteFormLeeg(){
   $("offNotities").value = "";
   $("offVerwijder").style.display = "none";
   $("offAccepteren").style.display = "none";
+  toonOffAi(null);
   offProductZoekReset();
   toonOffRegels();
 }
@@ -8473,6 +8499,93 @@ $("offNieuw").addEventListener("click", () => {
   window.scrollTo(0, 0);
 });
 $("offSluit").addEventListener("click", () => { $("offDetail").style.display = "none"; });
+
+/* ---- Offertes uit ClickUp ----
+   Een nieuwe taak in de gekoppelde ClickUp-lijst wordt op de server
+   uitgerekend (edge function 'clickup-offerte') en komt hier als concept
+   binnen, met in ai_onderbouwing hoe het bedrag is opgebouwd. Het dashboard
+   beheert alleen de koppeling en laat de berekening zien. */
+async function clickupVraag(body){
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) throw new Error("Je sessie is verlopen — log opnieuw in");
+  const antwoord = await fetch(SUPABASE_URL + "/functions/v1/clickup-offerte", {
+    method: "POST",
+    headers: { "content-type": "application/json", "authorization": "Bearer " + session.access_token },
+    body: JSON.stringify(body)
+  });
+  const data = await antwoord.json().catch(() => ({}));
+  if (!antwoord.ok) throw new Error((data.error && data.error.message) || "Fout " + antwoord.status);
+  return data;
+}
+
+function toonClickupStatus(s){
+  $("cuOntkoppel").style.display = s.gekoppeld ? "inline-block" : "none";
+  $("cuKoppel").textContent = s.gekoppeld ? "Andere lijst koppelen" : "Koppelen";
+  let tekst = !s.token_aanwezig
+    ? "Nog niet ingesteld: de ClickUp-sleutel (CLICKUP_API_TOKEN) staat nog niet bij de secrets in Supabase."
+    : s.gekoppeld ? "Gekoppeld aan lijst '" + (s.lijst_naam || s.lijst_id) + "'."
+    : "Nog niet gekoppeld.";
+  if (s.laatste_fout) tekst += "\nLaatste fout (" + fmtDatum(String(s.laatste_fout_op || "").slice(0, 10)) + "): " + s.laatste_fout;
+  $("cuStatus").textContent = tekst;
+  $("cuStatus").style.whiteSpace = "pre-wrap";
+}
+async function clickupActie(body, knop, klaarTekst){
+  if (knop) knop.disabled = true;
+  try {
+    toonClickupStatus(await clickupVraag(body));
+    if (klaarTekst) toast(klaarTekst);
+  } catch (e){
+    console.error(e);
+    $("cuStatus").textContent = "Mislukt: " + e.message;
+  }
+  if (knop) knop.disabled = false;
+}
+$("cuOpen").addEventListener("click", () => {
+  const open = $("cuBlok").style.display === "none";
+  $("cuBlok").style.display = open ? "block" : "none";
+  if (open){ $("cuStatus").textContent = "Even kijken…"; clickupActie({ actie: "status" }); }
+});
+$("cuSluit").addEventListener("click", () => { $("cuBlok").style.display = "none"; });
+$("cuKoppel").addEventListener("click", () => {
+  const lijst = $("cuLijst").value.trim();
+  if (!lijst) { toast("Plak eerst de link van de lijst"); return; }
+  clickupActie({ actie: "koppel", lijst }, $("cuKoppel"), "ClickUp gekoppeld").then(() => { $("cuLijst").value = ""; });
+});
+$("cuOntkoppel").addEventListener("click", () => {
+  if (!confirm("ClickUp ontkoppelen? Nieuwe taken worden dan niet meer uitgerekend. Bestaande offertes blijven staan.")) return;
+  clickupActie({ actie: "ontkoppel" }, $("cuOntkoppel"), "ClickUp ontkoppeld");
+});
+
+/* De berekening bij een offerte die uit ClickUp komt. Opnieuw uitrekenen kan
+   alleen zolang het een concept zonder project is — de server weigert het
+   anders ook. */
+function toonOffAi(o){
+  const heeft = !!(o && o.clickup_task_id);
+  $("offAiBlok").style.display = heeft ? "block" : "none";
+  if (!heeft) return;
+  $("offAiTekst").textContent = o.ai_onderbouwing || "Geen onderbouwing opgeslagen.";
+  const link = /^https:\/\//.test(o.clickup_url || "") ? o.clickup_url : "";
+  $("offAiLink").style.display = link ? "inline-block" : "none";
+  if (link) $("offAiLink").href = link; else $("offAiLink").removeAttribute("href");
+  $("offAiOpnieuw").style.display = (o.status || "concept") === "concept" && !o.project_id ? "inline-block" : "none";
+}
+$("offAiOpnieuw").addEventListener("click", async () => {
+  const o = offerteData.find(x => x.id === bewerkOfferteId);
+  if (!o || !o.clickup_task_id) return;
+  if (!confirm("De taak opnieuw uit ClickUp halen en uitrekenen? De regels en bedragen van dit concept worden overschreven, ook wat je zelf hebt aangepast.")) return;
+  const knop = $("offAiOpnieuw");
+  knop.disabled = true; knop.textContent = "Bezig… (1–2 minuten)";
+  try {
+    await clickupVraag({ actie: "reken", task_id: o.clickup_task_id });
+    toast("Opnieuw uitgerekend");
+  } catch (e){
+    console.error(e);
+    toast("Uitrekenen mislukt: " + e.message);
+  }
+  knop.disabled = false; knop.textContent = "Opnieuw uitrekenen";
+  await herlaadOffertes();
+  if (bewerkOfferteId === o.id) await openOfferte(o.id);
+});
 
 async function openOfferte(id){
   const o = offerteData.find(x => x.id === id);
@@ -8505,6 +8618,7 @@ async function openOfferte(id){
   // zet je apart via de knop hieronder) — dus die blijft zichtbaar tot er
   // echt een project aan hangt, anders kom je vast te zitten
   $("offAccepteren").style.display = o.project_id ? "none" : "inline-block";
+  toonOffAi(o);
   const { data } = await db.from("offerte_regels").select("*").eq("offerte_id", id).order("aangemaakt_op");
   offerteRegels = (data || []).map(r => ({
     omschrijving: r.omschrijving, eenheid: r.eenheid, aantal: Number(r.aantal), prijs: Number(r.prijs), product_id: r.product_id

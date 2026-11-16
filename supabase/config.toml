@@ -1,0 +1,6 @@
+# ClickUp kan niet inloggen op het dashboard, dus deze functie mag Supabase
+# niet zelf op een login laten controleren. De functie doet het zelf: een
+# melding van ClickUp moet de juiste handtekening hebben, en alles wat het
+# dashboard vraagt moet van de eigenaar komen, mét authenticator-code.
+[functions.clickup-offerte]
+verify_jwt = false
