@@ -1727,18 +1727,54 @@ nav.onderbalk{display:none}
           <div class="card groen"><div class="k">Naar privé</div><div class="v" id="bwNetto">—</div><div class="m">na belasting</div></div>
           <div class="card"><div class="k">Opzij zetten</div><div class="v" id="bwOpzij">—</div><div class="m">per maand</div></div>
         </div>
+        <h3 style="font-size:.95rem;margin:0 0 10px">Per kwartaal</h3>
         <div class="tbl-wrap" style="margin-bottom:20px">
           <table>
-            <thead><tr><th>Periode</th><th class="r">Winst</th><th class="r">Belasting</th><th class="r">Naar privé</th></tr></thead>
+            <thead><tr><th>Periode</th><th class="r">Winst</th><th class="r">Belasting</th><th class="r">Naar privé</th><th class="r">%</th></tr></thead>
             <tbody id="bwKwartaalBody"></tbody>
           </table>
         </div>
-        <div class="form-card">
-          <div class="veld"><label>Belastingpercentage over je winst (%)</label>
-            <input type="number" id="bwPct" min="0" max="100" step="0.5" inputmode="decimal">
-            <div class="hint">Een grove schatting van inkomstenbelasting plus premies. Aftrekposten zoals de zelfstandigenaftrek en de MKB-winstvrijstelling zitten hier niet in — vraag je boekhouder om een percentage dat bij jou past.</div>
+        <div id="bwTariefBlok">
+          <h3 style="font-size:.95rem;margin:0 0 10px">Schijven <span id="bwTariefJaar"></span> — wat je per schijf betaalt</h3>
+          <div class="tbl-wrap" style="margin-bottom:6px">
+            <table>
+              <thead><tr><th>Schijf</th><th>Inkomen</th><th class="r">Tarief</th><th class="r">Jouw inkomen erin</th><th class="r">Belasting</th></tr></thead>
+              <tbody id="bwSchijvenBody"></tbody>
+            </table>
           </div>
-          <button class="knop" id="bwOpslaan">Percentage opslaan</button>
+          <div class="hint" id="bwMarginaal" style="margin-bottom:20px"></div>
+          <h3 style="font-size:.95rem;margin:0 0 10px">Zo wordt je belasting berekend</h3>
+          <div class="tbl-wrap" style="margin-bottom:6px">
+            <table>
+              <thead><tr><th>Post</th><th class="r">Percentage</th><th class="r">Bedrag</th></tr></thead>
+              <tbody id="bwBerekeningBody"></tbody>
+            </table>
+          </div>
+          <div class="hint" id="bwBronHint" style="margin-bottom:20px"></div>
+        </div>
+        <div class="form-card">
+          <div id="bwSituatie">
+            <div class="veld"><label>Urencriterium (1.225 uur per jaar aan je bedrijf)</label>
+              <div class="schakel">
+                <button type="button" id="bwUrenJa">Haal ik</button>
+                <button type="button" id="bwUrenNee">Haal ik niet</button>
+              </div>
+              <div class="hint">Alleen als je het urencriterium haalt krijg je de zelfstandigenaftrek (en eventueel de startersaftrek). De mkb-winstvrijstelling krijg je altijd.</div>
+            </div>
+            <div class="veld"><label>Startersaftrek</label>
+              <div class="schakel">
+                <button type="button" id="bwStarterJa">Heb ik recht op</button>
+                <button type="button" id="bwStarterNee">Niet</button>
+              </div>
+              <div class="hint">Max. 3 keer in je eerste 5 jaar als ondernemer, en alleen samen met het urencriterium.</div>
+            </div>
+          </div>
+          <div class="veld" id="bwPctVeld"><label>Belastingpercentage over je winst (%)</label>
+            <input type="number" id="bwPct" min="0" max="100" step="0.5" inputmode="decimal">
+            <div class="hint">Voor dit jaar staan er geen tarieven in de app, dus rekent hij met één vast percentage over je winst.</div>
+          </div>
+          <button class="knop" id="bwOpslaan">Opslaan</button>
+          <div class="hint" style="margin-top:10px">Een schatting voor je eenmanszaak, alsof de winst je enige inkomen is en je de AOW-leeftijd nog niet hebt. Heb je ook loon, een partner met wie je posten verdeelt, of box 3-vermogen, dan wijkt je echte aanslag af.</div>
         </div>
       </div>
       <div class="tab" id="tab-btw">
@@ -7693,26 +7729,160 @@ $("ocToevoegen").addEventListener("click", async () => {
   renderFinancieel(); renderHoofd();
 });
 
+/* Inkomstenbelasting box 1 voor een eenmanszaak, per jaar. Alleen jaren
+   waarvan de tarieven hier staan worden echt doorgerekend; voor andere jaren
+   valt de Belasting-tab terug op het vaste percentage (belasting_percentage).
+   Cijfers 2026: Belastingdienst (heffingskortingen) en KVK (schijven,
+   ondernemersaftrek, Zvw). Uitgangspunt: jonger dan de AOW-leeftijd, winst
+   is het enige inkomen. */
+const IB_TARIEVEN = {
+  2026: {
+    schijven: [
+      { tot: 38883, pct: 35.75 },
+      { tot: 78426, pct: 37.56 },
+      { tot: Infinity, pct: 49.50 }
+    ],
+    zelfstandigenaftrek: 1200,
+    startersaftrek: 2123,
+    mkbPct: 12.70,
+    // algemene heffingskorting: vol tot 'vanaf', daarna af met afbouwPct
+    ahk: { max: 3115, vanaf: 29736, afbouwPct: 6.398 },
+    // arbeidskorting: [tot, vast bedrag, % over het deel boven 'van', van]
+    ak: [
+      { tot: 11965,  vast: 0,    pct: 8.324,  van: 0 },
+      { tot: 25845,  vast: 996,  pct: 31.009, van: 11965 },
+      { tot: 45592,  vast: 5300, pct: 1.950,  van: 25845 },
+      { tot: 132920, vast: 5685, pct: -6.510, van: 45592 }
+    ],
+    zvw: { pct: 4.85, max: 79409 }
+  }
+};
+
+function berekenIB(winst, t, opties){
+  const W = Math.max(0, winst);
+  const zelfst = opties.uren ? Math.min(W, t.zelfstandigenaftrek) : 0;
+  const starter = opties.uren && opties.starter ? Math.min(W - zelfst, t.startersaftrek) : 0;
+  const naOA = W - zelfst - starter;
+  const mkb = naOA * t.mkbPct / 100;
+  const belastbaar = naOA - mkb;
+
+  let onder = 0;
+  const schijven = t.schijven.map(s => {
+    const deel = Math.max(0, Math.min(belastbaar, s.tot) - onder);
+    const r = { van: onder, tot: s.tot, pct: s.pct, deel, belasting: deel * s.pct / 100 };
+    onder = s.tot;
+    return r;
+  });
+  const ibBruto = somArr(schijven.map(s => s.belasting));
+  // aftrekbeperking: ondernemersaftrek en mkb-winstvrijstelling leveren in de
+  // toptarief-schijf maar het tarief van schijf 2 op
+  const g2 = t.schijven[1].tot, top = t.schijven[2].pct - t.schijven[1].pct;
+  const beperking = Math.min(zelfst + starter + mkb, Math.max(0, belastbaar - g2)) * top / 100;
+
+  const ahk = belastbaar <= t.ahk.vanaf ? t.ahk.max
+    : Math.max(0, t.ahk.max - (belastbaar - t.ahk.vanaf) * t.ahk.afbouwPct / 100);
+  // arbeidsinkomen van een ondernemer: winst vóór ondernemersaftrek en mkb-vrijstelling
+  const tr = t.ak.find(x => W <= x.tot);
+  const ak = tr ? Math.max(0, tr.vast + (W - tr.van) * tr.pct / 100) : 0;
+  const ibVoorKorting = ibBruto + beperking;
+  // kortingen kunnen de belasting niet onder nul brengen
+  const kortingen = Math.min(ibVoorKorting, ahk + ak);
+  const ib = ibVoorKorting - kortingen;
+  const zvw = Math.min(belastbaar, t.zvw.max) * t.zvw.pct / 100;
+  return { W, zelfst, starter, mkb, belastbaar, schijven, beperking, ahk, ak, kortingen,
+    ahkGebruikt: Math.min(ahk, ibVoorKorting), akGebruikt: kortingen - Math.min(ahk, ibVoorKorting),
+    ib, zvw, totaal: ib + zvw };
+}
+
+let bwUren = null, bwStarter = null;   // keuze in het formulier, nog niet opgeslagen
+const bwOpties = () => ({
+  uren: bwUren ?? (cache.inst.belasting_urencriterium !== "nee"),
+  starter: bwStarter ?? (cache.inst.belasting_startersaftrek === "ja")
+});
+$("bwUrenJa").addEventListener("click", () => { bwUren = true; renderBelasting(); });
+$("bwUrenNee").addEventListener("click", () => { bwUren = false; renderBelasting(); });
+$("bwStarterJa").addEventListener("click", () => { bwStarter = true; renderBelasting(); });
+$("bwStarterNee").addEventListener("click", () => { bwStarter = false; renderBelasting(); });
+
 function renderBelasting(){
   const jaar = vulJaarKeuze("bwJaar");
   const f = financieelJaar(jaar);
+  const t = IB_TARIEVEN[jaar];
+  const opt = bwOpties();
   const pct = Number(cache.inst.belasting_percentage || 35);
   if (document.activeElement !== $("bwPct")) $("bwPct").value = pct;
-  const bel = w => Math.max(0, w) * pct / 100;
   const winstJ = somArr(f.omzet) - somArr(f.kosten);
+  const pctTxt = n => n.toLocaleString("nl-NL", { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + "%";
+
+  $("bwTariefBlok").style.display = t ? "" : "none";
+  $("bwSituatie").style.display = t ? "" : "none";
+  $("bwPctVeld").style.display = t ? "none" : "";
+  (opt.uren ? schakel : (a, b) => schakel(b, a))("bwUrenJa", "bwUrenNee");
+  (opt.starter ? schakel : (a, b) => schakel(b, a))("bwStarterJa", "bwStarterNee");
+  ["bwStarterJa", "bwStarterNee"].forEach(id => $(id).disabled = !opt.uren);
+
+  const r = t ? berekenIB(winstJ, t, opt) : null;
+  const totaal = r ? r.totaal : Math.max(0, winstJ) * pct / 100;
+  const eff = winstJ > 0 ? totaal / winstJ * 100 : 0;
 
   $("bwWinst").textContent = eur(winstJ);
-  $("bwBelasting").textContent = eur(bel(winstJ));
-  $("bwPctSub").textContent = pct + "% van je winst";
-  $("bwNetto").textContent = eur(winstJ - bel(winstJ));
-  $("bwOpzij").textContent = eur(bel(winstJ) / 12);
+  $("bwBelasting").textContent = eur(totaal);
+  $("bwPctSub").textContent = r ? pctTxt(eff) + " van je winst · tarieven " + jaar : pct + "% van je winst";
+  $("bwNetto").textContent = eur(winstJ - totaal);
+  $("bwOpzij").textContent = eur(totaal / 12);
 
-  const rij = (naam, w, extra) =>
-    '<tr' + (extra || '') + '><td>' + naam + '</td><td class="r">' + eur2(w) + '</td>' +
-    '<td class="r">' + eur2(bel(w)) + '</td><td class="r">' + eur2(w - bel(w)) + '</td></tr>';
+  // per kwartaal: de jaarbelasting naar rato van de winst in dat kwartaal
+  // (zo telt een verliesgevend kwartaal mee en klopt de optelsom met het jaar)
+  const deelVan = w => winstJ > 0 ? totaal * w / winstJ : 0;
+  const rij = (naam, w, extra) => {
+    const b = deelVan(w);
+    return '<tr' + (extra || '') + '><td>' + naam + '</td><td class="r">' + eur2(w) + '</td>' +
+      '<td class="r">' + eur2(b) + '</td><td class="r">' + eur2(w - b) + '</td>' +
+      '<td class="r">' + (w > 0 ? pctTxt(b / w * 100) : "—") + '</td></tr>';
+  };
   $("bwKwartaalBody").innerHTML =
     KWARTAAL_NAMEN.map((n, i) => rij(n, f.omzet[i] - f.kosten[i])).join("") +
     rij("<b>Heel " + jaar + "</b>", winstJ, ' style="border-top:2px solid var(--line)"');
+
+  if (!r) return;
+  $("bwTariefJaar").textContent = jaar;
+  $("bwSchijvenBody").innerHTML = r.schijven.map((s, i) =>
+    '<tr' + (s.deel > 0 ? '' : ' style="color:var(--ink3)"') + '><td>Schijf ' + (i + 1) + '</td>' +
+    '<td>' + (s.tot === Infinity ? "vanaf " + eur(s.van) : eur(s.van) + " – " + eur(s.tot)) + '</td>' +
+    '<td class="r">' + pctTxt(s.pct) + '</td>' +
+    '<td class="r">' + eur2(s.deel) + '</td><td class="r">' + eur2(s.belasting) + '</td></tr>').join("") +
+    '<tr style="border-top:2px solid var(--line)"><td><b>Totaal</b></td><td></td><td></td>' +
+    '<td class="r"><b>' + eur2(r.belastbaar) + '</b></td><td class="r"><b>' + eur2(somArr(r.schijven.map(s => s.belasting))) + '</b></td></tr>';
+
+  const marg = (berekenIB(winstJ + 100, t, opt).totaal - r.totaal);
+  $("bwMarginaal").innerHTML = winstJ > 0
+    ? "Over elke extra <b>€ 100</b> winst betaal je nu ongeveer <b>" + eur2(marg) + "</b> (" + pctTxt(marg) + ") — belasting, Zvw en het afbouwen van je heffingskortingen samen."
+    : "";
+
+  const regel = (naam, p, bedrag, stijl) =>
+    '<tr' + (stijl || '') + '><td>' + naam + '</td><td class="r">' + (p || "") + '</td><td class="r">' + bedrag + '</td></tr>';
+  const min = n => n > 0 ? "− " + eur2(n) : eur2(0);
+  const streep = ' style="border-top:2px solid var(--line)"';
+  $("bwBerekeningBody").innerHTML = [
+    regel("Winst " + jaar, "", eur2(winstJ)),
+    regel("Zelfstandigenaftrek" + (opt.uren ? "" : " <span style='color:var(--ink3)'>(urencriterium niet gehaald)</span>"), "", min(r.zelfst)),
+    opt.uren && opt.starter ? regel("Startersaftrek", "", min(r.starter)) : "",
+    regel("Mkb-winstvrijstelling", pctTxt(t.mkbPct), min(r.mkb)),
+    regel("<b>Belastbaar inkomen</b>", "", "<b>" + eur2(r.belastbaar) + "</b>", streep),
+    ...r.schijven.filter(s => s.deel > 0).map((s, i) =>
+      regel("Inkomstenbelasting schijf " + (i + 1) + " over " + eur2(s.deel), pctTxt(s.pct), eur2(s.belasting))),
+    r.beperking > 0 ? regel("Aftrekbeperking (aftrekposten maar tegen " + pctTxt(t.schijven[1].pct) + ")", pctTxt(t.schijven[2].pct - t.schijven[1].pct), eur2(r.beperking)) : "",
+    regel("Algemene heffingskorting", "", min(r.ahkGebruikt)),
+    regel("Arbeidskorting", "", min(r.akGebruikt)),
+    regel("<b>Inkomstenbelasting</b>", "", "<b>" + eur2(r.ib) + "</b>", streep),
+    regel("Zvw-bijdrage over " + eur2(Math.min(r.belastbaar, t.zvw.max)), pctTxt(t.zvw.pct), eur2(r.zvw)),
+    regel("<b>Totaal te betalen</b>", "<b>" + pctTxt(eff) + "</b>", "<b>" + eur2(r.totaal) + "</b>", streep)
+  ].join("");
+  $("bwBronHint").innerHTML = "Tarieven " + jaar + ": schijven " + t.schijven.map(s => pctTxt(s.pct)).join(" / ") +
+    ", zelfstandigenaftrek " + eur(t.zelfstandigenaftrek) + ", startersaftrek " + eur(t.startersaftrek) +
+    ", mkb-winstvrijstelling " + pctTxt(t.mkbPct) + ", algemene heffingskorting max " + eur(t.ahk.max) +
+    ", arbeidskorting max " + eur(t.ak[3].vast) + ", Zvw " + pctTxt(t.zvw.pct) + " tot " + eur(t.zvw.max) +
+    ". Het percentage per kwartaal is je jaarbelasting naar rato van de winst in dat kwartaal.";
 }
 
 function renderBtw(){
@@ -7965,8 +8135,12 @@ $("owDoelenOpslaan").addEventListener("click", () => bewaarInstellingen([
 $("bwOpslaan").addEventListener("click", () => {
   const pct = parseFloat($("bwPct").value);
   if (!(pct >= 0 && pct <= 100)) { toast("Vul een percentage tussen 0 en 100 in"); return; }
-  bewaarInstellingen([{ sleutel: "belasting_percentage", waarde: String(pct) }],
-    "bwOpslaan", "Percentage opgeslagen", renderBelasting);
+  const opt = bwOpties();
+  bewaarInstellingen([
+    { sleutel: "belasting_percentage", waarde: String(pct) },
+    { sleutel: "belasting_urencriterium", waarde: opt.uren ? "ja" : "nee" },
+    { sleutel: "belasting_startersaftrek", waarde: opt.starter ? "ja" : "nee" }
+  ], "bwOpslaan", "Opgeslagen", () => { bwUren = bwStarter = null; renderBelasting(); });
 });
 
 /* ---- bedrijfsgegevens ---- */
