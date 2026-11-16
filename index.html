@@ -154,6 +154,20 @@ td.tekst{font-family:'Archivo',sans-serif;font-weight:500;white-space:normal}
 td.r,th.r{text-align:right}
 tbody tr.klik{cursor:pointer}
 tbody tr.klik:hover td{background:var(--surface2)}
+/* offertes: op een breed scherm de lijst links en de open offerte rechts */
+.layout.breed{max-width:1640px}
+#offLeeg,.of-klant-klein{display:none}
+tbody tr.actief td{background:var(--surface2)}
+tbody tr.actief td:first-child{box-shadow:inset 3px 0 0 var(--ink)}
+@media(min-width:1100px){
+  .of-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:20px;align-items:start}
+  .of-split > .of-lijst{order:1}
+  .of-split > #offDetail,.of-split > #offLeeg{order:2;max-width:none!important;margin-bottom:0!important;
+    position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto}
+  #offLeeg:not(.verborgen){display:block}
+  .of-lijst .of-klant{display:none}
+  .of-lijst .of-klant-klein{display:block;font-size:.74rem;color:var(--ink3);margin-top:2px}
+}
 .chip{display:inline-block;padding:3px 9px;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:.66rem;font-weight:600;letter-spacing:.04em}
 .chip.groen{background:var(--groen-bg);color:var(--groen)}
 .chip.amber{background:var(--amber-bg);color:var(--amber)}
@@ -1108,6 +1122,8 @@ nav.onderbalk{display:none}
       <div class="tab" id="tab-offertes">
         <div class="tab-kop"><h2>Offertes</h2>
           <button class="knop klein" id="offNieuw">+ Nieuwe offerte</button></div>
+        <div class="of-split">
+        <div class="straks" id="offLeeg">Kies links een offerte om hem hier te openen, of maak een <b>nieuwe offerte</b>.</div>
         <div class="form-card" id="offDetail" style="display:none;margin-bottom:18px;max-width:680px">
           <div class="rij2">
             <div class="veld"><label>Offertenummer</label><input type="text" id="offNummer"></div>
@@ -1241,10 +1257,11 @@ nav.onderbalk{display:none}
             <div class="hint" style="margin-top:8px">Claude past alleen het formulier aan: pas met <b>Opslaan</b> staat het vast. Een product aan Voorraad toevoegen of je regels veranderen doet Claude pas na jouw ja. Elk bericht kost een paar cent.</div>
           </div>
         </div>
-        <div class="tbl-wrap"><table>
-          <thead><tr><th>Nr</th><th>Naam</th><th>Klant</th><th>Datum</th><th>Status</th><th class="r">Excl.</th></tr></thead>
+        <div class="tbl-wrap of-lijst"><table>
+          <thead><tr><th>Nr</th><th>Naam</th><th class="of-klant">Klant</th><th>Datum</th><th>Status</th><th class="r">Excl.</th></tr></thead>
           <tbody id="offBody"></tbody>
         </table></div>
+        </div>
 
         <!-- pop-up: in welk project komt de klus van een geaccepteerde vaste-prijs-offerte -->
         <div class="overlay" id="offProjectOverlay">
@@ -1983,6 +2000,10 @@ let factData = [];
     basis.delete(k); gewaarschuwd.delete(k);
     const m = k.querySelector(":scope > .niet-opgeslagen"); if (m) m.classList.remove("open");
   };
+  // voor formulieren die open blijven terwijl je een ander record kiest
+  // (offertes: lijst en offerte naast elkaar)
+  window.kaartVeranderd = k => basis.has(k) && basis.get(k) !== stand(k);
+  window.kaartVergeet = vergeet;
 
   // eerste aanraking legt de beginstand vast
   ["pointerdown", "focusin"].forEach(soort => document.addEventListener(soort, e => {
@@ -2043,6 +2064,8 @@ function toonTab(naam, viaMenu){
   document.querySelectorAll("[data-tab]").forEach(k =>
     k.classList.toggle("actief", k.dataset.tab === naam));
   $("meerSheet").classList.remove("open");
+  // offertes krijgen de hele schermbreedte: lijst en offerte naast elkaar
+  document.querySelector(".layout").classList.toggle("breed", naam === "offertes");
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("[data-tab]").forEach(k =>
@@ -8274,14 +8297,43 @@ function renderOffertes(){
   body.innerHTML = offerteData.map(o =>
     '<tr class="klik" data-ofid="' + o.id + '">' +
       '<td>' + esc(o.nummer || "") + '</td>' +
-      '<td class="tekst">' + esc(o.naam || "") + '</td>' +
-      '<td class="tekst">' + esc(klantNaam(o.klant_id) || "—") + '</td>' +
+      '<td class="tekst">' + esc(o.naam || "") +
+        '<span class="of-klant-klein">' + esc(klantNaam(o.klant_id) || "") + '</span></td>' +
+      '<td class="tekst of-klant">' + esc(klantNaam(o.klant_id) || "—") + '</td>' +
       '<td>' + fmtDatum(o.datum) + '</td>' +
       '<td>' + chip(o.status) + '</td>' +
       '<td class="r">' + eur2(o.bedrag_excl || 0) + '</td>' +
     '</tr>').join("");
-  body.querySelectorAll("[data-ofid]").forEach(r => r.addEventListener("click", () => openOfferte(r.dataset.ofid)));
+  body.querySelectorAll("[data-ofid]").forEach(r => r.addEventListener("click", () => {
+    if (offOpen() && r.dataset.ofid === bewerkOfferteId) return;
+    if (!offMagWisselen()) return;
+    openOfferte(r.dataset.ofid);
+  }));
+  offMarkeer();
 }
+
+/* Lijst en offerte staan op een breed scherm naast elkaar: dan blijft de
+   offerte open terwijl je een andere kiest. Waarschuw dan wel als er nog
+   niet-opgeslagen wijzigingen in staan, en begin daarna opnieuw met tellen. */
+const offOpen = () => $("offDetail").style.display !== "none";
+const offNaastElkaar = () => window.matchMedia("(min-width:1100px)").matches;
+function offMagWisselen(){
+  if (!offOpen()) return true;
+  if (window.kaartVeranderd && kaartVeranderd($("offDetail")) &&
+      !confirm("Deze offerte heeft wijzigingen die nog niet zijn opgeslagen. Toch wisselen? Dan gaan die wijzigingen verloren.")) return false;
+  if (window.kaartVergeet) kaartVergeet($("offDetail"));
+  return true;
+}
+function offMarkeer(){
+  document.querySelectorAll("#offBody [data-ofid]").forEach(r =>
+    r.classList.toggle("actief", offOpen() && r.dataset.ofid === bewerkOfferteId));
+}
+function offNaarBoven(){
+  if (offNaastElkaar()) $("offDetail").scrollTop = 0; else window.scrollTo(0, 0);
+}
+// 'kies een offerte'-vak alleen als er geen offerte open staat
+new MutationObserver(() => { $("offLeeg").classList.toggle("verborgen", offOpen()); offMarkeer(); })
+  .observe($("offDetail"), { attributes: true, attributeFilter: ["style"] });
 
 function vulOffKlanten(){
   const huidig = $("offKlant").value;
@@ -8498,9 +8550,11 @@ function offerteFormLeeg(){
   toonOffRegels();
 }
 $("offNieuw").addEventListener("click", () => {
+  if (!offMagWisselen()) return;
   offerteFormLeeg();
   $("offDetail").style.display = "block";
-  window.scrollTo(0, 0);
+  offMarkeer();
+  offNaarBoven();
 });
 $("offSluit").addEventListener("click", () => { $("offDetail").style.display = "none"; });
 
@@ -8543,7 +8597,8 @@ async function openOfferte(id){
   offProductZoekReset();
   toonOffRegels();
   $("offDetail").style.display = "block";
-  window.scrollTo(0, 0);
+  offMarkeer();
+  offNaarBoven();
 }
 
 /* De offerte zoals hij nu in het formulier staat — voor opslaan én voor de
