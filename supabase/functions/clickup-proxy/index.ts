@@ -152,6 +152,7 @@ Deno.serve(async (req: Request) => {
         status: t.status ? t.status.status : null,
         url: t.url,
         aangemaakt: Number(t.date_created) || null,
+        bijgewerkt: Number(t.date_updated) || null,
         maker: t.creator ? t.creator.username : null,
         adres: adresVan(t),
         beschrijving: t.markdown_description || t.text_content || t.description || "",
@@ -174,16 +175,31 @@ Deno.serve(async (req: Request) => {
       if (!/^image\//.test(soort) && !/^(jpe?g|png|gif|webp|heic)$/i.test(String(b.extension || ""))) {
         throw new Fout(400, "Alleen foto's kunnen worden opgehaald");
       }
-      if (b.size && Number(b.size) > MAX_BIJLAGE) throw new Fout(400, "Foto is te groot");
+      if (!verzoek.klein && b.size && Number(b.size) > MAX_BIJLAGE) throw new Fout(400, "Foto is te groot");
+      // klein = voorbeeldje voor het scherm (ClickUp maakt die zelf), anders de hele foto
+      const adressen: string[] = [];
+      if (verzoek.klein) adressen.push(b.thumbnail_large, b.thumbnail_medium);
+      adressen.push(b.url, b.url_w_query);
+      let antwoord: Response | null = null;
+      let laatste = 0;
       // eerst met de sleutel (nodig bij privé-bijlagen), anders zonder
-      let antwoord = await fetch(b.url, { headers: { authorization: sleutel } });
-      if (!antwoord.ok) antwoord = await fetch(b.url);
-      if (!antwoord.ok) throw new Fout(502, "Foto ophalen bij ClickUp mislukt (" + antwoord.status + ")");
+      for (const adres of [...new Set(adressen.filter(Boolean))]) {
+        for (const kop of [{ authorization: sleutel }, {}]) {
+          const a = await fetch(adres, { headers: kop });
+          // een inlogpagina of foutmelding (html/json) is geen foto
+          if (a.ok && !/^(text\/|application\/json)/.test(a.headers.get("content-type") || "")) { antwoord = a; break; }
+          laatste = a.status;
+          await a.body?.cancel();
+        }
+        if (antwoord) break;
+      }
+      if (!antwoord) throw new Fout(502, "Foto ophalen bij ClickUp mislukt (" + laatste + ")");
       const bytes = new Uint8Array(await antwoord.arrayBuffer());
       if (bytes.length > MAX_BIJLAGE) throw new Fout(400, "Foto is te groot");
+      const type = antwoord.headers.get("content-type") || "";
       return new Response(bytes, {
         status: 200,
-        headers: { ...corsHeaders(origin), "content-type": soort || "image/jpeg", "cache-control": "private, max-age=600" },
+        headers: { ...corsHeaders(origin), "content-type": /^image\//.test(type) ? type : (soort || "image/jpeg"), "cache-control": "private, max-age=600" },
       });
     }
 
