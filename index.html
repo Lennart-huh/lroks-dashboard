@@ -227,6 +227,10 @@ nav.onderbalk{display:none}
 .as-msg.bot{align-self:flex-start;border:1px solid var(--line)}
 .as-msg.bezig{align-self:flex-start;color:var(--ink2);font-style:italic}
 .as-msg.fout{align-self:flex-start;border:1px solid var(--rood);color:var(--rood)}
+.as-luister{display:inline-flex;align-items:center;gap:5px;margin-top:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:999px;padding:4px 10px;font:inherit;font-size:.74rem;cursor:pointer}
+.as-luister:hover{border-color:var(--ink3);color:var(--ink)}
+.as-luister.speelt{border-color:var(--ink);color:var(--ink)}
+.mini-btn.aan{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .as-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .as-chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:.78rem;cursor:pointer}
 .as-chip:hover{border-color:var(--ink3)}
@@ -368,7 +372,10 @@ nav.onderbalk{display:none}
         <div class="form-card" id="asKaart" style="margin-bottom:18px">
           <div class="tab-kop" style="margin:0 0 10px">
             <h3 style="font-size:.95rem;margin:0">Vraag het de assistent</h3>
-            <button type="button" class="mini-btn" id="asNieuw">NIEUW GESPREK</button>
+            <div style="display:flex;gap:6px">
+              <button type="button" class="mini-btn" id="asVoorlees" title="Lees elk antwoord hardop voor" hidden>VOORLEZEN: UIT</button>
+              <button type="button" class="mini-btn" id="asNieuw">NIEUW GESPREK</button>
+            </div>
           </div>
           <div id="asBerichten" class="as-berichten"></div>
           <div class="as-chips">
@@ -3113,6 +3120,13 @@ function asToon(soort, tekst){
   const el = document.createElement("div");
   el.className = "as-msg " + soort;
   if (soort === "bot") el.innerHTML = asOpmaak(tekst); else el.textContent = tekst;
+  if (soort === "bot" && AS_SPRAAK){
+    const k = document.createElement("button");
+    k.type = "button"; k.className = "as-luister"; k.textContent = "▶ Voorlezen";
+    k.addEventListener("click", () => k.classList.contains("speelt") ? asStilte() : asSpreek(tekst, k));
+    el.appendChild(document.createElement("br"));
+    el.appendChild(k);
+  }
   $("asBerichten").appendChild(el);
   $("asBerichten").scrollTop = $("asBerichten").scrollHeight;
   return el;
@@ -3124,9 +3138,85 @@ function asIntro(){
     (n ? "\n\n**Let op:** er " + (n === 1 ? "staat 1 vreemde gebeurtenis" : "staan " + n + " vreemde gebeurtenissen") + " in de lijst hieronder. Tik erop, of vraag 'Iets vreemds?', voor uitleg." : ""));
 }
 
+/* Voorlezen: de antwoorden hardop, met de spraak die in de browser of telefoon
+   zelf zit (Web Speech API). Gratis en er gaat niets extra's naar een server.
+   Aan/uit wordt per apparaat onthouden. */
+const AS_SPRAAK = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+let asVoorlezen = false;
+try { asVoorlezen = localStorage.getItem("lroks_voorlezen") === "aan"; } catch {}
+let asSpeelKnop = null;
+
+function asNlStem(){
+  const nl = speechSynthesis.getVoices().filter(v => /^nl([-_]|$)/i.test(v.lang));
+  const nlNL = nl.filter(v => /^nl[-_]nl/i.test(v.lang));
+  const mooi = v => /natural|neural|online|premium|enhanced|google/i.test(v.name);
+  return nlNL.find(mooi) || nlNL[0] || nl.find(mooi) || nl[0] || null;
+}
+// opmaak eruit en in zinnen knippen: Chrome breekt één lange uitspraak na ~15 s af
+function asZinnen(t){
+  const schoon = String(t)
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/^#+\s*/gm, "")
+    .replace(/^\s*[-*•] /gm, "")
+    .replace(/https?:\/\/\S+/g, "link")
+    .replace(/[_*`]/g, "");
+  // elke regel apart, en lange regels per zin
+  return schoon.split(/\n+/).flatMap(r => r.split(/(?<=[.!?])\s+/)).map(x => x.trim()).filter(Boolean);
+}
+function asKnopRust(){
+  if (asSpeelKnop){ asSpeelKnop.classList.remove("speelt"); asSpeelKnop.textContent = "▶ Voorlezen"; }
+  asSpeelKnop = null;
+}
+function asStilte(){
+  if (!AS_SPRAAK) return;
+  speechSynthesis.cancel();
+  asKnopRust();
+}
+function asSpreek(tekst, knop){
+  if (!AS_SPRAAK) return;
+  asStilte();
+  const zinnen = asZinnen(tekst);
+  if (!zinnen.length) return;
+  const stem = asNlStem();
+  asSpeelKnop = knop || null;
+  if (asSpeelKnop){ asSpeelKnop.classList.add("speelt"); asSpeelKnop.textContent = "■ Stop"; }
+  zinnen.forEach((z, i) => {
+    const u = new SpeechSynthesisUtterance(z);
+    u.lang = stem ? stem.lang : "nl-NL";
+    if (stem) u.voice = stem;
+    if (i === zinnen.length - 1){
+      u.onend = () => { if (asSpeelKnop === knop) asKnopRust(); };
+      u.onerror = u.onend;
+    }
+    speechSynthesis.speak(u);
+  });
+}
+function asVoorleesKnop(){
+  const k = $("asVoorlees");
+  k.hidden = !AS_SPRAAK;
+  k.textContent = "VOORLEZEN: " + (asVoorlezen ? "AAN" : "UIT");
+  k.classList.toggle("aan", asVoorlezen);
+}
+if (AS_SPRAAK) speechSynthesis.getVoices();   // stemmen alvast laden (Chrome levert ze pas na een eerste vraag)
+asVoorleesKnop();
+$("asVoorlees").addEventListener("click", () => {
+  asVoorlezen = !asVoorlezen;
+  try { localStorage.setItem("lroks_voorlezen", asVoorlezen ? "aan" : "uit"); } catch {}
+  asVoorleesKnop();
+  if (!asVoorlezen) asStilte();
+  else { const u = new SpeechSynthesisUtterance("Voorlezen staat aan."); const st = asNlStem(); u.lang = st ? st.lang : "nl-NL"; if (st) u.voice = st; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+});
+
 async function asStel(vraag){
   vraag = String(vraag || "").trim();
   if (!vraag || asBezig) return;
+  /* Nog binnen de tik/klik: iPhone en iPad laten spraak alleen toe als die
+     eerst door een tik is gestart. Een stille uitspraak ontgrendelt dat, zodat
+     het antwoord straks (na het wachten) wel hardop mag. */
+  if (AS_SPRAAK){
+    asStilte();
+    if (asVoorlezen){ const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); }
+  }
   const { data: { session } } = await db.auth.getSession();
   if (!session){ toast("Je sessie is verlopen — log opnieuw in"); return; }
   asBezig = true; $("asStuur").disabled = true;
@@ -3168,7 +3258,8 @@ async function asStel(vraag){
         return;
       }
       const tekst = data.content.filter(c => c.type === "text").map(c => c.text).join("\n").trim();
-      asToon("bot", (tekst || "(geen antwoord)") + (data.stop_reason === "max_tokens" ? "\n\n(Antwoord afgekapt.)" : ""));
+      const botEl = asToon("bot", (tekst || "(geen antwoord)") + (data.stop_reason === "max_tokens" ? "\n\n(Antwoord afgekapt.)" : ""));
+      if (asVoorlezen && tekst) asSpreek(tekst, botEl.querySelector(".as-luister"));
       return;
     }
     asGesprek.length = begin;
@@ -3196,6 +3287,7 @@ document.querySelectorAll("[data-asinvul]").forEach(k => k.addEventListener("cli
 }));
 $("asNieuw").addEventListener("click", () => {
   if (asBezig) return;
+  asStilte();
   asGesprek = [];
   $("asBerichten").innerHTML = "";
   asIntro();
