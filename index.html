@@ -162,8 +162,10 @@ tbody tr.actief td:first-child{box-shadow:inset 3px 0 0 var(--ink)}
 @media(min-width:1100px){
   .of-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:20px;align-items:start}
   .of-split > .of-lijst{order:1}
-  .of-split > #offDetail,.of-split > #offLeeg{order:2;max-width:none!important;margin-bottom:0!important;
-    position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto}
+  /* rechts: aanvragen uit ClickUp bovenaan, daaronder de open offerte; samen
+     in één vak dat blijft staan terwijl je links door de lijst scrolt */
+  .of-split > .of-rechts{order:2;position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto}
+  .of-rechts > #offDetail,.of-rechts > #offLeeg{max-width:none!important;margin-bottom:0!important}
   #offLeeg:not(.verborgen){display:block}
   .of-lijst .of-klant{display:none}
   .of-lijst .of-klant-klein{display:block;font-size:.74rem;color:var(--ink3);margin-top:2px}
@@ -1130,6 +1132,19 @@ nav.onderbalk{display:none}
         <div class="tab-kop"><h2>Offertes</h2>
           <button class="knop klein" id="offNieuw">+ Nieuwe offerte</button></div>
         <div class="of-split">
+        <div class="of-rechts" id="offRechts">
+        <!-- aanvragen van ChargeNow uit ClickUp (alleen lezen, via edge function clickup-proxy) -->
+        <div class="form-card" id="cuKaart" style="max-width:none;margin-bottom:16px;padding:14px 16px">
+          <div class="tab-kop" style="margin:0 0 8px">
+            <h3 style="font-size:.85rem;margin:0">Aanvragen in ClickUp <span class="nav-tel" id="cuTel"></span></h3>
+            <div style="display:flex;gap:6px">
+              <button type="button" class="mini-btn" id="cuAlles">ALLES</button>
+              <button type="button" class="mini-btn" id="cuVernieuw">VERNIEUWEN</button>
+            </div>
+          </div>
+          <div id="cuMelding" class="hint" style="margin:0"></div>
+          <div class="tbl-wrap" id="cuTabelWrap" style="display:none;margin-top:6px"><table><tbody id="cuBody"></tbody></table></div>
+        </div>
         <div class="straks" id="offLeeg">Kies links een offerte om hem hier te openen, of maak een <b>nieuwe offerte</b>.</div>
         <div class="form-card" id="offDetail" style="display:none;margin-bottom:18px;max-width:680px">
           <div class="rij2">
@@ -1265,19 +1280,8 @@ nav.onderbalk{display:none}
             <div class="hint" style="margin-top:8px">Claude past alleen het formulier aan: pas met <b>Opslaan</b> staat het vast. Een product aan Voorraad toevoegen of je regels veranderen doet Claude pas na jouw ja. Elk bericht kost een paar cent.</div>
           </div>
         </div>
+        </div>
         <div class="of-lijst">
-          <!-- aanvragen van ChargeNow uit ClickUp (alleen lezen, via edge function clickup-proxy) -->
-          <div class="form-card" id="cuKaart" style="max-width:none;margin-bottom:16px;padding:14px 16px">
-            <div class="tab-kop" style="margin:0 0 8px">
-              <h3 style="font-size:.85rem;margin:0">Aanvragen in ClickUp <span class="nav-tel" id="cuTel"></span></h3>
-              <div style="display:flex;gap:6px">
-                <button type="button" class="mini-btn" id="cuAlles">ALLES</button>
-                <button type="button" class="mini-btn" id="cuVernieuw">VERNIEUWEN</button>
-              </div>
-            </div>
-            <div id="cuMelding" class="hint" style="margin:0"></div>
-            <div class="tbl-wrap" id="cuTabelWrap" style="display:none;margin-top:6px"><table><tbody id="cuBody"></tbody></table></div>
-          </div>
           <div class="tbl-wrap"><table>
             <thead><tr><th>Nr</th><th>Naam</th><th class="of-klant">Klant</th><th>Datum</th><th>Status</th><th class="r">Excl.</th></tr></thead>
             <tbody id="offBody"></tbody>
@@ -8613,7 +8617,9 @@ function offMarkeer(){
     r.classList.toggle("actief", offOpen() && r.dataset.ofid === bewerkOfferteId));
 }
 function offNaarBoven(){
-  if (offNaastElkaar()) $("offDetail").scrollTop = 0; else window.scrollTo(0, 0);
+  // breed scherm: rechtervak naar boven, zodat de aanvragen uit ClickUp
+  // in beeld blijven met de offerte er direct onder
+  if (offNaastElkaar()) $("offRechts").scrollTop = 0; else window.scrollTo(0, 0);
 }
 // 'kies een offerte'-vak alleen als er geen offerte open staat
 new MutationObserver(() => { $("offLeeg").classList.toggle("verborgen", offOpen()); offMarkeer(); })
