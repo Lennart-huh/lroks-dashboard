@@ -246,6 +246,7 @@ nav.onderbalk{display:none}
 .as-msg{padding:10px 13px;border-radius:10px;font-size:.88rem;line-height:1.55;max-width:92%;overflow-wrap:anywhere}
 .as-msg.ik{align-self:flex-end;background:var(--surface2)}
 .as-msg.bot{align-self:flex-start;border:1px solid var(--line)}
+.as-msg.kosten{align-self:flex-start;padding:0 13px;margin-top:-4px;font-size:.72rem;color:var(--ink3)}
 .as-msg.bezig{align-self:flex-start;color:var(--ink2);font-style:italic}
 .as-msg.fout{align-self:flex-start;border:1px solid var(--rood);color:var(--rood)}
 .as-luister{display:inline-flex;align-items:center;gap:5px;margin-top:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:999px;padding:4px 10px;font:inherit;font-size:.74rem;cursor:pointer}
@@ -9262,6 +9263,25 @@ $("offPdf").addEventListener("click", () => {
    Loopt via dezelfde edge function als de assistent in Controle.
    ===================================================== */
 let ofaGesprek = [];
+let ofaKosten = 0;   // wat dit gesprek tot nu toe gekost heeft (euro, schatting)
+
+/* Offertes en de eisencontrole draaien op Sonnet 5.5: ongeveer de helft van Opus
+   per token, en goed genoeg voor rekenen volgens Lennarts regels en foto's lezen. */
+const OFA_MODEL = "claude-sonnet-5-5";
+// prijzen in dollar per miljoen tokens (Anthropic rekent in dollars)
+const AI_PRIJS = {
+  "claude-sonnet-5-5": { in: 2, uit: 10, schrijf: 2.5, lees: 0.10 },
+  "claude-opus-5-5":   { in: 4, uit: 20, schrijf: 5,   lees: 0.20 },
+};
+const DOLLAR_NAAR_EURO = 0.87;   // ongeveer; alleen voor de schatting op het scherm
+function aiKosten(model, u){
+  const p = AI_PRIJS[model]; if (!p || !u) return 0;
+  const dollar = ((u.input_tokens || 0) * p.in + (u.output_tokens || 0) * p.uit +
+    (u.cache_creation_input_tokens || 0) * p.schrijf + (u.cache_read_input_tokens || 0) * p.lees) / 1e6 +
+    ((u.server_tool_use && u.server_tool_use.web_search_requests) || 0) * 0.01;
+  return dollar * DOLLAR_NAAR_EURO;
+}
+const fmtKosten = e => "≈ € " + (e < 0.01 ? "0,01" : e.toFixed(2).replace(".", ","));
 let ofaBezig = false;
 let ofaFotos = [];      // verkleinde foto's voor het volgende bericht
 let ofaGeneratie = 0;   // omhoog bij een nieuw gesprek: een lopend antwoord belandt dan niet in het nieuwe
@@ -9520,7 +9540,7 @@ function ofaToonFotos(){
 }
 function ofaReset(){
   ofaGeneratie++;
-  ofaGesprek = []; ofaFotos = []; ofaBezig = false;
+  ofaGesprek = []; ofaFotos = []; ofaBezig = false; ofaKosten = 0;
   $("ofaStuur").disabled = false;
   $("ofaBerichten").innerHTML = "";
   $("ofaVraag").value = "";
@@ -9571,19 +9591,23 @@ async function ofaStel(vraag){
   ofaGesprek.push({ role: "user", content: [
     ...fotos.map(f => ({ type: "image", source: { type: "base64", media_type: f.media_type, data: f.data } })),
     { type: "text", text: vraag || "Bekijk deze foto('s)." } ] });
+  let kosten = 0;   // alle rondes van deze ene vraag samen
+  const kostenRegel = () => fmtKosten(kosten) + " voor dit antwoord · " + fmtKosten(ofaKosten) + " dit gesprek";
   try {
     for (let ronde = 0; ronde < 25; ronde++){
       const antwoord = await fetch(SUPABASE_URL + "/functions/v1/anthropic-proxy", {
         method: "POST",
         headers: { "content-type": "application/json", "authorization": "Bearer " + session.access_token },
         body: JSON.stringify({
-          model: AS_MODEL, max_tokens: 16000, output_config: { effort: "medium" },
+          model: OFA_MODEL, max_tokens: 16000, output_config: { effort: "medium" },
           cache_control: { type: "ephemeral" },
           system: ofaSysteem(), tools: OFA_TOOLS, messages: ofaGesprek
         })
       });
       const data = await antwoord.json();
       if (gen !== ofaGeneratie) return;   // intussen een nieuw gesprek begonnen
+      const k = aiKosten(OFA_MODEL, data.usage);
+      kosten += k; ofaKosten += k;
       if (!antwoord.ok) throw new Error((data.error && data.error.message) || "API-fout");
       ofaGesprek.push({ role: "assistant", content: data.content });
       if (data.stop_reason === "pause_turn") continue;   // lang zoekwerk op internet: gewoon laten doorgaan
@@ -9609,11 +9633,13 @@ async function ofaStel(vraag){
       }
       const tekst = data.content.filter(c => c.type === "text").map(c => c.text).join("").trim();
       ofaToon("bot", (tekst || "(geen antwoord)") + (data.stop_reason === "max_tokens" ? "\n\n(Antwoord afgekapt.)" : ""));
+      ofaToon("kosten", kostenRegel());
       return;
     }
     ofaGesprek.length = begin;
     bezig.remove();
     ofaToon("fout", "Te veel stappen. Vraag het in kleinere stukken.");
+    ofaToon("kosten", kostenRegel());
   } catch (e){
     console.error(e);
     if (gen !== ofaGeneratie) return;
@@ -9987,8 +10013,8 @@ async function cuEisenControle(id){
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Bearer " + session.access_token },
       body: JSON.stringify({
-        model: AS_MODEL, max_tokens: 6000,
-        output_config: { effort: "medium", format: { type: "json_schema", schema: CU_EISEN_SCHEMA } },
+        model: OFA_MODEL, max_tokens: 6000,
+        output_config: { effort: "low", format: { type: "json_schema", schema: CU_EISEN_SCHEMA } },
         system: cuEisenSysteem(),
         messages: [{ role: "user", content: [...inhoud, { type: "text", text: "Toets deze aanvraag aan mijn eisen." }] }]
       })
@@ -9999,7 +10025,8 @@ async function cuEisenControle(id){
     if (data.stop_reason === "max_tokens") throw new Error("Antwoord afgekapt");
     const uitslag = JSON.parse((data.content || []).filter(c => c.type === "text").map(c => c.text).join(""));
     try {
-      localStorage.setItem("cuEisen:" + id, JSON.stringify({ bijgewerkt: t.bijgewerkt || null, eisen: cuEisenTekst(), tijd: Date.now(), uitslag }));
+      localStorage.setItem("cuEisen:" + id, JSON.stringify({ bijgewerkt: t.bijgewerkt || null, eisen: cuEisenTekst(), tijd: Date.now(), uitslag,
+        kosten: aiKosten(OFA_MODEL, data.usage) }));
     } catch {}
   } catch (e){
     console.error(e);
@@ -10036,7 +10063,8 @@ function cuEisenToon(id){
       '<div class="hint">Ik zet niets in ClickUp: kopieer dit en plaats het daar zelf.</div></div>';
   }
   h += '<div class="hint">Gecontroleerd ' + esc(new Date(c.tijd).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) +
-    (c.verouderd ? ' · de aanvraag of je eisen zijn sindsdien veranderd' : '') +
+    (c.kosten ? ' (' + fmtKosten(c.kosten) + ')' : '') +
+    (c.verouderd ? ' · de aanvraag of je eisen zijn sindsdien veranderd — druk op OPNIEUW als je een nieuwe controle wilt' : '') +
     (fout ? ' · nieuwe controle mislukt: ' + esc(fout) : '') + '</div>';
   el.innerHTML = h;
   const kop = $("cuKopieer");
@@ -10071,8 +10099,9 @@ async function cuAutoControle(){
   try {
     for (const t of cuTaken.filter(t => cuIsOpen(t) && !cuOfferteVan(t.id))){
       if (document.hidden) break;
-      const c = cuEisenUitCache(t.id);
-      if ((c && !c.verouderd) || cuEisenFout.has(t.id)) continue;   // na een fout niet blijven proberen
+      // alleen aanvragen die nog nooit gecontroleerd zijn; is er daarna iets veranderd,
+      // dan zie je dat en druk je zelf op OPNIEUW (elke controle kost geld)
+      if (cuEisenUitCache(t.id) || cuEisenFout.has(t.id)) continue;   // na een fout niet blijven proberen
       await cuEisenControle(t.id);
     }
   } finally {
