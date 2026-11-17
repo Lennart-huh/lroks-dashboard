@@ -3145,10 +3145,11 @@ async function asLogboekLeesbaar(rijen){
     const u = {};
     for (const [k, v] of Object.entries(o)){
       if (AS_WEG.has(k)) continue;
-      if ((v === null || v === "") && !gewijzigd) continue;
+      if ((v === null || v === "" || v === false || k === "volgorde") && !gewijzigd) continue;
       if (AS_KOPPEL[k]){ u[k.replace(/_id$/, "")] = v ? (namen[v] ?? "(verwijderd of onbekend)") : "(leeg)"; continue; }
       if (/_id$/.test(k)) continue;   // koppelingen naar uren/km/mutaties: niet nodig om te vertellen
-      u[k] = v === null || v === "" ? "(leeg)" : v;
+      // lange teksten (bv. instellingen.offerte_regels) inkorten: het gaat erom dat het veranderde
+      u[k] = v === null || v === "" ? "(leeg)" : typeof v === "string" && v.length > 300 ? v.slice(0, 200) + " …(" + v.length + " tekens)" : v;
     }
     return Object.keys(u).length ? u : undefined;
   };
@@ -3165,14 +3166,16 @@ async function asLogboekLeesbaar(rijen){
       bron: r.bron && r.bron !== "app" ? r.bron : undefined,
       apparaat: asApparaat(r.apparaat)
     };
-    const sleutel = gewijzigd ? [e.tijd_nl, r.tabel, JSON.stringify(e.oud), JSON.stringify(e.nieuw), e.bron, e.apparaat].join("|") : "rij" + r.id;
+    // gelijke wijzigingen, en verwijderingen uit dezelfde tabel, in dezelfde minuut samen
+    const sleutel = gewijzigd ? [e.tijd_nl, r.tabel, JSON.stringify(e.oud), JSON.stringify(e.nieuw), e.bron, e.apparaat].join("|")
+      : r.actie === "verwijderd" ? [e.tijd_nl, r.tabel, "verwijderd", e.bron, e.apparaat].join("|") : "rij" + r.id;
     const g = groepen.get(sleutel);
     if (g){ g.aantal++; if (g.namen.length < 40) g.namen.push(r.label || "(zonder naam)"); continue; }
     groepen.set(sleutel, { ...e, aantal: 1, namen: [r.label || "(zonder naam)"], rij_id: r.rij_id });
   }
   return [...groepen.values()].map(g => {
     const { namen: nm, aantal, rij_id, ...rest } = g;
-    return aantal === 1 ? { ...rest, naam: nm[0], rij_id } : { ...rest, aantal, namen: nm };
+    return aantal === 1 ? { ...rest, naam: nm[0], rij_id } : { ...rest, verwijderd_was: undefined, aantal, namen: nm };
   });
 }
 
