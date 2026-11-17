@@ -67,7 +67,7 @@ button{font-family:inherit}
 .knop.klein{width:auto;padding:9px 16px;font-size:.82rem}
 .knop.stil{background:var(--surface2);color:var(--ink)}
 .knop.gevaar{background:none;color:var(--rood);border:1px solid var(--line);}
-.schakel{display:flex;gap:8px}
+.schakel{display:flex;flex-wrap:wrap;gap:8px}
 .schakel button{flex:1;padding:11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink2);font-size:.88rem;font-weight:600;cursor:pointer}
 .schakel button.aan{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 .hint{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--ink3);margin-top:6px}
@@ -1220,6 +1220,7 @@ nav.onderbalk{display:none}
           <div class="veld"><label>Status</label>
             <div class="schakel">
               <button type="button" id="offStatusConcept" class="aan">Concept</button>
+              <button type="button" id="offStatusVragen" title="Extra vragen gesteld: wacht op antwoord">Extra vragen</button>
               <button type="button" id="offStatusVerstuurd">Verstuurd</button>
               <button type="button" id="offStatusGeaccepteerd">Geaccepteerd</button>
               <button type="button" id="offStatusAfgewezen">Afgewezen</button>
@@ -3048,7 +3049,7 @@ const AS_SCHEMA = [
   "project_verwacht_materiaal: project_id, product_id, naam, aantal",
   "uren: datum, tijd, soort (werk/reis/kantoor), aantal, tarief, project_id, klant_id, klus_id, omschrijving, gefactureerd",
   "km_registratie: datum, tijd, km_stand, omschrijving, klant_id, project_id, klus_id, zakelijk, km_prijs, gefactureerd",
-  "offertes: id, nummer, naam, klant_id, project_id, datum, geldig_tot, status (concept/verstuurd/geaccepteerd/afgewezen), bedrag_excl, btw_bedrag, bedrag_incl, prijstype (product/vast), geschat_uren, geschat_reisuren, geschat_km, prijs_producten, prijs_arbeid, prijs_reisuren, prijs_km, notities, clickup_taak_id (aanvraag in ClickUp)",
+  "offertes: id, nummer, naam, klant_id, project_id, datum, geldig_tot, status (concept/vragen = extra vragen gesteld/verstuurd/geaccepteerd/afgewezen), bedrag_excl, btw_bedrag, bedrag_incl, prijstype (product/vast), geschat_uren, geschat_reisuren, geschat_km, prijs_producten, prijs_arbeid, prijs_reisuren, prijs_km, notities, clickup_taak_id (aanvraag in ClickUp)",
   "offerte_regels: offerte_id, omschrijving, eenheid, aantal, prijs, product_id",
   "vaste_lasten: naam, bedrag, interval_aantal, interval_eenheid, start_datum, actief, categorie",
   "financiele_correcties: type, omschrijving, bedrag_excl, btw, datum",
@@ -8731,6 +8732,7 @@ function renderOffertes(){
   const chip = s => s === "geaccepteerd" ? '<span class="chip groen">GEACCEPTEERD</span>'
     : s === "afgewezen" ? '<span class="chip rood">AFGEWEZEN</span>'
     : s === "verstuurd" ? '<span class="chip amber">VERSTUURD</span>'
+    : s === "vragen" ? '<span class="chip amber">EXTRA VRAGEN</span>'
     : '<span class="chip grijs">CONCEPT</span>';
   body.innerHTML = offerteData.map(o =>
     '<tr class="klik" data-ofid="' + o.id + '">' +
@@ -8788,11 +8790,11 @@ function vulOffKlanten(){
 
 function zetOfferteStatus(s){
   offerteStatus = s;
-  ["Concept","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
+  ["Concept","Vragen","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
     $("offStatus" + n).classList.toggle("aan", n.toLowerCase() === s));
   renderOffBestellijst();
 }
-["Concept","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
+["Concept","Vragen","Verstuurd","Geaccepteerd","Afgewezen"].forEach(n =>
   $("offStatus" + n).addEventListener("click", () => zetOfferteStatus(n.toLowerCase())));
 
 /* Bepaalt hoe de offerte zelf werkt én wat er gebeurt bij accepteren — zie
@@ -9734,6 +9736,8 @@ function cuStart(){
 
 const cuIsOpen = t => t.status_type !== "closed" && CU_OPEN.includes(String(t.status || "").toLowerCase());
 const cuOfferteVan = id => offerteData.find(o => o.clickup_taak_id === id);
+// extra vragen gesteld aan ChargeNow: wacht op antwoord, dus niet in de rij met open aanvragen
+const cuWachtOpVragen = t => { const o = cuOfferteVan(t.id); return !!o && o.status === "vragen"; };
 const cuDatum = ms => ms ? new Date(ms).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "";
 
 // klein chipje met de uitkomst van de eisencontrole
@@ -9749,14 +9753,15 @@ function cuEisenChip(id){
 
 function cuRender(){
   if (!cuTaken) return;
-  const lijst = cuTaken.filter(t => cuAllesTonen || cuIsOpen(t))
+  const lijst = cuTaken.filter(t => cuAllesTonen || (cuIsOpen(t) && !cuWachtOpVragen(t)))
     .sort((a, b) => (b.aangemaakt || 0) - (a.aangemaakt || 0));
   const zonderOfferte = cuTaken.filter(t => cuIsOpen(t) && !cuOfferteVan(t.id)).length;
   $("cuTel").textContent = zonderOfferte || "";
   ["cuNavTel", "cuNavTelMob"].forEach(id => { if ($(id)) $(id).textContent = zonderOfferte || ""; });
   $("cuAlles").textContent = cuAllesTonen ? "ALLEEN OPEN" : "ALLES";
   $("cuMelding").textContent = lijst.length ? "" :
-    cuAllesTonen ? "Geen aanvragen gevonden." : "Geen openstaande aanvragen (status to do of offerte).";
+    cuAllesTonen ? "Geen aanvragen gevonden." : "Geen openstaande aanvragen (status to do of offerte)." +
+      (cuTaken.some(t => cuIsOpen(t) && cuWachtOpVragen(t)) ? " Aanvragen waar je extra vragen over hebt gesteld staan onder ALLES." : "");
   $("cuTabelWrap").style.display = lijst.length ? "" : "none";
   $("cuBody").innerHTML = lijst.map(t => {
     const o = cuOfferteVan(t.id);
