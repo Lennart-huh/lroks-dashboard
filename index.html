@@ -9762,8 +9762,9 @@ function cuStart(){
 
 const cuIsOpen = t => t.status_type !== "closed" && CU_OPEN.includes(String(t.status || "").toLowerCase());
 const cuOfferteVan = id => offerteData.find(o => o.clickup_taak_id === id);
-// extra vragen gesteld aan ChargeNow: wacht op antwoord, dus niet in de rij met open aanvragen
-const cuWachtOpVragen = t => { const o = cuOfferteVan(t.id); return !!o && o.status === "vragen"; };
+// offerte voorbij concept (extra vragen gesteld, verstuurd, geaccepteerd of afgewezen):
+// je bent er niet meer mee bezig, dus niet in de rij met open aanvragen
+const cuAfgehandeld = t => { const o = cuOfferteVan(t.id); return !!o && o.status !== "concept"; };
 const cuDatum = ms => ms ? new Date(ms).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "";
 
 // klein chipje met de uitkomst van de eisencontrole
@@ -9779,7 +9780,7 @@ function cuEisenChip(id){
 
 function cuRender(){
   if (!cuTaken) return;
-  const lijst = cuTaken.filter(t => cuAllesTonen || (cuIsOpen(t) && !cuWachtOpVragen(t)))
+  const lijst = cuTaken.filter(t => cuAllesTonen || (cuIsOpen(t) && !cuAfgehandeld(t)))
     .sort((a, b) => (b.aangemaakt || 0) - (a.aangemaakt || 0));
   const zonderOfferte = cuTaken.filter(t => cuIsOpen(t) && !cuOfferteVan(t.id)).length;
   $("cuTel").textContent = zonderOfferte || "";
@@ -9787,7 +9788,7 @@ function cuRender(){
   $("cuAlles").textContent = cuAllesTonen ? "ALLEEN OPEN" : "ALLES";
   $("cuMelding").textContent = lijst.length ? "" :
     cuAllesTonen ? "Geen aanvragen gevonden." : "Geen openstaande aanvragen (status to do of offerte)." +
-      (cuTaken.some(t => cuIsOpen(t) && cuWachtOpVragen(t)) ? " Aanvragen waar je extra vragen over hebt gesteld staan onder ALLES." : "");
+      (cuTaken.some(t => cuIsOpen(t) && cuAfgehandeld(t)) ? " Aanvragen waarvan de offerte verstuurd is of waar je extra vragen over hebt gesteld staan onder ALLES." : "");
   $("cuTabelWrap").style.display = lijst.length ? "" : "none";
   $("cuBody").innerHTML = lijst.map(t => {
     const o = cuOfferteVan(t.id);
