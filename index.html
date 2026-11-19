@@ -1789,8 +1789,39 @@ nav.onderbalk{display:none}
         <div class="tab-kop"><h2>Belasting</h2>
           <select id="bwJaar" style="width:auto;padding:8px 12px"></select>
         </div>
+        <div class="form-card" id="bwPrognose" style="margin-bottom:18px">
+          <h3 style="font-size:.95rem;margin:0 0 12px">Prognose eind <span id="bwPrJaar"></span> — wat je over heel het jaar betaalt</h3>
+          <div class="grid4" style="margin-bottom:12px">
+            <div class="card"><div class="k">Winst t/m vandaag</div><div class="v" id="bwPrNu">—</div><div class="m" id="bwPrNuSub">excl. btw</div></div>
+            <div class="card"><div class="k">Verwacht tot 31 dec</div><div class="v" id="bwPrRest">—</div><div class="m" id="bwPrRestSub"></div></div>
+            <div class="card amber"><div class="k">Belasting heel jaar</div><div class="v" id="bwPrBelasting">—</div><div class="m" id="bwPrBelastingSub"></div></div>
+            <div class="card groen"><div class="k">Nog te betalen</div><div class="v" id="bwPrTeBetalen">—</div><div class="m" id="bwPrTeBetalenSub"></div></div>
+          </div>
+          <div class="hint" id="bwPrUitleg" style="margin-bottom:12px"></div>
+          <div class="rij2">
+            <div class="veld"><label>Verwachte winst nog tot 31 december (€)</label>
+              <input type="number" id="bwPrExtra" min="0" step="100" inputmode="decimal">
+              <div class="hint" id="bwPrExtraHint"></div>
+            </div>
+            <div class="veld"><label>Al betaald via voorlopige aanslag (€)</label>
+              <input type="number" id="bwPrBetaald" min="0" step="1" inputmode="decimal">
+              <div class="hint">Inkomstenbelasting + Zvw die je dit jaar al aan de Belastingdienst betaalt of betaald hebt. Geen voorlopige aanslag? Laat leeg.</div>
+            </div>
+          </div>
+          <div class="rij2">
+            <div class="veld"><label>Loon uit loondienst dit jaar (€)</label>
+              <input type="number" id="bwPrLoon" min="0" step="1" inputmode="decimal">
+              <div class="hint">Alleen als je dit jaar ook (een deel van het jaar) in loondienst was: het "fiscaal loon" van je jaaropgaaf of laatste loonstrook. Anders leeg.</div>
+            </div>
+            <div class="veld"><label>Ingehouden loonheffing op dat loon (€)</label>
+              <input type="number" id="bwPrLoonheffing" min="0" step="1" inputmode="decimal">
+              <div class="hint">Staat op dezelfde jaaropgaaf / loonstrook ("ingehouden loonheffing"). Die heb je al betaald.</div>
+            </div>
+          </div>
+          <button class="knop" id="bwPrOpslaan">Opslaan</button>
+        </div>
         <div class="grid4">
-          <div class="card"><div class="k">Winst</div><div class="v" id="bwWinst">—</div><div class="m">excl. btw</div></div>
+          <div class="card"><div class="k">Winst</div><div class="v" id="bwWinst">—</div><div class="m" id="bwWinstSub">excl. btw</div></div>
           <div class="card amber"><div class="k">Belasting</div><div class="v" id="bwBelasting">—</div><div class="m" id="bwPctSub">schatting</div></div>
           <div class="card groen"><div class="k">Naar privé</div><div class="v" id="bwNetto">—</div><div class="m">na belasting</div></div>
           <div class="card"><div class="k">Opzij zetten</div><div class="v" id="bwOpzij">—</div><div class="m">per maand</div></div>
@@ -8029,13 +8060,18 @@ const IB_TARIEVEN = {
   }
 };
 
+/* opties.loon = ander inkomen uit loondienst in hetzelfde jaar (optioneel):
+   telt mee in de schijven, de heffingskortingen en het Zvw-maximum. De
+   Zvw over het loon betaalt de werkgever, dus die zit hier niet in. */
 function berekenIB(winst, t, opties){
   const W = Math.max(0, winst);
+  const loon = Math.max(0, Number(opties.loon) || 0);
   const zelfst = opties.uren ? Math.min(W, t.zelfstandigenaftrek) : 0;
   const starter = opties.uren && opties.starter ? Math.min(W - zelfst, t.startersaftrek) : 0;
   const naOA = W - zelfst - starter;
   const mkb = naOA * t.mkbPct / 100;
-  const belastbaar = naOA - mkb;
+  const belastbareWinst = naOA - mkb;
+  const belastbaar = belastbareWinst + loon;
 
   let onder = 0;
   const schijven = t.schijven.map(s => {
@@ -8052,17 +8088,19 @@ function berekenIB(winst, t, opties){
 
   const ahk = belastbaar <= t.ahk.vanaf ? t.ahk.max
     : Math.max(0, t.ahk.max - (belastbaar - t.ahk.vanaf) * t.ahk.afbouwPct / 100);
-  // arbeidsinkomen van een ondernemer: winst vóór ondernemersaftrek en mkb-vrijstelling
-  const tr = t.ak.find(x => W <= x.tot);
-  const ak = tr ? Math.max(0, tr.vast + (W - tr.van) * tr.pct / 100) : 0;
+  // arbeidsinkomen van een ondernemer: winst vóór ondernemersaftrek en mkb-vrijstelling (+ loon)
+  const arbeid = W + loon;
+  const tr = t.ak.find(x => arbeid <= x.tot);
+  const ak = tr ? Math.max(0, tr.vast + (arbeid - tr.van) * tr.pct / 100) : 0;
   const ibVoorKorting = ibBruto + beperking;
   // kortingen kunnen de belasting niet onder nul brengen
   const kortingen = Math.min(ibVoorKorting, ahk + ak);
   const ib = ibVoorKorting - kortingen;
-  const zvw = Math.min(belastbaar, t.zvw.max) * t.zvw.pct / 100;
-  return { W, zelfst, starter, mkb, belastbaar, schijven, beperking, ahk, ak, kortingen,
+  const zvwGrondslag = Math.max(0, Math.min(belastbareWinst, t.zvw.max - loon));
+  const zvw = zvwGrondslag * t.zvw.pct / 100;
+  return { W, loon, zelfst, starter, mkb, belastbareWinst, belastbaar, schijven, beperking, ahk, ak, kortingen,
     ahkGebruikt: Math.min(ahk, ibVoorKorting), akGebruikt: kortingen - Math.min(ahk, ibVoorKorting),
-    ib, zvw, totaal: ib + zvw };
+    ib, zvwGrondslag, zvw, totaal: ib + zvw };
 }
 
 let bwUren = null, bwStarter = null;   // keuze in het formulier, nog niet opgeslagen
@@ -8080,6 +8118,7 @@ function renderBelasting(){
   const f = financieelJaar(jaar);
   const t = IB_TARIEVEN[jaar];
   const opt = bwOpties();
+  opt.loon = Number(cache.inst["belasting_loon_" + jaar] || 0);
   const pct = Number(cache.inst.belasting_percentage || 35);
   if (document.activeElement !== $("bwPct")) $("bwPct").value = pct;
   const winstJ = somArr(f.omzet) - somArr(f.kosten);
@@ -8092,15 +8131,27 @@ function renderBelasting(){
   (opt.starter ? schakel : (a, b) => schakel(b, a))("bwStarterJa", "bwStarterNee");
   ["bwStarterJa", "bwStarterNee"].forEach(id => $(id).disabled = !opt.uren);
 
-  const r = t ? berekenIB(winstJ, t, opt) : null;
-  const totaal = r ? r.totaal : Math.max(0, winstJ) * pct / 100;
+  // lopend jaar: belasting over de verwachte winst van héél het jaar, want
+  // de schijven en kortingen gelden voor het jaartotaal
+  const prog = t && jaar === new Date().getFullYear() ? belastingPrognose(jaar, t, opt) : null;
+  $("bwPrognose").style.display = prog ? "" : "none";
+  const winstReken = prog ? prog.jaarWinst : winstJ;
+  const r = t ? berekenIB(winstReken, t, opt) : null;
+  // wat de winst er bovenop kost: met loon is dat het verschil met "alleen loon"
+  const winstBelasting = r ? r.totaal - (opt.loon > 0 ? berekenIB(0, t, opt).totaal : 0) : 0;
+  const effJaar = r && winstReken > 0 ? winstBelasting / winstReken * 100 : 0;
+  // de belasting over de winst tot nu: naar rato van het jaarpercentage
+  const totaal = r ? (prog ? Math.max(0, winstJ) * effJaar / 100 : winstBelasting) : Math.max(0, winstJ) * pct / 100;
   const eff = winstJ > 0 ? totaal / winstJ * 100 : 0;
 
   $("bwWinst").textContent = eur(winstJ);
+  $("bwWinstSub").textContent = prog ? "excl. btw · tot nu toe" : "excl. btw";
   $("bwBelasting").textContent = eur(totaal);
   $("bwPctSub").textContent = r ? pctTxt(eff) + " van je winst · tarieven " + jaar : pct + "% van je winst";
   $("bwNetto").textContent = eur(winstJ - totaal);
-  $("bwOpzij").textContent = eur(totaal / 12);
+  $("bwOpzij").textContent = eur((r && prog ? winstBelasting : totaal) / 12);
+
+  if (prog) toonPrognose(prog, r, t, opt, effJaar, winstBelasting, pctTxt);
 
   // per kwartaal: de jaarbelasting naar rato van de winst in dat kwartaal
   // (zo telt een verliesgevend kwartaal mee en klopt de optelsom met het jaar)
@@ -8125,8 +8176,8 @@ function renderBelasting(){
     '<tr style="border-top:2px solid var(--line)"><td><b>Totaal</b></td><td></td><td></td>' +
     '<td class="r"><b>' + eur2(r.belastbaar) + '</b></td><td class="r"><b>' + eur2(somArr(r.schijven.map(s => s.belasting))) + '</b></td></tr>';
 
-  const marg = (berekenIB(winstJ + 100, t, opt).totaal - r.totaal);
-  $("bwMarginaal").innerHTML = winstJ > 0
+  const marg = (berekenIB(winstReken + 100, t, opt).totaal - r.totaal);
+  $("bwMarginaal").innerHTML = winstReken > 0
     ? "Over elke extra <b>€ 100</b> winst betaal je nu ongeveer <b>" + eur2(marg) + "</b> (" + pctTxt(marg) + ") — belasting, Zvw en het afbouwen van je heffingskortingen samen."
     : "";
 
@@ -8135,10 +8186,11 @@ function renderBelasting(){
   const min = n => n > 0 ? "− " + eur2(n) : eur2(0);
   const streep = ' style="border-top:2px solid var(--line)"';
   $("bwBerekeningBody").innerHTML = [
-    regel("Winst " + jaar, "", eur2(winstJ)),
+    regel("Winst " + jaar + (prog ? " <span style='color:var(--ink3)'>(prognose heel jaar)</span>" : ""), "", eur2(winstReken)),
     regel("Zelfstandigenaftrek" + (opt.uren ? "" : " <span style='color:var(--ink3)'>(urencriterium niet gehaald)</span>"), "", min(r.zelfst)),
     opt.uren && opt.starter ? regel("Startersaftrek", "", min(r.starter)) : "",
     regel("Mkb-winstvrijstelling", pctTxt(t.mkbPct), min(r.mkb)),
+    r.loon > 0 ? regel("Loon uit loondienst", "", "+ " + eur2(r.loon)) : "",
     regel("<b>Belastbaar inkomen</b>", "", "<b>" + eur2(r.belastbaar) + "</b>", streep),
     ...r.schijven.filter(s => s.deel > 0).map((s, i) =>
       regel("Inkomstenbelasting schijf " + (i + 1) + " over " + eur2(s.deel), pctTxt(s.pct), eur2(s.belasting))),
@@ -8146,15 +8198,121 @@ function renderBelasting(){
     regel("Algemene heffingskorting", "", min(r.ahkGebruikt)),
     regel("Arbeidskorting", "", min(r.akGebruikt)),
     regel("<b>Inkomstenbelasting</b>", "", "<b>" + eur2(r.ib) + "</b>", streep),
-    regel("Zvw-bijdrage over " + eur2(Math.min(r.belastbaar, t.zvw.max)), pctTxt(t.zvw.pct), eur2(r.zvw)),
-    regel("<b>Totaal te betalen</b>", "<b>" + pctTxt(eff) + "</b>", "<b>" + eur2(r.totaal) + "</b>", streep)
+    regel("Zvw-bijdrage over " + eur2(r.zvwGrondslag) + (r.loon > 0 ? " <span style='color:var(--ink3)'>(alleen over je winst)</span>" : ""), pctTxt(t.zvw.pct), eur2(r.zvw)),
+    regel("<b>Totaal belasting " + jaar + "</b>", r.loon > 0 ? "" : "<b>" + pctTxt(effJaar) + "</b>", "<b>" + eur2(r.totaal) + "</b>", streep),
+    prog && prog.loonheffing > 0 ? regel("Al ingehouden op je loon (loonheffing)", "", min(prog.loonheffing)) : "",
+    prog && prog.betaald > 0 ? regel("Al betaald via voorlopige aanslag", "", min(prog.betaald)) : "",
+    prog && (prog.betaald > 0 || prog.loonheffing > 0) ? regel("<b>" + (r.totaal - prog.betaald - prog.loonheffing >= 0 ? "Nog bij te betalen" : "Terug te krijgen") + "</b>", "",
+      "<b>" + eur2(Math.abs(r.totaal - prog.betaald - prog.loonheffing)) + "</b>", streep) : ""
   ].join("");
   $("bwBronHint").innerHTML = "Tarieven " + jaar + ": schijven " + t.schijven.map(s => pctTxt(s.pct)).join(" / ") +
     ", zelfstandigenaftrek " + eur(t.zelfstandigenaftrek) + ", startersaftrek " + eur(t.startersaftrek) +
     ", mkb-winstvrijstelling " + pctTxt(t.mkbPct) + ", algemene heffingskorting max " + eur(t.ahk.max) +
     ", arbeidskorting max " + eur(t.ak[3].vast) + ", Zvw " + pctTxt(t.zvw.pct) + " tot " + eur(t.zvw.max) +
-    ". Het percentage per kwartaal is je jaarbelasting naar rato van de winst in dat kwartaal.";
+    ". Het percentage per kwartaal is je jaarbelasting naar rato van de winst in dat kwartaal." +
+    (prog ? " Schijven en berekening gaan over de verwachte winst van heel " + jaar + " (prognose hierboven)." : "");
 }
+
+/* Prognose voor het lopende jaar: winst tot en met vandaag + wat er tot
+   31 december nog bij komt. Zonder eigen schatting doortrekken in het tempo
+   sinds de eerste boeking van het jaar (of 1 januari als je al langer bezig bent).
+   Vaste lasten na vandaag staan al in financieelJaar() en tellen daarom niet
+   mee in 'tot nu'; het doortrekken neemt ze vanzelf mee. */
+function belastingPrognose(jaar, t, opt){
+  const f = financieelJaar(jaar);
+  const vandaag = new Date(); vandaag.setHours(0, 0, 0, 0);
+  const vandaagIso = isoDatum(vandaag);
+  const vlLater = cache.vasteLasten.reduce((s, vl) =>
+    s + vasteLastDatumsInJaar(vl, jaar).filter(d => d > vandaagIso).length * Number(vl.bedrag || 0), 0);
+  const winstNu = somArr(f.omzet) - somArr(f.kosten) + vlLater;
+
+  const datums = [
+    ...factData.map(x => x.datum), ...urenData.map(x => x.datum),
+    ...cache.correcties.map(x => x.datum), ...bpTellend().map(x => x.datum)
+  ].filter(Boolean).map(d => String(d).slice(0, 10));
+  const eerder = datums.some(d => Number(d.slice(0, 4)) < jaar);
+  const ditJaar = datums.filter(d => Number(d.slice(0, 4)) === jaar && d <= vandaagIso).sort();
+  const start = eerder || !ditJaar.length ? new Date(jaar, 0, 1) : new Date(ditJaar[0] + "T00:00:00");
+  const dag = 86400000;
+  const dagenActief = Math.max(1, Math.round((vandaag - start) / dag) + 1);
+  const dagenRest = Math.max(0, Math.round((new Date(jaar, 11, 31) - vandaag) / dag));
+  const trend = Math.max(0, winstNu / dagenActief * dagenRest);
+
+  const eigen = cache.inst["belasting_prognose_extra_" + jaar];
+  const extra = eigen !== undefined && eigen !== "" ? Number(eigen) || 0 : trend;
+  const betaald = Number(cache.inst["belasting_voorlopig_" + jaar] || 0);
+  const loonheffing = Number(cache.inst["belasting_loonheffing_" + jaar] || 0);
+
+  const uren = urenData.filter(u => String(u.datum).slice(0, 4) === String(jaar))
+    .reduce((s, u) => s + Number(u.aantal || 0), 0);
+  const nogFactureren = urenData.filter(u => !u.gefactureerd && (u.soort === "werk" || u.soort === "reis"))
+    .reduce((s, u) => s + Number(u.aantal || 0) * Number(u.tarief || 0), 0);
+
+  const jaarWinst = winstNu + extra;
+  const zonderUren = berekenIB(jaarWinst, t, { uren: !opt.uren, starter: opt.starter, loon: opt.loon }).totaal;
+  return { winstNu, trend, extra, eigen: eigen !== undefined && eigen !== "", jaarWinst, betaald, loonheffing,
+    start, dagenActief, dagenRest, uren, nogFactureren, zonderUren };
+}
+
+function toonPrognose(p, r, t, opt, effJaar, winstBelasting, pctTxt){
+  const jaar = new Date().getFullYear();
+  const perMaand = p.winstNu / p.dagenActief * 30.44;
+  $("bwPrJaar").textContent = jaar;
+  $("bwPrNu").textContent = eur(p.winstNu);
+  $("bwPrNuSub").textContent = "excl. btw · sinds " + fmtDatum(isoDatum(p.start));
+  $("bwPrRest").textContent = "+ " + eur(p.extra);
+  $("bwPrRestSub").textContent = (p.eigen ? "jouw schatting" : "in je tempo van nu") + " · nog " + p.dagenRest + " dagen";
+  $("bwPrBelasting").textContent = eur(r.totaal);
+  $("bwPrBelastingSub").textContent = opt.loon > 0
+    ? "over loon + " + eur(p.jaarWinst) + " winst · winst kost " + eur(winstBelasting)
+    : pctTxt(effJaar) + " van " + eur(p.jaarWinst) + " winst";
+  const al = p.betaald + p.loonheffing;
+  const rest = r.totaal - al;
+  $("bwPrTeBetalen").textContent = eur(Math.abs(rest));
+  $("bwPrTeBetalenSub").textContent = al > 0
+    ? (rest >= 0 ? "bij te betalen" : "terug te krijgen") + " · al betaald " + eur(al)
+    : "nog niets betaald ingevuld";
+
+  const vul = (id, sleutel) => {
+    if (document.activeElement === $(id)) return;
+    const w = cache.inst[sleutel + jaar];
+    $(id).value = w !== undefined && w !== "" ? w : "";
+  };
+  vul("bwPrExtra", "belasting_prognose_extra_");
+  vul("bwPrBetaald", "belasting_voorlopig_");
+  vul("bwPrLoon", "belasting_loon_");
+  vul("bwPrLoonheffing", "belasting_loonheffing_");
+  $("bwPrExtra").placeholder = String(Math.round(p.trend));
+  $("bwPrExtraHint").innerHTML = "Leeg = doortrekken: je maakt nu gemiddeld <b>" + eur(Math.max(0, perMaand)) +
+    "</b> winst per maand, dat is <b>" + eur(p.trend) + "</b> tot het eind van het jaar." +
+    (p.nogFactureren > 0 ? " Je hebt nog voor " + eur(p.nogFactureren) + " aan uren openstaan die nog niet gefactureerd zijn." : "");
+
+  const verschil = p.zonderUren - r.totaal;
+  const urenTxt = p.uren.toLocaleString("nl-NL", { maximumFractionDigits: 1 });
+  $("bwPrUitleg").innerHTML =
+    (opt.uren
+      ? "Je rekent mét het urencriterium (1.225 uur in " + jaar + ", ook als je halverwege het jaar bent begonnen). " +
+        "In de app staat nu " + urenTxt + " uur geregistreerd. Haal je het niet, dan betaal je ongeveer <b>" + eur(Math.abs(verschil)) + " meer</b>."
+      : "Je rekent zónder urencriterium. Haal je die 1.225 uur toch, dan scheelt dat ongeveer <b>" + eur(Math.abs(verschil)) + "</b>.") +
+    " De aangifte over " + jaar + " doe je vóór 1 mei " + (jaar + 1) + "; doe je hem op tijd, dan betaal je geen belastingrente. " +
+    "Inkomstenbelasting en Zvw krijg je als twee aparte aanslagen.";
+}
+$("bwPrOpslaan").addEventListener("click", () => {
+  const jaar = new Date().getFullYear();
+  const velden = [
+    ["bwPrExtra", "belasting_prognose_extra_", "verwachte winst"],
+    ["bwPrBetaald", "belasting_voorlopig_", "voorlopige aanslag"],
+    ["bwPrLoon", "belasting_loon_", "loon"],
+    ["bwPrLoonheffing", "belasting_loonheffing_", "loonheffing"]
+  ];
+  const rijen = [];
+  for (const [id, sleutel, naam] of velden){
+    const txt = $(id).value.trim(), n = parseFloat(txt);
+    if (txt !== "" && !(n >= 0)) { toast("Vul bij " + naam + " een bedrag van 0 of meer in, of laat het leeg"); return; }
+    rijen.push({ sleutel: sleutel + jaar, waarde: txt === "" ? "" : String(r2(n)) });
+  }
+  bewaarInstellingen(rijen, "bwPrOpslaan", "Prognose opgeslagen", renderBelasting);
+});
 
 function renderBtw(){
   const jaar = vulJaarKeuze("btJaar");
