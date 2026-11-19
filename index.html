@@ -9291,7 +9291,10 @@ let ofaKosten = 0;   // wat dit gesprek tot nu toe gekost heeft (euro, schatting
    per token, en goed genoeg voor rekenen volgens Lennarts regels en foto's lezen. */
 const OFA_MODEL = "claude-sonnet-5-5";
 // prijzen in dollar per miljoen tokens (Anthropic rekent in dollars)
+// eisencontrole = een vaste lijst afvinken: daarvoor is Haiku goed genoeg (~20× goedkoper)
+const CU_CONTROLE_MODEL = "claude-haiku-5-5";
 const AI_PRIJS = {
+  "claude-haiku-5-5":  { in: 0.10, uit: 0.50, schrijf: 0.125, lees: 0.01 },   // tot 100k tokens per vraag
   "claude-sonnet-5-5": { in: 2, uit: 10, schrijf: 2.5, lees: 0.10 },
   "claude-opus-5-5":   { in: 4, uit: 20, schrijf: 5,   lees: 0.20 },
 };
@@ -10070,24 +10073,40 @@ async function cuEisenControle(id){
     const inhoud = await cuAanvraagBlokken(t, true);
     const { data: { session } } = await db.auth.getSession();
     if (!session) throw new Error("Je sessie is verlopen — log opnieuw in");
-    const r = await fetch(SUPABASE_URL + "/functions/v1/anthropic-proxy", {
-      method: "POST",
-      headers: { "content-type": "application/json", "authorization": "Bearer " + session.access_token },
-      body: JSON.stringify({
-        model: OFA_MODEL, max_tokens: 6000,
-        output_config: { effort: "low", format: { type: "json_schema", schema: CU_EISEN_SCHEMA } },
-        system: cuEisenSysteem(),
-        messages: [{ role: "user", content: [...inhoud, { type: "text", text: "Toets deze aanvraag aan mijn eisen." }] }]
-      })
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error((data.error && data.error.message) || "API-fout");
-    if (data.stop_reason === "refusal") throw new Error("Claude wilde deze aanvraag niet beoordelen");
-    if (data.stop_reason === "max_tokens") throw new Error("Antwoord afgekapt");
-    const uitslag = JSON.parse((data.content || []).filter(c => c.type === "text").map(c => c.text).join(""));
+    // eerst het goedkope Haiku; lukt dat niet (fout, geweigerd, afgekapt, rare uitslag)
+    // dan alsnog met Sonnet, zodat je altijd een bruikbare controle krijgt
+    let kosten = 0, uitslag = null, laatsteFout = null;
+    for (const model of [CU_CONTROLE_MODEL, OFA_MODEL]){
+      try {
+        const r = await fetch(SUPABASE_URL + "/functions/v1/anthropic-proxy", {
+          method: "POST",
+          headers: { "content-type": "application/json", "authorization": "Bearer " + session.access_token },
+          body: JSON.stringify({
+            model, max_tokens: 6000,
+            output_config: { effort: "low", format: { type: "json_schema", schema: CU_EISEN_SCHEMA } },
+            system: cuEisenSysteem(),
+            messages: [{ role: "user", content: [...inhoud, { type: "text", text: "Toets deze aanvraag aan mijn eisen." }] }]
+          })
+        });
+        const data = await r.json();
+        kosten += aiKosten(model, data.usage);
+        if (r.status === 401) throw Object.assign(new Error((data.error && data.error.message) || "Log opnieuw in"), { stop: true });
+        if (!r.ok) throw new Error((data.error && data.error.message) || "API-fout");
+        if (data.stop_reason === "refusal") throw new Error("Claude wilde deze aanvraag niet beoordelen");
+        if (data.stop_reason === "max_tokens") throw new Error("Antwoord afgekapt");
+        const u = JSON.parse((data.content || []).filter(c => c.type === "text").map(c => c.text).join(""));
+        if (!u || !Array.isArray(u.eisen) || !u.eisen.length) throw new Error("Onvolledige uitslag");
+        uitslag = u;
+        break;
+      } catch (e){
+        console.warn("Eisencontrole met " + model + " mislukt:", e.message);
+        laatsteFout = e;
+        if (e.stop) break;
+      }
+    }
+    if (!uitslag) throw laatsteFout || new Error("Controle mislukt");
     try {
-      localStorage.setItem("cuEisen:" + id, JSON.stringify({ bijgewerkt: t.bijgewerkt || null, eisen: cuEisenTekst(), tijd: Date.now(), uitslag,
-        kosten: aiKosten(OFA_MODEL, data.usage) }));
+      localStorage.setItem("cuEisen:" + id, JSON.stringify({ bijgewerkt: t.bijgewerkt || null, eisen: cuEisenTekst(), tijd: Date.now(), uitslag, kosten }));
     } catch {}
   } catch (e){
     console.error(e);
@@ -10200,15 +10219,27 @@ function ofaClickupChip(){
    de foto's (verkleind in de browser, net als foto's die je zelf toevoegt). */
 async function cuAanvraagVoorClaude(metFotos){
   if (!offClickupTaakId) return "Deze offerte is niet aan een aanvraag in ClickUp gekoppeld.";
-  return cuAanvraagBlokken(await cuDetail(offClickupTaakId, true), metFotos);
+  // foto's maar één keer per gesprek: wat al eerder is meegestuurd (en nog in het
+  // gesprek staat) niet opnieuw — dat scheelt geld bij elke volgende ronde
+  const gezien = new Set();
+  const loop = blokken => (Array.isArray(blokken) ? blokken : []).forEach(b => {
+    if (b && b.type === "tool_result") loop(b.content);
+    else if (b && b.type === "text"){ const m = String(b.text).match(/\[foto ([^\]]+)\]$/); if (m) gezien.add(m[1]); }
+  });
+  ofaGesprek.filter(m => m.role === "user").forEach(m => loop(m.content));
+  return cuAanvraagBlokken(await cuDetail(offClickupTaakId, true), metFotos, gezien);
 }
-async function cuAanvraagBlokken(t, metFotos){
-  const fotos = metFotos ? (t.bijlagen || []).filter(cuIsFoto).sort((a, b) => (b.datum || 0) - (a.datum || 0)).slice(0, 6) : [];
+async function cuAanvraagBlokken(t, metFotos, alGezien){
+  const alle = metFotos ? (t.bijlagen || []).filter(cuIsFoto).sort((a, b) => (b.datum || 0) - (a.datum || 0)).slice(0, 6) : [];
+  const fotos = alle.filter(b => !(alGezien && alGezien.has(b.id)));
   const blokken = [];
+  if (alle.length > fotos.length){
+    blokken.push({ type: "text", text: (alle.length - fotos.length) + " foto('s) heb je eerder in dit gesprek al gekregen; die staan hierboven en worden niet opnieuw meegestuurd." });
+  }
   for (const b of fotos){
     try {
       const f = await ofaVerklein((await cuFoto(t.id, b, false)).blob);
-      blokken.push({ type: "text", text: "Foto: " + b.titel },
+      blokken.push({ type: "text", text: "Foto: " + b.titel + " [foto " + b.id + "]" },
         { type: "image", source: { type: "base64", media_type: f.media_type, data: f.data } });
     } catch (e){
       blokken.push({ type: "text", text: "Foto " + b.titel + " kon niet worden opgehaald: " + e.message });
