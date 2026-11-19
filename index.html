@@ -1847,7 +1847,10 @@ nav.onderbalk{display:none}
       </div>
       <div class="tab" id="tab-btw">
         <div class="tab-kop"><h2>BTW</h2>
-          <select id="btJaar" style="width:auto;padding:8px 12px"></select>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="knop klein stil" id="btJaarpakket" title="Eén PDF voor de Belastingdienst: dag voor dag km-standen, facturen en betalingen, met daarachter elke bon en factuur zelf">JAARPAKKET (PDF)</button>
+            <select id="btJaar" style="width:auto;padding:8px 12px"></select>
+          </div>
         </div>
         <div class="grid4">
           <div class="card"><div class="k">Btw ontvangen</div><div class="v" id="btOnt">—</div><div class="m">uitgaande facturen</div></div>
@@ -10552,6 +10555,241 @@ $("fdPrint").addEventListener("click", () => {
     doc.save(bestandsnaam);
   } catch (e) { console.error(e); toast("PDF maken mislukt"); }
 });
+
+/* =====================================================
+   JAARPAKKET — één PDF voor de Belastingdienst
+   Dag voor dag vanaf de eerste datum van het jaar: km-standen met omschrijving,
+   facturen en losse betalingen van die dag, en direct daarna het bewijsstuk zelf
+   (de opgeslagen PDF of foto van de bon, of de verkoopfactuur zoals de klant hem
+   kreeg). Voorop een samenvatting en de lijst met ontbrekende bewijsstukken.
+   ===================================================== */
+let jpPdfLibLaden = null;
+function jpLaadPdfLib(){
+  if (window.PDFLib) return Promise.resolve(window.PDFLib);
+  if (!jpPdfLibLaden) jpPdfLibLaden = new Promise((ok, fout) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
+    s.onload = () => window.PDFLib ? ok(window.PDFLib) : fout(new Error("pdf-lib niet geladen"));
+    s.onerror = () => { jpPdfLibLaden = null; fout(new Error("pdf-lib kon niet geladen worden")); };
+    document.head.appendChild(s);
+  });
+  return jpPdfLibLaden;
+}
+
+// foto → JPEG met de goede kant boven (zoals de telefoon hem toont), niet groter dan nodig
+async function jpFotoNaarJpeg(blob){
+  const bm = await createImageBitmap(blob, { imageOrientation: "from-image" });
+  const schaal = Math.min(1, 2000 / Math.max(bm.width, bm.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bm.width * schaal); c.height = Math.round(bm.height * schaal);
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(bm, 0, 0, c.width, c.height);
+  if (bm.close) bm.close();
+  const uit = await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.85));
+  if (!uit) throw new Error("foto omzetten mislukt");
+  return { bytes: new Uint8Array(await uit.arrayBuffer()), w: c.width, h: c.height };
+}
+
+const jpLokaleDatum = ts => { const d = new Date(ts); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+const jpDagNaam = iso => { const s = new Date(iso + "T12:00:00").toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }); return s.charAt(0).toUpperCase() + s.slice(1); };
+const jpKm = n => Number(n).toLocaleString("nl-NL");
+// korte omschrijving van een factuur, ook voor de kop boven een bewijsstuk
+const jpFactuurNaam = f => f.type === "verkoop"
+  ? "Verkoopfactuur " + (f.nummer || "") + " · " + (klantNaam(f.klant_id) || "—")
+  : "Inkoop " + (f.leverancier || "—") + (f.nummer && f.nummer !== "-" ? " · factuur " + f.nummer : "");
+
+async function maakJaarpakket(jaar){
+  const knop = $("btJaarpakket"), knopTekst = knop.textContent;
+  const meld = t => { knop.textContent = t; };
+  knop.disabled = true;
+  try {
+    meld("Gegevens ophalen…");
+    const van = jaar + "-01-01", tot = jaar + "-12-31";
+    const [ft, km, lb, kmVoor] = await Promise.all([
+      db.from("facturen").select("*").gte("datum", van).lte("datum", tot).order("datum").order("aangemaakt_op"),
+      db.from("km_registratie").select("*").gte("datum", van).lte("datum", tot).order("datum").order("km_stand"),
+      db.from("losse_betalingen").select("*").gte("betaald_op", new Date(jaar, 0, 1).toISOString()).lt("betaald_op", new Date(jaar + 1, 0, 1).toISOString()).order("betaald_op"),
+      db.from("km_registratie").select("km_stand").lt("datum", van).order("km_stand", { ascending: false }).limit(1)
+    ]);
+    const dbFout = [ft, km, lb, kmVoor].find(r => r.error);
+    if (dbFout) throw dbFout.error;
+    const facturen = ft.data || [], kms = km.data || [], losse = lb.data || [];
+    if (!facturen.length && !kms.length && !losse.length){ toast("Niets gevonden in " + jaar); return; }
+    const verkoopIds = facturen.filter(f => f.type === "verkoop").map(f => f.id);
+    let vRegels = [];
+    if (verkoopIds.length){
+      const r = await db.from("factuur_regels").select("*").in("factuur_id", verkoopIds)
+        .order("volgorde", { nullsFirst: false }).order("aangemaakt_op");
+      if (r.error) throw r.error;
+      vRegels = r.data || [];
+    }
+
+    // alles per dag
+    const dagen = new Map();
+    const dag = d => { if (!dagen.has(d)) dagen.set(d, { km: [], fact: [], losse: [] }); return dagen.get(d); };
+    kms.forEach(k => dag(k.datum).km.push(k));
+    facturen.forEach(f => dag(f.datum).fact.push(f));
+    losse.forEach(l => dag(jpLokaleDatum(l.betaald_op)).losse.push(l));
+    const volgorde = [...dagen.keys()].sort();
+
+    meld("PDF voorbereiden…");
+    const { PDFDocument, StandardFonts, rgb } = await jpLaadPdfLib();
+    const uit = await PDFDocument.create();
+    const helv = await uit.embedFont(StandardFonts.Helvetica);
+    const helvB = await uit.embedFont(StandardFonts.HelveticaBold);
+    const I = cache.inst || {};
+    const bedrijf = I.bedrijf_naam || "LRoks Elektrotechniek";
+
+    // ---- tekstpagina's met jsPDF, in stukken tussen de bewijsstukken door ----
+    const L = 15, R = 195, ONDER = 282;
+    let seg = null, y = 0;
+    const nieuwSeg = () => { seg = new window.jspdf.jsPDF({ unit: "mm", format: "a4" }); y = 18; };
+    const ruimte = h => { if (!seg) nieuwSeg(); else if (y + h > ONDER){ seg.addPage(); y = 18; } };
+    const tekst = (t, o = {}) => {
+      if (!seg) nieuwSeg();
+      seg.setFont("helvetica", o.vet ? "bold" : "normal");
+      seg.setFontSize(o.grootte || 9);
+      seg.setTextColor(...(o.kleur || [30, 30, 30]));
+      const lh = (o.grootte || 9) * 0.45;
+      seg.splitTextToSize(String(t), R - L - (o.in || 0)).forEach(r => { ruimte(lh); seg.text(r, L + (o.in || 0), y); y += lh; });
+      y += o.na || 0;
+    };
+    const lijn = () => { ruimte(3); seg.setDrawColor(200); seg.line(L, y, R, y); y += 3; };
+    const segKlaar = async () => {
+      if (!seg) return;
+      const src = await PDFDocument.load(seg.output("arraybuffer"));
+      (await uit.copyPages(src, src.getPageIndices())).forEach(p => uit.addPage(p));
+      seg = null;
+    };
+
+    // ---- voorblad ----
+    const verkoop = facturen.filter(f => f.type === "verkoop"), inkoop = facturen.filter(f => f.type === "inkoop");
+    const som = (a, k) => a.reduce((s, x) => s + Number(x[k] || 0), 0);
+    const zonderBewijs = inkoop.filter(f => !f.bestand_url);
+    const eersteKm = kms[0], laatsteKm = kms[kms.length - 1];
+    tekst(bedrijf, { vet: true, grootte: 16, na: 2 });
+    tekst([I.bedrijf_adres, I.bedrijf_postcode_plaats].filter(Boolean).join(", "));
+    tekst("KVK " + (I.bedrijf_kvk || "-") + "   ·   BTW " + (I.bedrijf_btw || "-"), { na: 6 });
+    tekst("Administratie " + jaar, { vet: true, grootte: 14, na: 1 });
+    tekst("Periode " + fmtDatum(volgorde[0]) + " t/m " + fmtDatum(volgorde[volgorde.length - 1]) + "   ·   opgemaakt op " + fmtDatum(vandaagISO()), { na: 4 });
+    tekst("Opbouw: per dag, op datumvolgorde, de kilometerstanden met omschrijving, de facturen en de betalingen van die dag. " +
+          "Direct na elke dag volgen de bewijsstukken van die dag zelf: de inkoopfacturen en bonnen zoals ontvangen, en de verkoopfacturen zoals verstuurd.", { na: 6 });
+    tekst("Samenvatting", { vet: true, grootte: 11, na: 1 });
+    [
+      "Verkoopfacturen: " + verkoop.length + "  ·  omzet excl. btw " + eur2(som(verkoop, "bedrag_excl")) + "  ·  btw " + eur2(som(verkoop, "btw_bedrag")),
+      "Inkoopfacturen en bonnen: " + inkoop.length + "  ·  excl. btw " + eur2(som(inkoop, "bedrag_excl")) + "  ·  btw " + eur2(som(inkoop, "btw_bedrag")) +
+        "  ·  bewijsstuk aanwezig: " + (inkoop.length - zonderBewijs.length) + " van " + inkoop.length,
+      losse.length ? "Betalingen zonder factuur: " + losse.length + "  ·  totaal " + eur2(som(losse, "bedrag")) : null,
+      kms.length ? "Kilometerregistratie: " + kms.length + " standen  ·  van " + jpKm(eersteKm.km_stand) + " km (" + fmtDatum(eersteKm.datum) + ") tot " +
+        jpKm(laatsteKm.km_stand) + " km (" + fmtDatum(laatsteKm.datum) + ")  ·  " + jpKm(laatsteKm.km_stand - ((kmVoor.data || [])[0] ? kmVoor.data[0].km_stand : eersteKm.km_stand)) + " km" : null
+    ].filter(Boolean).forEach(t => tekst("• " + t, { in: 2, na: 1 }));
+    y += 4;
+    if (zonderBewijs.length){
+      tekst("Inkoop zonder bewijsstuk in het dashboard (" + zonderBewijs.length + ")", { vet: true, grootte: 11, kleur: [180, 30, 30], na: 1 });
+      zonderBewijs.forEach(f => tekst(fmtDatum(f.datum) + "   " + jpFactuurNaam(f) + "   " + eur2(f.bedrag_incl || 0) + " incl.", { in: 2 }));
+    } else {
+      tekst("Bij elke inkoopfactuur zit het bewijsstuk.", { vet: true, kleur: [20, 120, 60] });
+    }
+    await segKlaar();
+
+    // ---- dag voor dag ----
+    const totaalBewijs = facturen.filter(f => f.type === "verkoop" || f.bestand_url).length + losse.filter(l => l.bijlage).length;
+    let nBewijs = 0, vorigeStand = (kmVoor.data || [])[0] ? kmVoor.data[0].km_stand : null;
+    const mislukt = [];
+    for (const d of volgorde){
+      const g = dagen.get(d);
+      ruimte(16);
+      y += 3;
+      tekst(jpDagNaam(d), { vet: true, grootte: 11, na: 1 });
+      g.km.forEach(k => {
+        const erbij = vorigeStand != null ? " (+" + jpKm(k.km_stand - vorigeStand) + ")" : "";
+        vorigeStand = k.km_stand;
+        tekst((k.tijd ? fmtTijd(k.tijd) + "  " : "") + "Km-stand " + jpKm(k.km_stand) + erbij + "  ·  " + (k.zakelijk === false ? "privé" : "zakelijk") +
+          (k.klant_id ? "  ·  " + (klantNaam(k.klant_id) || "") : "") + (k.omschrijving ? "  ·  " + k.omschrijving : ""), { in: 2 });
+      });
+      g.fact.forEach(f => {
+        const bewijs = f.type === "verkoop" ? "factuur volgt hierna" : f.bestand_url ? "bewijsstuk volgt hierna" : "BEWIJSSTUK ONTBREEKT";
+        tekst(jpFactuurNaam(f) + "  ·  excl. " + eur2(f.bedrag_excl || 0) + "  ·  btw " + eur2(f.btw_bedrag || 0) + "  ·  incl. " + eur2(f.bedrag_incl || 0) +
+          (f.type === "inkoop" && f.categorie ? "  ·  " + kostenNaam(f.categorie) : "") + "  —  " + bewijs,
+          { in: 2, kleur: bewijs === "BEWIJSSTUK ONTBREEKT" ? [180, 30, 30] : undefined });
+      });
+      g.losse.forEach(l => tekst("Betaling zonder factuur (" + (l.richting === "in" ? "ontvangen" : "betaald") + ")  ·  " + (l.tegenpartij || "—") +
+        (l.omschrijving ? "  ·  " + l.omschrijving : "") + "  ·  " + eur2(l.bedrag || 0) + (Number(l.btw_bedrag) ? " (btw " + eur2(l.btw_bedrag) + ")" : "") +
+        (l.bijlage ? "  —  bewijsstuk volgt hierna" : ""), { in: 2 }));
+
+      // bewijsstukken van deze dag
+      const stukken = [
+        ...g.fact.filter(f => f.type === "verkoop" || f.bestand_url).map(f => ({ naam: jpFactuurNaam(f), f, pad: f.type === "verkoop" ? null : f.bestand_url })),
+        ...g.losse.filter(l => l.bijlage).map(l => ({ naam: "Betaling " + (l.tegenpartij || ""), pad: l.bijlage }))
+      ];
+      if (!stukken.length){ y += 1; lijn(); continue; }
+      await segKlaar();
+      for (const s of stukken){
+        nBewijs++;
+        meld("Bewijsstuk " + nBewijs + " van " + totaalBewijs + "…");
+        const kop = s.naam + "  ·  " + fmtDatum(d);
+        try {
+          if (!s.pad){
+            // verkoopfactuur: opnieuw opmaken zoals de klant hem kreeg
+            const k = cache.klanten.find(x => x.id === s.f.klant_id);
+            const doc = genereerFactuurPdf(s.f, k, I, vRegels.filter(r => r.factuur_id === s.f.id));
+            const src = await PDFDocument.load(doc.output("arraybuffer"));
+            (await uit.copyPages(src, src.getPageIndices())).forEach(p => uit.addPage(p));
+            continue;
+          }
+          const { data: blob, error } = await db.storage.from("bijlagen").download(s.pad);
+          if (error || !blob) throw new Error((error && error.message) || "downloaden mislukt");
+          const isPdf = /\.pdf$/i.test(s.pad) || blob.type === "application/pdf";
+          if (isPdf){
+            const src = await PDFDocument.load(await blob.arrayBuffer(), { ignoreEncryption: true });
+            (await uit.copyPages(src, src.getPageIndices())).forEach(p => uit.addPage(p));
+          } else {
+            const foto = await jpFotoNaarJpeg(blob);
+            const img = await uit.embedJpg(foto.bytes);
+            const p = uit.addPage([595.28, 841.89]);
+            p.drawText("Bewijsstuk: " + kop.replace(/[^\x20-\x7E -ÿ€]/g, "?"), { x: 42, y: 805, size: 10, font: helvB, color: rgb(0.15, 0.15, 0.15) });
+            const maxW = 511, maxH = 740, sch = Math.min(maxW / foto.w, maxH / foto.h);
+            const w = foto.w * sch, h = foto.h * sch;
+            p.drawImage(img, { x: 42 + (maxW - w) / 2, y: 790 - h, width: w, height: h });
+          }
+        } catch (e){
+          console.error("Bewijsstuk niet ingevoegd: " + s.naam, e);
+          mislukt.push(kop);
+          tekst("Bewijsstuk kon niet worden ingevoegd: " + kop + " (" + e.message + "). Open het apart in het dashboard.", { kleur: [180, 30, 30], na: 2 });
+          await segKlaar();
+        }
+      }
+    }
+    await segKlaar();
+
+    // paginanummers onderaan elke pagina, klein en grijs (ook op de originele bonnen, buiten de tekst)
+    meld("PDF afronden…");
+    const paginas = uit.getPages(), N = paginas.length;
+    const voet = (bedrijf + " - administratie " + jaar).replace(/[^\x20-\x7E -ÿ]/g, "?");
+    paginas.forEach((p, i) => {
+      const { width } = p.getSize();
+      const t = voet + "  -  pagina " + (i + 1) + " van " + N;
+      p.drawText(t, { x: width - 14 - helv.widthOfTextAtSize(t, 6.5), y: 7, size: 6.5, font: helv, color: rgb(0.45, 0.45, 0.45) });
+    });
+    uit.setTitle("Administratie " + jaar + " - " + bedrijf);
+    const bytes = await uit.save();
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "Administratie " + jaar + " - " + bedrijf.replace(/[\\/:*?"<>|]/g, "") + ".pdf";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    toast("Jaarpakket " + jaar + ": " + N + " pagina's" + (zonderBewijs.length ? " — " + zonderBewijs.length + " inkoop zonder bewijsstuk (staat op het voorblad)" : "") +
+      (mislukt.length ? " — " + mislukt.length + " bewijsstuk(ken) niet ingevoegd" : ""));
+  } catch (e){
+    console.error(e);
+    toast("Jaarpakket maken mislukt: " + (e.message || e));
+  } finally {
+    knop.disabled = false;
+    knop.textContent = knopTekst;
+  }
+}
+$("btJaarpakket").addEventListener("click", () => maakJaarpakket(Number($("btJaar").value) || new Date().getFullYear()));
 
 /* elke minuut checken of de halfvijf-herinnering moet verschijnen */
 setInterval(checkHerinnering, 60000);
