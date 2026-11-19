@@ -143,8 +143,18 @@ Deno.serve(async (req: Request) => {
     if (verzoek.actie === "taak") {
       const t = await taakUitLijst(String(verzoek.taak_id || ""), sleutel);
       const r = await cu("/task/" + encodeURIComponent(t.id) + "/comment", sleutel);
-      const reacties = (r.comments || [])
-        .map((c: Obj) => ({ tekst: c.comment_text, door: c.user ? c.user.username : null, datum: Number(c.date) || null }))
+      const reactie = (c: Obj, opDraad = false) => ({
+        tekst: c.comment_text, door: c.user ? c.user.username : null, datum: Number(c.date) || null,
+        ...(opDraad ? { in_draadje: true } : {}),
+      });
+      const hoofd: Obj[] = r.comments || [];
+      // antwoorden in een draadje onder een reactie komen niet mee met /comment: apart ophalen
+      // (alleen bij reacties van deze taak, dus nog steeds alleen de lijst LRoks)
+      const draadjes = await Promise.all(hoofd.filter((c) => Number(c.reply_count) > 0).slice(0, 10)
+        .map((c) => cu("/comment/" + encodeURIComponent(c.id) + "/reply", sleutel)
+          .then((d) => (d.comments || []).map((x: Obj) => reactie(x, true)))
+          .catch(() => [])));
+      const reacties = [...hoofd.map((c) => reactie(c)), ...draadjes.flat()]
         .sort((a: Obj, b: Obj) => (a.datum || 0) - (b.datum || 0));
       return json({
         id: t.id,

@@ -8735,6 +8735,8 @@ function renderOffertes(){
     : s === "verstuurd" ? '<span class="chip amber">VERSTUURD</span>'
     : s === "vragen" ? '<span class="chip amber">EXTRA VRAGEN</span>'
     : '<span class="chip grijs">CONCEPT</span>';
+  const antwChip = o => o.clickup_taak_id && cuHeeftAntwoord(o.clickup_taak_id)
+    ? ' <span class="chip groen">ANTWOORD BINNEN</span>' : '';
   body.innerHTML = offerteData.map(o =>
     '<tr class="klik" data-ofid="' + o.id + '">' +
       '<td>' + esc(o.nummer || "") + '</td>' +
@@ -8742,7 +8744,7 @@ function renderOffertes(){
         '<span class="of-klant-klein">' + esc(klantNaam(o.klant_id) || "") + '</span></td>' +
       '<td class="tekst of-klant">' + esc(klantNaam(o.klant_id) || "—") + '</td>' +
       '<td>' + fmtDatum(o.datum) + '</td>' +
-      '<td>' + chip(o.status) + '</td>' +
+      '<td>' + chip(o.status) + antwChip(o) + '</td>' +
       '<td class="r">' + eur2(o.bedrag_excl || 0) + '</td>' +
     '</tr>').join("");
   body.querySelectorAll("[data-ofid]").forEach(r => r.addEventListener("click", () => {
@@ -9692,6 +9694,10 @@ const cuDetails = new Map();            // taak-id → { t, tijd }
 const cuFotos = new Map();              // bijlage-id|formaat → Promise<{ blob, url }>
 const cuEisenBezig = new Set();
 const cuEisenFout = new Map();
+// Offerte op 'Extra vragen' en daarna een reactie van iemand anders dan jij in ClickUp
+// = antwoord binnen: die aanvraag komt terug in de open rij. taak-id → laatste reactie
+const cuAntwoord = new Map();
+const CU_IK = /^lennart\s+roks$/i;      // jouw naam in ClickUp
 
 async function cuVraag(body, alsBlob){
   const { data: { session } } = await db.auth.getSession();
@@ -9734,6 +9740,7 @@ async function cuLaad(stil){
       .forEach(t => toast("Nieuwe aanvraag in ClickUp: " + t.naam));
     cuRender();
     if (cuToon) cuEisenToon(cuToon);
+    await cuAntwoordZoeken();
     cuAutoControle();
   } catch (e){
     console.error(e);
@@ -9764,7 +9771,38 @@ const cuIsOpen = t => t.status_type !== "closed" && CU_OPEN.includes(String(t.st
 const cuOfferteVan = id => offerteData.find(o => o.clickup_taak_id === id);
 // offerte voorbij concept (extra vragen gesteld, verstuurd, geaccepteerd of afgewezen):
 // je bent er niet meer mee bezig, dus niet in de rij met open aanvragen
-const cuAfgehandeld = t => { const o = cuOfferteVan(t.id); return !!o && o.status !== "concept"; };
+// (behalve als er op je extra vragen geantwoord is: dan ben je er weer mee bezig)
+const cuHeeftAntwoord = id => { const o = cuOfferteVan(id); return !!o && o.status === "vragen" && cuAntwoord.has(id); };
+const cuAfgehandeld = t => { const o = cuOfferteVan(t.id); return !!o && o.status !== "concept" && !cuHeeftAntwoord(t.id); };
+
+// Bij elke verversing: voor elke aanvraag met een offerte op 'Extra vragen' de reacties
+// ophalen (kost alleen een ClickUp-verzoek, geen AI) en kijken of de laatste van ChargeNow is.
+async function cuAntwoordZoeken(){
+  const wacht = (cuTaken || []).filter(t => { const o = cuOfferteVan(t.id); return o && o.status === "vragen"; });
+  for (const id of [...cuAntwoord.keys()]) if (!wacht.some(t => t.id === id)) cuAntwoord.delete(id);
+  let veranderd = false;
+  for (const t of wacht){
+    try {
+      const d = await cuDetail(t.id, true);
+      const laatste = (d.reacties || []).slice(-1)[0];
+      const isAntwoord = !!laatste && !CU_IK.test(String(laatste.door || "").trim());
+      if (isAntwoord !== cuAntwoord.has(t.id)) veranderd = true;
+      if (!isAntwoord){ cuAntwoord.delete(t.id); continue; }
+      cuAntwoord.set(t.id, laatste);
+      // één melding per antwoord, ook als je het dashboard opnieuw opent
+      const sleutel = "cuAntwoordGemeld:" + t.id;
+      let gemeld = null;
+      try { gemeld = localStorage.getItem(sleutel); } catch {}
+      if (gemeld !== String(laatste.datum)){
+        toast("Antwoord op je vragen: " + t.naam + " (" + (laatste.door || "ChargeNow") + ")");
+        try { localStorage.setItem(sleutel, String(laatste.datum)); } catch {}
+      }
+    } catch (e){
+      console.error("Reacties ophalen mislukt voor " + t.id, e);
+    }
+  }
+  if (veranderd){ cuRender(); renderOffertes(); }
+}
 const cuDatum = ms => ms ? new Date(ms).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "";
 
 // klein chipje met de uitkomst van de eisencontrole
@@ -9782,20 +9820,22 @@ function cuRender(){
   if (!cuTaken) return;
   const lijst = cuTaken.filter(t => cuAllesTonen || (cuIsOpen(t) && !cuAfgehandeld(t)))
     .sort((a, b) => (b.aangemaakt || 0) - (a.aangemaakt || 0));
-  const zonderOfferte = cuTaken.filter(t => cuIsOpen(t) && !cuOfferteVan(t.id)).length;
+  const zonderOfferte = cuTaken.filter(t => cuIsOpen(t) && (!cuOfferteVan(t.id) || cuHeeftAntwoord(t.id))).length;
   $("cuTel").textContent = zonderOfferte || "";
   ["cuNavTel", "cuNavTelMob"].forEach(id => { if ($(id)) $(id).textContent = zonderOfferte || ""; });
   $("cuAlles").textContent = cuAllesTonen ? "ALLEEN OPEN" : "ALLES";
   $("cuMelding").textContent = lijst.length ? "" :
     cuAllesTonen ? "Geen aanvragen gevonden." : "Geen openstaande aanvragen (status to do of offerte)." +
-      (cuTaken.some(t => cuIsOpen(t) && cuAfgehandeld(t)) ? " Aanvragen waarvan de offerte verstuurd is of waar je extra vragen over hebt gesteld staan onder ALLES." : "");
+      (cuTaken.some(t => cuIsOpen(t) && cuAfgehandeld(t)) ? " Aanvragen waarvan de offerte verstuurd is of waar je extra vragen over hebt gesteld staan onder ALLES; komt er antwoord op je vragen, dan komen ze vanzelf terug." : "");
   $("cuTabelWrap").style.display = lijst.length ? "" : "none";
   $("cuBody").innerHTML = lijst.map(t => {
     const o = cuOfferteVan(t.id);
     const nieuw = cuVorigeKeer > 0 && (t.aangemaakt || 0) > cuVorigeKeer;
+    const antw = cuHeeftAntwoord(t.id) && cuAntwoord.get(t.id);
     const sub = [t.adres, t.maker, cuDatum(t.aangemaakt)].filter(Boolean).join(" · ");
     return '<tr class="klik' + (t.id === cuToon ? ' actief' : '') + '" data-cuid="' + esc(t.id) + '">' +
       '<td class="tekst">' + esc(t.naam) + (nieuw ? ' <span class="chip amber">NIEUW</span>' : '') +
+        (antw ? ' <span class="chip groen" title="' + esc((antw.door || "") + " · " + cuDatum(antw.datum)) + '">ANTWOORD BINNEN</span>' : '') +
         (o ? '' : ' ' + cuEisenChip(t.id)) +
         (sub ? '<span style="display:block;font-size:.74rem;color:var(--ink3);margin-top:2px">' + esc(sub) + '</span>' : '') + '</td>' +
       '<td><span class="chip grijs">' + esc(String(t.status || "").toUpperCase()) + '</span></td>' +
@@ -9916,7 +9956,7 @@ async function cuToonAanvraag(id){
     }).catch(e => { knop.textContent = "foto niet geladen"; knop.title = b.titel + " — " + e.message; });
   });
   $("cuAvReacties").innerHTML = (t.reacties || []).map(r =>
-    '<div class="cu-reactie"><b>' + esc(r.door || "?") + '</b> · ' + esc(cuDatum(r.datum)) + '\n' + esc(r.tekst || "") + '</div>').join("");
+    '<div class="cu-reactie"><b>' + (r.in_draadje ? '↳ ' : '') + esc(r.door || "?") + '</b> · ' + esc(cuDatum(r.datum)) + '\n' + esc(r.tekst || "") + '</div>').join("");
 }
 
 // foto groot bekijken (klik of Esc = dicht)
