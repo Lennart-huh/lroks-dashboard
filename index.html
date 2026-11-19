@@ -5843,24 +5843,44 @@ $("vSelNaarGw").addEventListener("click", async () => {
                     "Annuleren = één regel per item");
   }
 
+  /* wanneer gekocht: de laatste inkoopfactuur waar het product op staat. Eerst via de koppeling
+     (die verdwijnt bij het verwijderen uit Producten, dus nu ophalen), anders op naam */
+  const gekocht = new Map();   // product-id → { datum, leverancier, nummer }
+  try {
+    const { data: regels } = await db.from("factuur_inkoop_regels")
+      .select("product_id, omschrijving, facturen(datum, leverancier, nummer)")
+      .or("product_id.in.(" + ids.join(",") + ")," +
+          prods.map(p => 'omschrijving.ilike."' + String(p.naam).replace(/[",()%_\\]/g, "_") + '*"').join(","));
+    (regels || []).forEach(r => {
+      const f = r.facturen;
+      if (!f || !f.datum) return;
+      const naam = String(r.omschrijving || "").toLowerCase();
+      prods.filter(p => p.id === r.product_id || naam.startsWith(String(p.naam).toLowerCase())).forEach(p => {
+        const nu = gekocht.get(p.id);
+        if (!nu || f.datum > nu.datum) gekocht.set(p.id, f);
+      });
+    });
+  } catch (e){ console.error("Aankoopdatum zoeken mislukt", e); }
+
   const rijen = [];
   prods.forEach(p => {
     const aantal = (apart && p.op_voorraad !== false) ? Math.max(1, Math.round(Number(p.voorraad || 1))) : 1;
+    const f = gekocht.get(p.id);
     for (let i = 0; i < aantal; i++){
       rijen.push({
         naam: aantal > 1 ? p.naam + " (" + (i + 1) + "/" + aantal + ")" : p.naam,
         merk: null,
         type_nr: null,
         serienummer: null,
-        aankoopdatum: null,
+        aankoopdatum: f ? f.datum : null,
         prijs_excl: r2(Number(p.inkoopprijs || 0)),
-        leverancier: p.leverancier || null,
+        leverancier: p.leverancier || (f && f.leverancier) || null,
         garantie_tot: null,
         keuring_tot: null,
         locatie: "bus",
         status: "in_gebruik",
         uitgeleend_aan: null,
-        notitie: "Overgezet vanuit Voorraad op " + vandaagISO()
+        notitie: "Overgezet vanuit Voorraad op " + vandaagISO() + (f && f.nummer ? " · inkoopfactuur " + f.nummer : "")
       });
     }
   });
