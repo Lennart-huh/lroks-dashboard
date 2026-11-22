@@ -1184,6 +1184,17 @@ nav.onderbalk{display:none}
           <button class="knop klein" id="offNieuw">+ Nieuwe offerte</button></div>
         <div class="of-split">
         <div class="of-rechts" id="offRechts">
+        <!-- nieuwe offerte uit je eigen verhaal: Claude bouwt het formulier op, opslaan blijft jouw knop -->
+        <div class="form-card" id="ofnKaart" data-geen-wijziging style="max-width:none;margin-bottom:16px;padding:14px 16px">
+          <h3 style="font-size:.85rem;margin:0 0 8px">Nieuwe offerte met Claude</h3>
+          <div class="veld" style="margin-bottom:8px"><textarea id="ofnTekst" style="min-height:110px" placeholder="Vertel het gewoon: voor wie, wat erin komt, wat er moet gebeuren en hoe je het aanpakt. Bv. 'Fam. de Vries in Zwolle, groepenkast vervangen door 3-fase kast met 8 groepen, ongeveer 6 uur werk, 25 km enkele reis.'"></textarea></div>
+          <div id="ofnFotos" class="hint" style="margin:0 0 6px"></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button type="button" class="knop klein" id="ofnStart">Maak offerte →</button>
+            <label class="knop klein stil" title="Foto's toevoegen (bv. van de meterkast)" style="cursor:pointer">📷 Foto's<input type="file" id="ofnFoto" accept="image/*" multiple style="display:none"></label>
+          </div>
+          <div class="hint" style="margin-top:8px">Claude zet klant, regels, uren en km in een nieuw offerteformulier volgens jouw regels, en vraagt wat hij mist. Pas met <b>Opslaan</b> staat het vast.</div>
+        </div>
         <!-- aanvragen van ChargeNow uit ClickUp (alleen lezen, via edge function clickup-proxy) -->
         <div class="form-card" id="cuKaart" style="max-width:none;margin-bottom:16px;padding:14px 16px">
           <div class="tab-kop" style="margin:0 0 8px">
@@ -9850,6 +9861,8 @@ function offNaarBoven(){
 // 'kies een offerte'-vak alleen als er geen offerte open staat
 const offLeegObs = new MutationObserver(() => {
   $("offLeeg").classList.toggle("verborgen", offOpen() || $("cuAanvraag").style.display !== "none");
+  // 'nieuwe offerte met Claude' alleen als er geen offerte open staat
+  $("ofnKaart").style.display = offOpen() ? "none" : "";
   offMarkeer();
 });
 offLeegObs.observe($("offDetail"), { attributes: true, attributeFilter: ["style"] });
@@ -10401,6 +10414,12 @@ const OFA_TOOLS = [
       eenheid: { type: "string", description: "stuks, meter, …" },
       inkoopprijs: { type: "number", description: "excl. btw, per eenheid" },
       leverancier: { type: "string" } } } },
+  { name: "klant_toevoegen",
+    description: "Zet een nieuwe klant in Klanten en kiest hem in het offerteformulier. Alleen als de klant echt nog niet bestaat: kijk eerst met gegevens_lezen (tabel klanten). Lennart bevestigt het eerst zelf; zegt hij nee, dan hoor je dat.",
+    input_schema: { type: "object", additionalProperties: false, required: ["naam"], properties: {
+      naam: { type: "string", description: "zoals hij op de offerte moet staan, bv. 'Fam. de Vries' of de bedrijfsnaam" },
+      contactpersoon: { type: "string" }, telefoon: { type: "string" }, email: { type: "string" },
+      adres: { type: "string", description: "straat en huisnummer" }, postcode: { type: "string" }, plaats: { type: "string" } } } },
   { name: "regels_bewaren",
     description: "Bewaart een nieuwe versie van Lennarts rekenregels (de tekst tussen <regels>). Stuur de volledige nieuwe tekst, met alleen het nodige veranderd. Lennart bevestigt het eerst zelf.",
     input_schema: { type: "object", additionalProperties: false, required: ["nieuwe_tekst", "wat_verandert"], properties: {
@@ -10416,7 +10435,7 @@ const OFA_TOOLS = [
 ];
 const OFA_BEZIG = { offerte_bekijken: "Offerte bekijken…", producten_zoeken: "Voorraad doorzoeken…",
   regels_aanpassen: "Regels aanpassen…", velden_invullen: "Formulier invullen…", gegevens_lezen: "Gegevens opzoeken…",
-  product_toevoegen: "Wacht op jouw akkoord…", regels_bewaren: "Wacht op jouw akkoord…",
+  product_toevoegen: "Wacht op jouw akkoord…", klant_toevoegen: "Wacht op jouw akkoord…", regels_bewaren: "Wacht op jouw akkoord…",
   clickup_aanvraag_lezen: "Aanvraag in ClickUp lezen…" };
 
 const ofaGetal = id => $(id).value === "" ? null : Number($(id).value);
@@ -10550,6 +10569,26 @@ async function ofaVoerUit(naam, inv){
     toast("Product toegevoegd: " + data.naam);
     return JSON.stringify({ toegevoegd: true, product_id: data.id, naam: data.naam, verkoopprijs: Number(data.verkoopprijs) });
   }
+  if (naam === "klant_toevoegen"){
+    const kNaam = String(inv.naam || "").trim();
+    if (!kNaam) throw new Error("Naam is nodig");
+    const bestaand = cache.klanten.find(k => k.naam.trim().toLowerCase() === kNaam.toLowerCase());
+    if (bestaand){ $("offKlant").value = bestaand.id; return "Deze klant bestond al en staat nu in het formulier: " + bestaand.naam; }
+    const veld = v => (v == null || String(v).trim() === "") ? null : String(v).trim();
+    const rij = { naam: kNaam, contactpersoon: veld(inv.contactpersoon), telefoon: veld(inv.telefoon), email: veld(inv.email),
+      adres: veld(inv.adres), postcode: veld(inv.postcode), plaats: veld(inv.plaats) };
+    const regels = [rij.contactpersoon, rij.adres, [rij.postcode, rij.plaats].filter(Boolean).join(" "), rij.telefoon, rij.email].filter(Boolean);
+    if (!confirm("Claude wil deze klant toevoegen:\n\n" + kNaam + (regels.length ? "\n" + regels.join("\n") : "") + "\n\nToevoegen?"))
+      return "Lennart wilde deze klant niet toevoegen. Vraag wat hij anders wil.";
+    const { data, error } = await db.from("klanten").insert(rij).select().single();
+    if (error) throw new Error(error.message);
+    const { data: alle } = await db.from("klanten").select("*").order("naam");
+    cache.klanten = alle || [];
+    vulSelects(); renderKlanten(); vulOffKlanten();
+    $("offKlant").value = data.id;
+    toast("Klant toegevoegd: " + data.naam);
+    return "Toegevoegd en gekozen in het formulier. Nieuwe stand: " + ofaStand();
+  }
   if (naam === "regels_bewaren"){
     const tekst = String(inv.nieuwe_tekst || "").trim();
     if (!tekst) throw new Error("Lege tekst");
@@ -10578,6 +10617,7 @@ function ofaSysteem(){
     "- Volg Lennarts regels. Mis je iets wat je nodig hebt (welke lader, foto van de meterkast, meters, kabeltracé, de dag en tijd voor de reistijd), vraag het. Wil hij toch een prijs, reken dan met een aanname en noem die aanname in je antwoord en in de notities.\n" +
     "- Foto van een meterkast: noem merk en type kast, 1- of 3-fase, hoofdschakelaar, vrije plekken, en wat je niet goed kunt zien.\n" +
     "- Je verandert alleen het formulier, met regels_aanpassen en velden_invullen. Niets staat vast tot Lennart op Opslaan drukt: zeg dat in één zin als je iets hebt veranderd.\n" +
+    "- Klant: kies hem met velden_invullen. Staat hij er niet in, kijk met gegevens_lezen of hij onder een andere naam bestaat; zo niet, zet hem met klant_toevoegen erin (Lennart bevestigt dat zelf). Weet je de naam niet, vraag het.\n" +
     "- Producten: zoek eerst in Voorraad met producten_zoeken en gebruik het product_id in de regel. Staat het er niet in, zoek het op internet (web_search, eerst elektramat.nl) en zet het met product_toevoegen in Voorraad; Lennart bevestigt dat zelf.\n" +
     "- Is de offerte gekoppeld aan een aanvraag in ClickUp, lees die dan met clickup_aanvraag_lezen. In ClickUp kun je niets plaatsen: vragen voor ChargeNow schrijf je kort en vriendelijk uit, zodat Lennart ze zelf kan doorsturen.\n" +
     "- 1-fase aansluiting met een 3-fase kabel (5-aderig): nooit stilzwijgend. Zeg het Lennart duidelijk in je antwoord, zet het in de notities, en schrijf een bericht voor ChargeNow " +
@@ -10649,7 +10689,8 @@ $("ofaFoto").addEventListener("change", async e => {
   ofaToonFotos();
 });
 
-async function ofaStel(vraag){
+// getoond: wat er in de chat als jouw bericht staat (standaard de vraag zelf)
+async function ofaStel(vraag, getoond){
   vraag = String(vraag || "").trim();
   if ((!vraag && !ofaFotos.length) || ofaBezig) return;
   const { data: { session } } = await db.auth.getSession();
@@ -10657,7 +10698,8 @@ async function ofaStel(vraag){
   const gen = ofaGeneratie;
   ofaBezig = true; $("ofaStuur").disabled = true;
   const fotos = ofaFotos; ofaFotos = []; ofaToonFotos();
-  ofaToon("ik", (fotos.length ? "📷 " + fotos.length + (fotos.length === 1 ? " foto" : " foto's") + (vraag ? "\n" : "") : "") + vraag);
+  const zichtbaar = getoond != null ? String(getoond).trim() : vraag;
+  ofaToon("ik", (fotos.length ? "📷 " + fotos.length + (fotos.length === 1 ? " foto" : " foto's") + (zichtbaar ? "\n" : "") : "") + zichtbaar);
   $("ofaVraag").value = "";
   const bezig = ofaToon("bezig", "Even kijken…");
   const begin = ofaGesprek.length;   // bij een fout terug naar hier, zodat het gesprek geldig blijft
@@ -10743,6 +10785,46 @@ $("ofaRegelsKnop").addEventListener("click", () => {
 $("ofaRegelsBewaar").addEventListener("click", async () => {
   try { await ofaRegelsOpslaan($("ofaRegelsTekst").value.trim()); }
   catch (e){ console.error(e); toast("Bewaren mislukt"); }
+});
+
+/* Nieuwe offerte uit je eigen verhaal ("dit komt erin, dit moet er gebeuren,
+   dit is het plan"): leeg formulier openen en Claude het laten opbouwen in de
+   offerte-chat eronder. Opslaan blijft jouw knop. */
+let ofnFotos = [];
+function ofnToonFotos(){
+  $("ofnFotos").innerHTML = ofnFotos.length
+    ? "📷 " + ofnFotos.length + (ofnFotos.length === 1 ? " foto" : " foto's") + " gaat mee · <a href=\"#\" id=\"ofnFotosWeg\">weghalen</a>" : "";
+  const weg = $("ofnFotosWeg");
+  if (weg) weg.onclick = e => { e.preventDefault(); ofnFotos = []; ofnToonFotos(); };
+}
+$("ofnFoto").addEventListener("change", async e => {
+  const bestanden = [...e.target.files];
+  e.target.value = "";
+  for (const b of bestanden){
+    try { ofnFotos.push(await ofaVerklein(b)); } catch (fout){ toast(fout.message); }
+  }
+  ofnToonFotos();
+});
+$("ofnStart").addEventListener("click", async () => {
+  const verhaal = $("ofnTekst").value.trim();
+  if (!verhaal && !ofnFotos.length){ toast("Vertel eerst wat er in de offerte moet"); $("ofnTekst").focus(); return; }
+  // eerst de sessie: anders raak je je verhaal kwijt zonder dat Claude iets doet
+  const { data: { session } } = await db.auth.getSession();
+  if (!session){ toast("Je sessie is verlopen — log opnieuw in"); return; }
+  if (!offMagWisselen()) return;
+  offerteFormLeeg();   // begint ook een nieuw gesprek met Claude
+  $("offDetail").style.display = "block";
+  offMarkeer();
+  ofaFotos = ofnFotos; ofnFotos = []; ofnToonFotos();
+  $("ofnTekst").value = "";
+  ofaStel("Ik wil een nieuwe offerte maken. Hieronder vertel ik voor wie, wat erin komt, wat er moet gebeuren en wat het plan is" +
+    (ofaFotos.length ? " (met foto's)" : "") + ". Bouw de offerte op in het formulier volgens mijn regels: " +
+    "klant (bestaande kiezen, of voorstellen om hem toe te voegen), een korte naam, het prijstype, de producten uit Voorraad, " +
+    "uren, reisuren en km, en reken het na. Zet het plan van aanpak, de berekening en je aannames in de notities. " +
+    "Mis je iets belangrijks, vraag het dan; vul in wat al wel kan.\n\nMijn verhaal:\n" + (verhaal || "(zie de foto's)"),
+    verhaal || "Nieuwe offerte uit deze foto's");
+  // de chat in beeld: daar zie je Claude werken en zijn vragen
+  setTimeout(() => $("ofaKaart").scrollIntoView({ behavior: "smooth", block: "start" }), 50);
 });
 
 /* =====================================================
