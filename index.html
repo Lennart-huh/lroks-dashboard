@@ -1824,12 +1824,9 @@ nav.onderbalk{display:none}
         </div>
         <div class="form-card" id="bwWinstJaarBlok" style="margin-bottom:20px">
           <h3 style="font-size:.95rem;margin:0 0 12px">Winst <span id="bwWjJaar"></span></h3>
-          <div class="tbl-wrap" style="margin-bottom:12px">
-            <table><tbody id="bwWjBody"></tbody></table>
-          </div>
-          <div class="veld" style="max-width:360px"><label>Winst die niet in de app staat (€)</label>
-            <input type="number" id="bwWjBuiten" step="1" inputmode="decimal" placeholder="0">
-            <div class="hint">Bijvoorbeeld van voordat je met de app begon: omzet min kosten, excl. btw. Verlies? Vul een minbedrag in. Telt mee in alle belastingberekeningen van dit jaar.</div>
+          <div class="veld" style="max-width:360px"><label>Totale winst <span id="bwWjJaar2"></span> tot nu toe (€)</label>
+            <input type="number" id="bwWjTotaal" step="1" inputmode="decimal">
+            <div class="hint" id="bwWjHint"></div>
           </div>
           <button class="knop" id="bwWjOpslaan">Opslaan</button>
         </div>
@@ -8144,24 +8141,18 @@ function renderBelasting(){
   const pct = Number(cache.inst.belasting_percentage || 35);
   if (document.activeElement !== $("bwPct")) $("bwPct").value = pct;
   const winstApp = somArr(f.omzet) - somArr(f.kosten);
-  const buiten = winstBuitenApp(jaar);
-  const winstJ = winstApp + buiten;
+  const totIn = winstTotaalIngevuld(jaar);
+  const winstJ = totIn !== null ? totIn : winstApp;
+  const overig = winstJ - winstApp;   // deel van de winst zonder kwartaal
   const pctTxt = n => n.toLocaleString("nl-NL", { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + "%";
 
-  // ---- kopje "Winst <jaar>": wat in de app staat + wat je zelf invult
+  // ---- kopje "Winst <jaar>": je totale winst van het jaar, zelf in te vullen
   $("bwWjJaar").textContent = jaar;
-  if (document.activeElement !== $("bwWjBuiten")){
-    const w = cache.inst["belasting_winst_buiten_" + jaar];
-    $("bwWjBuiten").value = w !== undefined && w !== "" ? w : "";
-  }
-  const wjRij = (naam, sub, bedrag, stijl) => '<tr' + (stijl || '') + '><td class="tekst">' + naam +
-    (sub ? '<div style="color:var(--ink3);font-size:.75rem;margin-top:2px">' + sub + '</div>' : '') +
-    '</td><td class="r">' + bedrag + '</td></tr>';
-  $("bwWjBody").innerHTML = [
-    wjRij("In de app" + (jaar === new Date().getFullYear() ? " t/m vandaag" : ""), "Omzet " + eur(somArr(f.omzet)) + " − kosten " + eur(somArr(f.kosten)), eur2(winstApp)),
-    wjRij("Niet in de app", "Zelf ingevuld, hieronder", (buiten < 0 ? "− " : "+ ") + eur2(Math.abs(buiten))),
-    wjRij("<b>Winst " + jaar + (jaar === new Date().getFullYear() ? " tot nu toe" : "") + "</b>", "", "<b>" + eur2(winstJ) + "</b>", ' style="border-top:2px solid var(--line)"')
-  ].join("");
+  $("bwWjJaar2").textContent = jaar;
+  if (document.activeElement !== $("bwWjTotaal")) $("bwWjTotaal").value = totIn !== null ? totIn : "";
+  $("bwWjTotaal").placeholder = String(Math.round(winstApp));
+  $("bwWjHint").innerHTML = "Omzet min kosten, excl. btw. Verlies? Vul een minbedrag in. Leeg = de winst die in de app staat (<b>" +
+    eur(winstApp) + "</b>). Telt mee in alle belastingberekeningen van " + jaar + ".";
 
   $("bwTariefBlok").style.display = t ? "" : "none";
   $("bwSituatie").style.display = t ? "" : "none";
@@ -8186,7 +8177,7 @@ function renderBelasting(){
   const eff = winstJ > 0 ? totaal / winstJ * 100 : 0;
 
   $("bwWinst").textContent = eur(winstJ);
-  $("bwWinstSub").textContent = prog ? "excl. btw · tot nu toe" : "excl. btw";
+  $("bwWinstSub").textContent = "excl. btw" + (prog ? " · tot nu toe" : "") + (totIn !== null ? " · zelf ingevuld" : "");
   $("bwBelasting").textContent = eur(totaal);
   $("bwPctSub").textContent = r ? pctTxt(eff) + " van je winst · tarieven " + jaar : pct + "% van je winst";
   $("bwNetto").textContent = eur(winstJ - totaal);
@@ -8205,7 +8196,7 @@ function renderBelasting(){
   };
   $("bwKwartaalBody").innerHTML =
     KWARTAAL_NAMEN.map((n, i) => rij(n, f.omzet[i] - f.kosten[i])).join("") +
-    (buiten ? rij("Niet in de app", buiten) : "") +
+    (overig ? rij("Overig <span style='color:var(--ink3)'>(geen kwartaal)</span>", overig) : "") +
     rij("<b>Heel " + jaar + "</b>", winstJ, ' style="border-top:2px solid var(--line)"');
 
   if (!r) return;
@@ -8268,10 +8259,10 @@ function belastingPrognose(jaar, t, opt){
     s + vasteLastDatumsInJaar(vl, jaar).filter(d => d > vandaagIso).length * Number(vl.bedrag || 0), 0);
   const omzetNu = somArr(f.omzet), kostenNu = somArr(f.kosten) - vlLater;
   const winstApp = omzetNu - kostenNu;
-  // zelf ingevulde winst van buiten de app telt mee, maar niet in het tempo:
-  // die is niet verdiend in de periode die de app bijhoudt
-  const buiten = winstBuitenApp(jaar);
-  const winstNu = winstApp + buiten;
+  // zelf ingevulde totale winst gaat voor; het tempo blijft op de app, want
+  // alleen daarvan weet je in welke periode hij verdiend is
+  const totIn = winstTotaalIngevuld(jaar);
+  const winstNu = totIn !== null ? totIn : winstApp;
 
   const datums = [
     ...factData.map(x => x.datum), ...urenData.map(x => x.datum),
@@ -8297,7 +8288,7 @@ function belastingPrognose(jaar, t, opt){
 
   const jaarWinst = winstNu + extra;
   const zonderUren = berekenIB(jaarWinst, t, { uren: !opt.uren, starter: opt.starter, loon: opt.loon }).totaal;
-  return { omzetNu, kostenNu, winstApp, buiten, winstNu, trend, extra, eigen: eigen !== undefined && eigen !== "", jaarWinst, betaald, loonheffing,
+  return { omzetNu, kostenNu, winstApp, ingevuld: totIn !== null, winstNu, trend, extra, eigen: eigen !== undefined && eigen !== "", jaarWinst, betaald, loonheffing,
     start, dagenActief, dagenRest, uren, nogFactureren, zonderUren };
 }
 
@@ -8306,7 +8297,7 @@ function toonPrognose(p, r, t, opt, effJaar, winstBelasting, pctTxt){
   const perMaand = p.winstApp / p.dagenActief * 30.44;
   $("bwPrJaar").textContent = jaar;
   $("bwPrNu").textContent = eur(p.winstNu);
-  $("bwPrNuSub").textContent = p.buiten ? "excl. btw · incl. " + eur(p.buiten) + " buiten de app"
+  $("bwPrNuSub").textContent = p.ingevuld ? "excl. btw · zelf ingevuld"
     : "excl. btw · sinds " + fmtDatum(isoDatum(p.start));
   $("bwPrRest").textContent = "+ " + eur(p.extra);
   $("bwPrRestSub").textContent = (p.eigen ? "jouw schatting" : "in je tempo van nu") + " · nog " + p.dagenRest + " dagen";
@@ -8356,11 +8347,9 @@ function toonPrognose(p, r, t, opt, effJaar, winstBelasting, pctTxt){
 
   $("bwPrDetailBody").innerHTML = [
     kop("1. Je winst"),
-    rij("Omzet t/m " + vandaagTxt, "Verkoopfacturen, losse betalingen die binnenkwamen en correcties — excl. btw.", "", eur2(p.omzetNu)),
-    rij("Kosten t/m " + vandaagTxt, "Inkoopfacturen, vaste lasten tot vandaag, losse betalingen met een kostensoort en afschrijvingen — excl. btw.", "", min(p.kostenNu)),
-    p.buiten ? rij(b("Winst in de app"), "", "", b(eur2(p.winstApp)), streep) : "",
-    p.buiten ? rij("Winst die niet in de app staat", "Zelf ingevuld bij het kopje Winst hierboven.", "", (p.buiten < 0 ? "− " : "+ ") + eur2(Math.abs(p.buiten))) : "",
-    rij(b("Winst tot nu toe"), "", "", b(eur2(p.winstNu)), streep),
+    p.ingevuld ? "" : rij("Omzet t/m " + vandaagTxt, "Verkoopfacturen, losse betalingen die binnenkwamen en correcties — excl. btw.", "", eur2(p.omzetNu)),
+    p.ingevuld ? "" : rij("Kosten t/m " + vandaagTxt, "Inkoopfacturen, vaste lasten tot vandaag, losse betalingen met een kostensoort en afschrijvingen — excl. btw.", "", min(p.kostenNu)),
+    rij(b("Winst tot nu toe"), p.ingevuld ? "Zelf ingevuld bij het kopje Winst hierboven." : "", "", b(eur2(p.winstNu)), p.ingevuld ? "" : streep),
     rij("Verwachte winst tot 31 december", p.eigen ? "Jouw eigen schatting (veld hieronder)."
       : "Je tempo in de app tot nu (" + eur(perMaand) + " per maand) doorgetrokken over de laatste " + p.dagenRest + " dagen.", "", plus(p.extra)),
     rij(b("Verwachte winst heel " + jaar), "", "", b(eur2(p.jaarWinst)), streep),
@@ -8417,16 +8406,25 @@ function toonPrognose(p, r, t, opt, effJaar, winstBelasting, pctTxt){
     " De aangifte over " + jaar + " doe je vóór 1 mei " + (jaar + 1) + "; doe je hem op tijd, dan betaal je geen belastingrente. " +
     "Inkomstenbelasting en Zvw krijg je als twee aparte aanslagen.";
 }
-/* Winst die je zelf invult omdat hij niet in de app staat (bv. van vóór de
-   app), per jaar in instellingen. Negatief = verlies. */
+/* Totale winst van een jaar die je zelf invult (niet alles staat in de app),
+   per jaar in instellingen. null = niet ingevuld, dan geldt de winst uit de app. */
+function winstTotaalIngevuld(jaar){
+  const w = cache.inst["belasting_winst_totaal_" + jaar];
+  return w === undefined || w === "" || !isFinite(Number(w)) ? null : Number(w);
+}
+/* Verschil tussen de ingevulde totale winst en de winst in de app (0 als er
+   niets is ingevuld) — voor berekeningen die op de app-winst voortbouwen. */
 function winstBuitenApp(jaar){
-  return Number(cache.inst["belasting_winst_buiten_" + jaar] || 0) || 0;
+  const tot = winstTotaalIngevuld(jaar);
+  if (tot === null) return 0;
+  const f = financieelJaar(jaar);
+  return tot - (somArr(f.omzet) - somArr(f.kosten));
 }
 $("bwWjOpslaan").addEventListener("click", () => {
   const jaar = Number($("bwJaar").value) || new Date().getFullYear();
-  const txt = $("bwWjBuiten").value.trim(), n = parseFloat(txt);
+  const txt = $("bwWjTotaal").value.trim(), n = parseFloat(txt);
   if (txt !== "" && !isFinite(n)) { toast("Vul een bedrag in, of laat het leeg"); return; }
-  bewaarInstellingen([{ sleutel: "belasting_winst_buiten_" + jaar, waarde: txt === "" ? "" : String(r2(n)) }],
+  bewaarInstellingen([{ sleutel: "belasting_winst_totaal_" + jaar, waarde: txt === "" ? "" : String(r2(n)) }],
     "bwWjOpslaan", "Winst " + jaar + " opgeslagen", renderBelasting);
 });
 $("bwPrOpslaan").addEventListener("click", () => {
