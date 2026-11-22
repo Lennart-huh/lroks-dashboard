@@ -1939,7 +1939,7 @@ nav.onderbalk{display:none}
           <div class="hint" style="margin-bottom:14px" id="btwUitlegSub">—</div>
           <div class="tbl-wrap">
             <table>
-              <thead><tr><th>Datum</th><th>Omschrijving</th><th></th><th class="r">Bedrag excl.</th><th class="r">Btw</th></tr></thead>
+              <thead><tr><th>Datum</th><th>Omschrijving</th><th class="r">Bedrag excl.</th><th class="r">Btw</th></tr></thead>
               <tbody id="btwUitlegBody"></tbody>
             </table>
           </div>
@@ -8534,14 +8534,29 @@ function toonBtwUitleg(jaar, k){
   $("btwUitlegTitel").textContent = k === -1 ? "Btw · heel " + jaar : "Btw · " + KWARTAAL_NAMEN[k] + " " + jaar;
   $("btwUitlegSub").innerHTML = "Btw uitgaand " + eur2(uit) + " − voorbelasting " + eur2(in_) +
     " = <b>" + eur2(Math.abs(saldo)) + "</b> " + (saldo >= 0 ? "af te dragen" : "terug te vragen");
-  $("btwUitlegBody").innerHTML = items.length
-    ? items.map(i =>
-        '<tr><td>' + fmtDatum(i.datum) + '</td>' +
-        '<td class="tekst">' + esc(i.omschrijving) + (i.nummer ? ' <span style="color:var(--ink3)">· ' + esc(i.nummer) + '</span>' : '') + '</td>' +
-        '<td>' + (i.richting === "uit" ? '<span class="chip groen">UITGAAND</span>' : '<span class="chip grijs">INKOMEND</span>') + '</td>' +
-        '<td class="r">' + eur2(i.excl) + '</td>' +
-        '<td class="r">' + eur2(i.btw) + '</td></tr>').join("")
-    : '<tr><td colspan="5" class="leeg">Niets gevonden voor deze periode.</td></tr>';
+  // uitgaand en inkomend elk in een eigen blok met subtotaal, zodat je in
+  // één oogopslag ziet hoeveel btw je ontvangen hebt en wat je terugkrijgt
+  const regel = i =>
+    '<tr><td>' + fmtDatum(i.datum) + '</td>' +
+    '<td class="tekst">' + esc(i.omschrijving) + (i.nummer ? ' <span style="color:var(--ink3)">· ' + esc(i.nummer) + '</span>' : '') + '</td>' +
+    '<td class="r">' + eur2(i.excl) + '</td>' +
+    '<td class="r">' + eur2(i.btw) + '</td></tr>';
+  const blok = (titel, chip, lijst, leeg) => {
+    const excl = lijst.reduce((s, i) => s + i.excl, 0), btw = lijst.reduce((s, i) => s + i.btw, 0);
+    return '<tr><td colspan="4" style="padding-top:16px;border-bottom:2px solid var(--line)">' + chip +
+        ' <b>' + titel + '</b> <span style="color:var(--ink3)">· ' + lijst.length + (lijst.length === 1 ? ' regel' : ' regels') + '</span></td></tr>' +
+      (lijst.length ? lijst.map(regel).join("") : '<tr><td colspan="4" class="leeg">' + leeg + '</td></tr>') +
+      '<tr><td></td><td class="tekst"><b>Totaal ' + titel.toLowerCase() + '</b></td>' +
+        '<td class="r"><b>' + eur2(excl) + '</b></td><td class="r"><b>' + eur2(btw) + '</b></td></tr>';
+  };
+  $("btwUitlegBody").innerHTML =
+    blok("Uitgaand", '<span class="chip groen">BTW ONTVANGEN</span>', items.filter(i => i.richting === "uit"),
+      "Geen uitgaande facturen in deze periode.") +
+    blok("Inkomend", '<span class="chip grijs">VOORBELASTING</span>', items.filter(i => i.richting === "in"),
+      "Geen inkomende facturen in deze periode.") +
+    '<tr><td colspan="3" class="tekst" style="padding-top:16px;border-top:2px solid var(--line)"><b>' +
+      (saldo >= 0 ? "Af te dragen" : "Terug te vragen") + '</b> <span style="color:var(--ink3)">(' + eur2(uit) + ' − ' + eur2(in_) + ')</span></td>' +
+      '<td class="r" style="padding-top:16px;border-top:2px solid var(--line)"><b>' + eur2(Math.abs(saldo)) + '</b></td></tr>';
   $("btwUitlegOverlay").classList.add("open");
 }
 $("btwUitlegSluit").addEventListener("click", () => $("btwUitlegOverlay").classList.remove("open"));
