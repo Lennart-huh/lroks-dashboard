@@ -1101,6 +1101,15 @@ nav.onderbalk{display:none}
             <tbody id="owMaandBody"></tbody>
           </table>
         </div>
+        <h3 style="font-size:.95rem;margin:0 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">Investeringen in je kosten
+          <button type="button" class="knop klein stil" id="owNaarInv">Naar Investeringen →</button></h3>
+        <div class="tbl-wrap" style="margin-bottom:8px">
+          <table>
+            <thead><tr><th>Gekocht</th><th>Wat</th><th class="r">Aanschaf</th><th class="r">Jaren</th><th class="r">Afschrijving <span id="owInvJaar"></span></th></tr></thead>
+            <tbody id="owInvBody"></tbody>
+          </table>
+        </div>
+        <div class="hint" style="margin-bottom:20px">Een investering telt niet in één keer als kosten, maar elk jaar een stukje (afschrijving) — dat bedrag zit in de kosten hierboven. Zelf aangeven doe je per product: open de inkoopfactuur (Facturen → Inkomend) en tik bij het product op <b>Investering?</b>, of kies het op het tabblad Investeringen.</div>
         <h3 style="font-size:.95rem;margin:0 0 10px">Waar je winst vandaan komt</h3>
         <div class="tbl-wrap" style="margin-bottom:20px">
           <table>
@@ -1998,13 +2007,13 @@ nav.onderbalk{display:none}
             <tbody id="ivBody"></tbody>
           </table>
         </div>
-        <div class="hint" style="margin-bottom:20px">Tik op een regel om jaren, restwaarde of KIA aan te passen. Een nieuwe investering voer je in als inkoopfactuur met <b>Investering: ja</b>; hij verschijnt dan vanzelf hier.</div>
+        <div class="hint" style="margin-bottom:20px">Tik op een regel om jaren, restwaarde of KIA aan te passen. Een investering kan één product van een inkoopfactuur zijn, of de hele factuur (Investering: ja bij het invoeren).</div>
         <div id="ivKandidatenBlok">
-          <h3 style="font-size:.95rem;margin:0 0 6px">Misschien ook een investering?</h3>
-          <div class="hint" style="margin-bottom:10px">Inkoop vanaf € 450 excl. btw (geen materiaal, opleiding of abonnement) die nu in één keer als kosten telt. Gaat het om één ding dat meerdere jaren meegaat, dan schrijf je het af — en telt het mee voor de KIA.</div>
+          <h3 style="font-size:.95rem;margin:0 0 6px">Producten die je als investering kunt aangeven</h3>
+          <div class="hint" style="margin-bottom:10px">Producten vanaf € 100 van inkoopfacturen in dit jaar (geen materiaal, werkkleding, opleiding of abonnement). Jij bepaalt wat een investering is. Onder € 450 per stuk mag het gewoon kosten blijven en telt het niet voor de KIA; vanaf € 450 dat jaren meegaat, moet je het afschrijven.</div>
           <div class="tbl-wrap" style="margin-bottom:20px">
             <table>
-              <thead><tr><th>Datum</th><th>Leverancier</th><th>Kostensoort</th><th class="r">Bedrag excl.</th><th></th></tr></thead>
+              <thead><tr><th>Datum</th><th>Product</th><th>Kostensoort</th><th class="r">Bedrag</th><th></th></tr></thead>
               <tbody id="ivKandidatenBody"></tbody>
             </table>
           </div>
@@ -2809,7 +2818,7 @@ $("uitlogKnop").addEventListener("click", async () => { sessieActief = false; aw
 async function laadAlles(){
   const dbStatus = $("dbStatus"), dbBol = $("dbBol");
   try {
-    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm, po, vl, fc, kls, lb] = await Promise.all([
+    const [kl, pr, cat, prod, inst, ur, km, ft, pp, gw, fr, vm, po, vl, fc, kls, lb, ir] = await Promise.all([
       db.from("klanten").select("*").order("naam"),
       db.from("projecten").select("*").order("aangemaakt_op", { ascending:false }),
       db.from("categorieen").select("*").order("volgorde"),
@@ -2826,7 +2835,8 @@ async function laadAlles(){
       db.from("vaste_lasten").select("*").eq("actief", true),
       db.from("financiele_correcties").select("*"),
       db.from("klussen").select("*"),
-      db.from("logboek").select("*").gte("tijd", new Date(Date.now() - 30 * 864e5).toISOString()).order("tijd", { ascending:false }).limit(3000)
+      db.from("logboek").select("*").gte("tijd", new Date(Date.now() - 30 * 864e5).toISOString()).order("tijd", { ascending:false }).limit(3000),
+      db.from("factuur_inkoop_regels").select("*").eq("is_investering", true)
     ]);
     const eerste = [kl,pr,cat,prod,inst,ur,km,ft,pp].find(r => r.error);
     if (eerste) throw eerste.error;
@@ -2849,6 +2859,7 @@ async function laadAlles(){
     cache.correcties = fc.data || [];
     cache.klussen = kls.data || [];
     cache.logboek = lb.error ? [] : (lb.data || []);
+    invRegels = ir.error ? [] : (ir.data || []);
 
     vulSelects();
     vulVoorraadSelects();
@@ -3289,7 +3300,7 @@ const AS_SCHEMA = [
   "categorieen: id, naam",
   "facturen: id, type (verkoop/inkoop), nummer, klant_id, project_id, leverancier, datum, vervaldatum, status (open/verstuurd/betaald), betaald_op, bedrag_excl, btw_bedrag, bedrag_incl, btw_land (landcode bij buitenlandse btw, leeg = NL), categorie (kostensoort), is_investering, afschrijf_jaren (vanaf maand van aankoop), restwaarde, kia (false = telt niet voor KIA), bestand_url (bijlage), notities, gearchiveerd, aangemaakt_op",
   "factuur_regels: regels van verkoopfacturen: factuur_id, omschrijving, aantal, eenheid, prijs, product_id, uren_id, km_id, mutatie_id, extra_id, klus_id, datum, meerwerk, kostenpost, kostprijs, verborgen, volgorde",
-  "factuur_inkoop_regels: regels van inkoopfacturen zoals op de factuur: factuur_id, omschrijving, aantal, prijs, product_id",
+  "factuur_inkoop_regels: regels van inkoopfacturen zoals op de factuur: factuur_id, omschrijving, aantal, prijs, product_id, is_investering (dit product wordt afgeschreven i.p.v. in één keer kosten), afschrijf_jaren, restwaarde, kia",
   "losse_betalingen: betalingen zonder factuur: betaald_op, richting (uit/in), bedrag, tegenpartij, omschrijving, btw_pct, btw_bedrag, btw_land (landcode bij buitenlandse btw, leeg = NL), categorie, bijlage",
   "klanten: id, naam, contactpersoon, email, telefoon, adres, postcode, plaats, kvk, btw_nummer, notities",
   "projecten: id, klant_id, naam, omschrijving, status, prijstype, vaste_prijs, geschat_uren, geschat_kosten, geschat_km, aangemaakt_op",
@@ -3875,20 +3886,39 @@ $("vlVerwijder").addEventListener("click", async () => {
   renderTeBetalen(); renderKostensoorten(); renderBetalingen();
 });
 
-/* Afschrijving van een investering (inkoopfactuur met is_investering en een
-   aantal jaren). Lineair, vanaf de maand van aankoop: (aanschaf − restwaarde)
-   gelijk verdeeld over jaren × 12 maanden — zoals de Belastingdienst het wil
-   (in het eerste jaar alleen de maanden dat je het ding al had). Zonder jaren
-   is het geen afschrijving maar gewoon kosten op de factuurdatum (null). */
-function afschrijving(f){
-  const jr = Number(f.afschrijf_jaren || 0);
-  if (f.type !== "inkoop" || !f.is_investering || jr <= 0) return null;
-  const aanschaf = kostBedrag(f);   // incl. buitenlandse btw: die krijg je niet terug
-  const rest = Math.min(aanschaf, Math.max(0, Number(f.restwaarde || 0)));
+/* Investeringen en hun afschrijving. Een investering is óf een hele
+   inkoopfactuur (facturen.is_investering), óf één productregel daarvan
+   (factuur_inkoop_regels.is_investering) — dat laatste als op één factuur
+   gereedschap en klein spul door elkaar staan; Lennart wijst dat zelf aan.
+   Lineair, vanaf de maand van aankoop: (aanschaf − restwaarde) gelijk verdeeld
+   over jaren × 12 maanden (in het eerste jaar alleen de maanden dat je het al
+   had). Zonder jaren wordt er niets afgeschreven: dan telt het gewoon als
+   kosten op de factuurdatum. */
+let invRegels = [];   // factuur_inkoop_regels met is_investering = true
+// bedrag van een productregel; bij buitenlandse btw naar rato verhoogd (die krijg je niet terug)
+const regelKost = (f, r) => {
+  const excl = Number(r.aantal ?? 1) * Number(r.prijs || 0);
+  const be = Number(f.bedrag_excl || 0);
+  return f.btw_land && be > 0 ? excl * kostBedrag(f) / be : excl;
+};
+function maakAfschrijving(f, r, aanschaf, bron){
+  const jr = Math.max(0, Number(bron.afschrijf_jaren || 0));
+  const rest = Math.min(aanschaf, Math.max(0, Number(bron.restwaarde || 0)));
   const d = new Date(f.datum);
   const start = d.getFullYear() * 12 + d.getMonth();
-  return { f, aanschaf, rest, jr, start, eind: start + jr * 12, perMaand: (aanschaf - rest) / (jr * 12) };
+  return { f, r, id: r ? r.id : f.id, aanschaf, rest, jr, kia: bron.kia !== false,
+    wat: r ? (r.omschrijving || "Productregel") : (f.leverancier || "—"),
+    start, eind: start + jr * 12, perMaand: jr ? (aanschaf - rest) / (jr * 12) : 0 };
 }
+function afschrijvingen(f){
+  if (f.type !== "inkoop") return [];
+  if (f.is_investering) return [maakAfschrijving(f, null, kostBedrag(f), f)];
+  return invRegels.filter(r => r.factuur_id === f.id).map(r => maakAfschrijving(f, r, regelKost(f, r), r));
+}
+// wat van een inkoopfactuur in één keer als kosten telt (op de factuurdatum)
+const directeKost = f => Math.max(0, kostBedrag(f) - afschrijvingen(f).filter(a => a.jr > 0).reduce((s, a) => s + a.aanschaf, 0));
+const heeftAfschrijving = f => afschrijvingen(f).some(a => a.jr > 0);
+const alleInvesteringen = () => factData.flatMap(afschrijvingen).sort((a, b) => String(a.f.datum).localeCompare(String(b.f.datum)));
 const afschrInMaand = (a, jaar, m) => { const i = jaar * 12 + m; return i >= a.start && i < a.eind ? a.perMaand : 0; };
 const afschrInJaar = (a, jaar) => { let s = 0; for (let m = 0; m < 12; m++) s += afschrInMaand(a, jaar, m); return s; };
 // boekwaarde op 31 december van 'jaar' (vóór de aankoop: nog niets)
@@ -3909,12 +3939,8 @@ function omzetWinstPerMaand(jaar){
     if (f.type === "verkoop"){
       if (fJaar === jaar) omzet[m] += excl;
     } else if (f.type === "inkoop"){
-      const a = afschrijving(f);
-      if (a){
-        for (let i = 0; i < 12; i++) kosten[i] += afschrInMaand(a, jaar, i);
-      } else if (fJaar === jaar){
-        kosten[m] += excl;
-      }
+      afschrijvingen(f).forEach(a => { for (let i = 0; i < 12; i++) kosten[i] += afschrInMaand(a, jaar, i); });
+      if (fJaar === jaar) kosten[m] += directeKost(f);
     }
   });
   cache.correcties.forEach(c => {
@@ -3960,17 +3986,17 @@ function maandPosten(jaar, maand){
           open: () => { toonTab("facturen"); kiesFSub("fUit"); openFactuur(f.id); } });
       }
     } else if (f.type === "inkoop"){
-      const a = afschrijving(f);
       const wat = (f.leverancier || "—") + (f.nummer && f.nummer !== "-" ? " · " + f.nummer : "");
       const open = () => { toonTab("facturen"); kiesFSub("fIn"); openInkoop(f.id); };
-      if (a){
+      afschrijvingen(f).forEach(a => {
         const bedrag = afschrInMaand(a, jaar, maand);
         if (bedrag > 0)
-          kosten.push({ datum: eersteVanMaand, wat: wat + " (" + eur2(excl) + " over " + a.jr + " jaar)",
+          kosten.push({ datum: eersteVanMaand, wat: (a.r ? a.wat + " · " : "") + wat + " (" + eur2(a.aanschaf) + " over " + a.jr + " jaar)",
             soort: "Afschrijving", bedrag, open });
-      } else if (inMaand(f.datum)){
-        kosten.push({ datum: f.datum, wat, soort: kostenNaam(f.categorie || "materiaal"), bedrag: excl, open });
-      }
+      });
+      if (inMaand(f.datum) && (directeKost(f) > 0.004 || !heeftAfschrijving(f)))
+        kosten.push({ datum: f.datum, wat: wat + (heeftAfschrijving(f) ? " (zonder investeringen)" : ""),
+          soort: kostenNaam(f.categorie || "materiaal"), bedrag: directeKost(f), open });
     }
   });
   cache.correcties.forEach(c => {
@@ -4488,23 +4514,22 @@ function kmJaarTotaal(jaar){
 
 /* Auto: alle kosten met kostensoort 'vervoer' (inkoop, afschrijving van
    investeringen, vaste lasten) per maand naast de gereden km. Afschrijving
-   rekent hetzelfde als omzetWinstPerMaand(): via afschrijving(), vanaf de maand van aankoop. */
+   rekent hetzelfde als omzetWinstPerMaand(): via afschrijvingen(), vanaf de maand van aankoop. */
 function autoKostenPosten(jaar){
   const posten = [];
   factData.filter(f => f.type === "inkoop" && f.categorie === "vervoer").forEach(f => {
-    const excl = kostBedrag(f);
-    const a = afschrijving(f);
     const fJaar = new Date(f.datum).getFullYear();
     const wat = (f.leverancier || "—") + (f.nummer && f.nummer !== "-" ? " · " + f.nummer : "");
     const open = () => { toonTab("facturen"); kiesFSub("fIn"); openInkoop(f.id); };
-    if (a){
+    afschrijvingen(f).forEach(a => {
       for (let m = 0; m < 12; m++){
         const bedrag = afschrInMaand(a, jaar, m);
         if (bedrag > 0) posten.push({ maand: m, datum: jaar + "-" + String(m + 1).padStart(2, "0") + "-01",
-          wat: wat + " (" + eur2(excl) + " over " + a.jr + " jaar)", soort: "Afschrijving", bedrag, open, afschr: f.id });
+          wat: (a.r ? a.wat + " · " : "") + wat + " (" + eur2(a.aanschaf) + " over " + a.jr + " jaar)", soort: "Afschrijving", bedrag, open, afschr: a.id });
       }
-    } else if (fJaar === jaar){
-      posten.push({ maand: new Date(f.datum).getMonth(), datum: f.datum, wat, soort: "Inkoop", bedrag: excl, open });
+    });
+    if (fJaar === jaar && (directeKost(f) > 0.004 || !heeftAfschrijving(f))){
+      posten.push({ maand: new Date(f.datum).getMonth(), datum: f.datum, wat, soort: "Inkoop", bedrag: directeKost(f), open });
     }
   });
   cache.vasteLasten.filter(vl => vl.categorie === "vervoer").forEach(vl =>
@@ -7355,12 +7380,14 @@ async function maakFactuurAan(){
 }
 
 async function herlaadFacturen(){
-  const [{ data }, fr, vm] = await Promise.all([
+  const [{ data }, fr, vm, ir] = await Promise.all([
     db.from("facturen").select("*").order("datum", { ascending:false }).limit(500),
     db.from("factuur_regels").select("*"),
-    db.from("voorraad_mutaties").select("*")
+    db.from("voorraad_mutaties").select("*"),
+    db.from("factuur_inkoop_regels").select("*").eq("is_investering", true)
   ]);
   factData = data || [];
+  if (!ir.error) invRegels = ir.data || [];
   cache.regels = fr.data || [];
   cache.mutaties = vm.data || [];
   renderBetalingen();
@@ -7941,7 +7968,8 @@ function openInkoop(id){
   $("fdiVerval").textContent = f.vervaldatum ? fmtDatum(f.vervaldatum) : "\u2014";
   $("fdiExcl").textContent = eur2(f.bedrag_excl || 0);
   $("fdiBtw").textContent = eur2(f.btw_bedrag || 0) + (f.btw_land ? "  (buitenlandse btw: " + btwLandNaam(f.btw_land) + ")" : "");
-  $("fdiCategorie").textContent = kostenNaam(f.categorie) + (f.is_investering ? "  (investering / KIA)" : "");
+  $("fdiCategorie").textContent = kostenNaam(f.categorie) + (f.is_investering ? "  (hele factuur is een investering)"
+    : heeftAfschrijving(f) ? "  (met " + afschrijvingen(f).length + " investering" + (afschrijvingen(f).length > 1 ? "en" : "") + " — zie de producten)" : "");
   $("fdiProject").textContent = projectNaam(f.project_id) || "\u2014";
   $("fdiNotitie").textContent = f.notities || "\u2014";
   $("fdiBijlageVeld").style.display = f.bestand_url ? "block" : "none";
@@ -7965,12 +7993,23 @@ async function laadInkoopRegels(factuurId){
   $("fdiRegelsVeld").style.display = "none";
   const { data, error } = await db.from("factuur_inkoop_regels").select("*").eq("factuur_id", factuurId);
   if (error || !data || !data.length) return;
+  if (bekijkInkoopId !== factuurId) return;   // intussen een andere factuur geopend
+  const f = factData.find(x => x.id === factuurId);
   $("fdiRegelsVeld").style.display = "block";
-  $("fdiRegels").innerHTML = data.map(r =>
-    '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--line)">' +
+  // per product zelf aangeven of het een investering is (niet als de hele factuur er al een is)
+  const perRegel = f && !f.is_investering;
+  $("fdiRegels").innerHTML = data.map((r, i) =>
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid var(--line)">' +
       '<span>' + esc(r.omschrijving) + (r.product_id ? ' <span class="chip grijs">PRODUCT</span>' : '') + '</span>' +
-      '<span class="mono">' + (r.aantal ? Number(r.aantal).toLocaleString("nl-NL") + ' \u00d7 ' : '') + eur2(r.prijs || 0) + '</span>' +
-    '</div>').join("");
+      '<span style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
+        '<span class="mono">' + (r.aantal ? Number(r.aantal).toLocaleString("nl-NL") + ' \u00d7 ' : '') + eur2(r.prijs || 0) + '</span>' +
+        (!perRegel ? '' : r.is_investering
+          ? '<button type="button" class="knop klein" data-fdinv="' + i + '" title="Investering aanpassen">Investering · ' + (r.afschrijf_jaren || "?") + ' jr</button>'
+          : '<button type="button" class="knop klein stil" data-fdinv="' + i + '" title="Dit product als investering afschrijven">Investering?</button>') +
+      '</span>' +
+    '</div>').join("") +
+    (perRegel ? '<div class="hint" style="margin-top:6px">Gaat een product jaren mee (en is het duur), tik dan op <b>Investering?</b>: dan telt het niet in één keer als kosten, maar elk jaar een stukje. Alles staat daarna op het tabblad Investeringen.</div>' : '');
+  $("fdiRegels").querySelectorAll("[data-fdinv]").forEach(b => b.addEventListener("click", () => ivOpen(f, data[Number(b.dataset.fdinv)])));
 }
 
 function zetInkoopStatus(s){
@@ -8057,12 +8096,8 @@ function financieelJaar(jaar){
       btwUit[k] += btw;
     } else if (f.type === "inkoop"){
       if (fJaar === jaar) (f.btw_land ? btwBuiten : btwIn)[k] += btw;
-      const a = afschrijving(f);
-      if (a){
-        for (let m = 0; m < 12; m++) kosten[Math.floor(m / 3)] += afschrInMaand(a, jaar, m);
-      } else if (fJaar === jaar){
-        kosten[k] += excl;
-      }
+      afschrijvingen(f).forEach(a => { for (let m = 0; m < 12; m++) kosten[Math.floor(m / 3)] += afschrInMaand(a, jaar, m); });
+      if (fJaar === jaar) kosten[k] += directeKost(f);
     }
   });
   // handmatige correcties: omzet/kosten die niet uit een factuur in de app komen
@@ -8913,7 +8948,7 @@ function toggleHint(id){
 [["owCorrectiesVraag", "owCorrectiesHint"]]
   .forEach(([knopId, hintId]) => $(knopId).addEventListener("click", () => toggleHint(hintId)));
 
-function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); renderKostensoorten(); renderMaandDetail(); renderPerUur(); renderInvesteringen(); }
+function renderFinancieel(){ renderOmzet(); renderBelasting(); renderBtw(); renderKostensoorten(); renderMaandDetail(); renderPerUur(); renderInvesteringen(); renderOwInvesteringen(); }
 
 /* Alle inkoopfacturen gegroepeerd per kostensoort — bedrag en leverancier,
    zodat je ziet wat iets gekost heeft en waar je het weer kunt bestellen. */
@@ -9046,7 +9081,7 @@ $("ksJaar").addEventListener("change", renderKostensoorten);
 const KIA_TARIEVEN = {
   2026: { drempel: 2901, perStuk: 450, vol: 71683, pct: 28, vast: 20072, afbouwVanaf: 132746, afbouwPct: 7.56, tot: 398236 }
 };
-const kiaTelt = f => f.type === "inkoop" && f.is_investering && f.kia !== false && kostBedrag(f) >= 450;
+const kiaTelt = a => a.kia && a.aanschaf / Math.max(1, a.r ? Number(a.r.aantal || 1) : 1) >= 450;   // per stuk
 function kiaStaffel(totaal, k){
   if (totaal < k.drempel) return 0;
   if (totaal <= k.vol) return totaal * k.pct / 100;
@@ -9056,8 +9091,8 @@ function kiaStaffel(totaal, k){
 }
 function kiaVoorJaar(jaar){
   const k = KIA_TARIEVEN[jaar] || null;
-  const posten = factData.filter(f => kiaTelt(f) && new Date(f.datum).getFullYear() === jaar);
-  const totaal = posten.reduce((s, f) => s + kostBedrag(f), 0);
+  const posten = alleInvesteringen().filter(a => kiaTelt(a) && new Date(a.f.datum).getFullYear() === jaar);
+  const totaal = posten.reduce((s, a) => s + a.aanschaf, 0);
   return { k, posten, totaal, aftrek: k ? kiaStaffel(totaal, k) : 0 };
 }
 
@@ -9160,22 +9195,35 @@ function renderPerUur(){
 $("puJaar").addEventListener("change", renderPerUur);
 
 /* ---------- Investeringen ---------- */
-const ivInvesteringen = () => factData.filter(f => f.type === "inkoop" && f.is_investering)
-  .sort((a, b) => String(a.datum).localeCompare(String(b.datum)));
-const ivWat = f => esc(f.leverancier || "—") + (f.notities ? ' <span style="color:var(--ink3)">· ' + esc(f.notities) + '</span>' : "");
+const ivWat = a => esc(a.wat) + (a.r ? ' <span style="color:var(--ink3)">· ' + esc(a.f.leverancier || "—") + '</span>'
+  : (a.f.notities ? ' <span style="color:var(--ink3)">· ' + esc(a.f.notities) + '</span>' : ""));
 const maandJaar = i => MAAND_NAMEN[i % 12].toLowerCase() + " " + Math.floor(i / 12);
+const ivSoortTxt = a => a.r ? "productregel" : "hele factuur";
+
+/* regels van inkoopfacturen die misschien een investering zijn — per jaar
+   één keer opgehaald, want ze staan niet standaard in het geheugen */
+const ivKandRegels = {};   // jaar -> { sleutel, regels }
+async function ivLaadKandidaten(jaar, facturen){
+  const ids = facturen.map(f => f.id);
+  const sleutel = ids.join(",");
+  if (ivKandRegels[jaar] && ivKandRegels[jaar].sleutel === sleutel) return;
+  ivKandRegels[jaar] = { sleutel, regels: null };
+  if (!ids.length){ ivKandRegels[jaar].regels = []; return; }
+  const { data, error } = await db.from("factuur_inkoop_regels").select("*").in("factuur_id", ids);
+  ivKandRegels[jaar].regels = error ? [] : (data || []);
+  if (Number($("ivJaar").value) === jaar) renderIvKandidaten(jaar);
+}
 
 function renderInvesteringen(){
   const jaar = vulJaarKeuze("ivJaar");
-  const inv = ivInvesteringen();
+  const inv = alleInvesteringen();
   const kia = kiaVoorJaar(jaar);
   const bel = belastingPctJaar(jaar);
   document.querySelectorAll(".ivJ").forEach(s => s.textContent = jaar);
 
   let afschrJ = 0, boekJ = 0, zonderJaren = 0;
-  inv.forEach(f => {
-    const a = afschrijving(f);
-    if (a){ afschrJ += afschrInJaar(a, jaar); boekJ += boekwaardeEind(a, jaar); }
+  inv.forEach(a => {
+    if (a.jr > 0){ afschrJ += afschrInJaar(a, jaar); boekJ += boekwaardeEind(a, jaar); }
     else zonderJaren++;
   });
   $("ivTotaal").textContent = eur(kia.totaal);
@@ -9188,7 +9236,6 @@ function renderInvesteringen(){
   $("ivAfschrSub").textContent = "kosten in " + jaar + (zonderJaren ? " · " + zonderJaren + " zonder jaren" : "");
   $("ivBoek").textContent = eur(boekJ);
 
-  // uitleg KIA: hoe ver je van de drempel zit
   const k = kia.k;
   let uitleg;
   if (!k) uitleg = "Voor " + jaar + " staan de KIA-bedragen nog niet in het dashboard; de aftrek wordt daarom niet meegerekend.";
@@ -9203,37 +9250,28 @@ function renderInvesteringen(){
   }
   $("ivKiaUitleg").innerHTML = uitleg;
 
-  $("ivBody").innerHTML = inv.length ? inv.map(f => {
-    const a = afschrijving(f);
-    const aanschaf = kostBedrag(f);
-    const kiaCel = f.kia === false ? '<span style="color:var(--ink3)">nee</span>'
-      : aanschaf < 450 ? '<span style="color:var(--ink3)">&lt; € 450</span>' : '<span class="chip">KIA</span>';
-    const nogNiet = a && jaar * 12 + 11 < a.start;
-    return '<tr class="klik" data-ivid="' + f.id + '"><td>' + fmtDatum(f.datum) + '</td><td>' + ivWat(f) + '</td>' +
-      '<td class="r">' + eur2(aanschaf) + '</td>' +
-      '<td class="r">' + (a ? a.jr + (a.jr < 5 ? ' <span title="Fiscaal minimaal 5 jaar" style="color:var(--amber)">!</span>' : '') : '<span style="color:var(--amber)">invullen</span>') + '</td>' +
-      '<td class="r">' + (a ? eur2(a.rest) : "—") + '</td>' +
-      '<td class="r">' + (a ? (nogNiet ? "—" : eur2(afschrInJaar(a, jaar))) : (new Date(f.datum).getFullYear() === jaar ? eur2(aanschaf) + ' <span style="color:var(--ink3)">(in één keer)</span>' : "—")) + '</td>' +
-      '<td class="r">' + (a ? (nogNiet ? "—" : eur2(boekwaardeEind(a, jaar))) : "—") + '</td>' +
-      '<td>' + kiaCel + '</td></tr>';
-  }).join("") : '<tr><td colspan="8" style="color:var(--ink3)">Nog geen investeringen. Markeer hieronder een aankoop, of voer er een in als inkoopfactuur met Investering: ja.</td></tr>';
-  $("ivBody").querySelectorAll("[data-ivid]").forEach(r => r.addEventListener("click", () => ivOpen(r.dataset.ivid)));
+  const kiaCel = a => !a.kia ? '<span style="color:var(--ink3)">nee</span>'
+    : a.aanschaf < 450 ? '<span style="color:var(--ink3)" title="Per stuk onder € 450: telt niet voor de KIA">&lt; € 450</span>' : '<span class="chip">KIA</span>';
+  $("ivBody").innerHTML = inv.length ? inv.map((a, i) => {
+    const nogNiet = jaar * 12 + 11 < a.start;
+    return '<tr class="klik" data-ivi="' + i + '"><td>' + fmtDatum(a.f.datum) + '</td><td class="tekst">' + ivWat(a) + '</td>' +
+      '<td class="r">' + eur2(a.aanschaf) + '</td>' +
+      '<td class="r">' + (a.jr ? a.jr + (a.jr < 5 ? ' <span title="Fiscaal minimaal 5 jaar" style="color:var(--amber)">!</span>' : '') : '<span style="color:var(--amber)">invullen</span>') + '</td>' +
+      '<td class="r">' + (a.jr ? eur2(a.rest) : "—") + '</td>' +
+      '<td class="r">' + (a.jr ? (nogNiet ? "—" : eur2(afschrInJaar(a, jaar))) : (new Date(a.f.datum).getFullYear() === jaar ? eur2(a.aanschaf) + ' <span style="color:var(--ink3)">(in één keer)</span>' : "—")) + '</td>' +
+      '<td class="r">' + (a.jr ? (nogNiet ? "—" : eur2(boekwaardeEind(a, jaar))) : "—") + '</td>' +
+      '<td>' + kiaCel(a) + '</td></tr>';
+  }).join("") : '<tr><td colspan="8" style="color:var(--ink3)">Nog geen investeringen. Geef hieronder aan welk product een investering is, of open een inkoopfactuur en tik bij het product op <b>Investering?</b></td></tr>';
+  $("ivBody").querySelectorAll("[data-ivi]").forEach(r => r.addEventListener("click", () => {
+    const a = inv[Number(r.dataset.ivi)];
+    ivOpen(a.f, a.r);
+  }));
 
-  // aankopen die misschien een investering zijn
-  const geen = ["materiaal", "opleiding", "abonnementen", "verzekeringen"];
-  const kand = factData.filter(f => f.type === "inkoop" && !f.is_investering && kostBedrag(f) >= 450 &&
-    !geen.includes(f.categorie || "materiaal") && new Date(f.datum).getFullYear() === jaar)
-    .sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
-  $("ivKandidatenBlok").style.display = kand.length ? "" : "none";
-  $("ivKandidatenBody").innerHTML = kand.map(f =>
-    '<tr><td>' + fmtDatum(f.datum) + '</td><td>' + ivWat(f) + '</td><td>' + esc(kostenNaam(f.categorie)) + '</td>' +
-    '<td class="r">' + eur2(kostBedrag(f)) + '</td>' +
-    '<td class="r"><button class="knop klein" data-ivkand="' + f.id + '">Is investering</button></td></tr>').join("");
-  $("ivKandidatenBody").querySelectorAll("[data-ivkand]").forEach(b => b.addEventListener("click", () => ivOpen(b.dataset.ivkand)));
+  renderIvKandidaten(jaar);
 
   // per jaar: van de eerste aankoop tot het laatste afschrijvingsjaar
-  const as = inv.map(afschrijving).filter(Boolean);
-  const jaren = inv.map(f => new Date(f.datum).getFullYear());
+  const as = inv.filter(a => a.jr > 0);
+  const jaren = inv.map(a => new Date(a.f.datum).getFullYear());
   if (!jaren.length){ $("ivJarenBody").innerHTML = '<tr><td colspan="5" style="color:var(--ink3)">—</td></tr>'; }
   else {
     const van = Math.min(...jaren), totJ = Math.max(...jaren, ...as.map(a => Math.floor((a.eind - 1) / 12)));
@@ -9251,69 +9289,152 @@ function renderInvesteringen(){
   }
 
   $("ivRegels").innerHTML = "Zo rekent het dashboard: afschrijven gaat in gelijke delen per maand vanaf de maand van aankoop, tot de restwaarde. " +
-    "Fiscaal mag je hooguit 20% per jaar afschrijven (dus minimaal 5 jaar). Iets onder € 450 excl. btw mag je gewoon in één keer als kosten nemen. " +
-    "De afschrijving telt mee als kosten op Omzet / winst, Per uur, Kostensoorten en Belasting; de btw op de aankoop vraag je in één keer terug in het kwartaal van aankoop." +
+    "Fiscaal mag je hooguit 20% per jaar afschrijven (dus minimaal 5 jaar). Iets onder € 450 excl. btw per stuk mag je gewoon in één keer als kosten nemen, en telt niet voor de KIA. " +
+    "De afschrijving telt mee als kosten op Omzet / winst, Per uur en Belasting; de btw op de aankoop vraag je in één keer terug in het kwartaal van aankoop." +
     (k ? " KIA " + jaar + ": " + k.pct + "% bij " + eur(k.drempel) + " – " + eur(k.vol) + ", daarboven vast " + eur(k.vast) + ", vanaf " + eur(k.afbouwVanaf) + " aflopend tot nul bij " + eur(k.tot) + "." : "");
 }
 $("ivJaar").addEventListener("change", renderInvesteringen);
 
-/* pop-up: jaren, restwaarde en KIA van één investering */
-let ivBewerkId = null, ivKiaAan = true;
-function ivOpen(id){
-  const f = factData.find(x => x.id === id);
+/* Producten die misschien een investering zijn: de regels van inkoopfacturen
+   in dit jaar met een kostensoort waar gereedschap/apparatuur onder valt.
+   Lennart beslist zelf; boven € 450 per stuk staat er een markering bij. */
+const IV_GEEN_SOORT = ["materiaal", "opleiding", "abonnementen", "verzekeringen", "werkkleding"];
+function renderIvKandidaten(jaar){
+  const fact = factData.filter(f => f.type === "inkoop" && !f.is_investering && !IV_GEEN_SOORT.includes(f.categorie || "materiaal") &&
+    new Date(f.datum).getFullYear() === jaar);
+  const st = ivKandRegels[jaar];
+  const sleutel = fact.map(f => f.id).join(",");
+  if (!st || st.sleutel !== sleutel){ ivLaadKandidaten(jaar, fact); }
+  const regels = st && st.sleutel === sleutel ? st.regels : null;
+  if (regels === null){
+    $("ivKandidatenBlok").style.display = fact.length ? "" : "none";
+    $("ivKandidatenBody").innerHTML = '<tr><td colspan="5" style="color:var(--ink3)">Producten ophalen…</td></tr>';
+    return;
+  }
+  const gemarkeerd = new Set(invRegels.map(r => r.id));
+  const perFactuur = new Map(fact.map(f => [f.id, f]));
+  const rijen = regels.filter(r => !gemarkeerd.has(r.id) && !r.is_investering)
+    .map(r => ({ r, f: perFactuur.get(r.factuur_id) })).filter(x => x.f)
+    .map(x => ({ ...x, bedrag: regelKost(x.f, x.r) }))
+    .filter(x => x.bedrag >= 100)
+    .sort((a, b) => b.bedrag - a.bedrag);
+  // facturen zonder productregels: alleen als geheel aan te wijzen
+  const metRegels = new Set(regels.map(r => r.factuur_id));
+  const heel = fact.filter(f => !metRegels.has(f.id) && kostBedrag(f) >= 450);
+  $("ivKandidatenBlok").style.display = rijen.length || heel.length ? "" : "none";
+  $("ivKandidatenBody").innerHTML =
+    rijen.map((x, i) => '<tr><td>' + fmtDatum(x.f.datum) + '</td><td class="tekst">' + esc(x.r.omschrijving || "—") +
+      ' <span style="color:var(--ink3)">· ' + esc(x.f.leverancier || "—") + (Number(x.r.aantal) > 1 ? " · " + Number(x.r.aantal).toLocaleString("nl-NL") + " stuks" : "") + '</span></td>' +
+      '<td>' + esc(kostenNaam(x.f.categorie)) + '</td>' +
+      '<td class="r">' + eur2(x.bedrag) + (x.bedrag >= 450 ? ' <span class="chip">≥ € 450</span>' : '') + '</td>' +
+      '<td class="r"><button class="knop klein stil" data-ivkr="' + i + '">Investering</button></td></tr>').join("") +
+    heel.map((f, i) => '<tr><td>' + fmtDatum(f.datum) + '</td><td>' + esc(f.leverancier || "—") + ' <span style="color:var(--ink3)">· hele factuur (geen producten bekend)</span></td>' +
+      '<td>' + esc(kostenNaam(f.categorie)) + '</td><td class="r">' + eur2(kostBedrag(f)) + '</td>' +
+      '<td class="r"><button class="knop klein stil" data-ivkf="' + i + '">Investering</button></td></tr>').join("");
+  $("ivKandidatenBody").querySelectorAll("[data-ivkr]").forEach(b => b.addEventListener("click", () => {
+    const x = rijen[Number(b.dataset.ivkr)]; ivOpen(x.f, x.r);
+  }));
+  $("ivKandidatenBody").querySelectorAll("[data-ivkf]").forEach(b => b.addEventListener("click", () => ivOpen(heel[Number(b.dataset.ivkf)], null)));
+}
+
+/* Omzet / winst: welke investeringen er in de kosten zitten (als afschrijving) */
+function renderOwInvesteringen(){
+  const jaar = Number($("owJaar").value) || new Date().getFullYear();
+  $("owInvJaar").textContent = jaar;
+  const inv = alleInvesteringen().filter(a => afschrInJaar(a, jaar) > 0 || new Date(a.f.datum).getFullYear() === jaar);
+  const totaal = inv.reduce((s, a) => s + (a.jr ? afschrInJaar(a, jaar) : 0), 0);
+  $("owKostenSub").textContent = totaal > 0.5 ? "excl. btw · waarvan " + eur(totaal) + " afschrijving" : "excl. btw";
+  $("owInvBody").innerHTML = inv.length ? inv.map((a, i) =>
+    '<tr class="klik" data-owi="' + i + '"><td>' + fmtDatum(a.f.datum) + '</td><td class="tekst">' + ivWat(a) + '</td>' +
+    '<td class="r">' + eur2(a.aanschaf) + '</td>' +
+    '<td class="r">' + (a.jr ? a.jr : '<span style="color:var(--amber)">invullen</span>') + '</td>' +
+    '<td class="r">' + (a.jr ? eur2(afschrInJaar(a, jaar)) : eur2(a.aanschaf) + ' <span style="color:var(--ink3)">(in één keer)</span>') + '</td></tr>').join("") +
+    '<tr style="border-top:2px solid var(--line);font-weight:600"><td></td><td>Afschrijving in de kosten van ' + jaar + '</td><td></td><td></td><td class="r">' + eur2(totaal) + '</td></tr>'
+    : '<tr><td colspan="5" style="color:var(--ink3)">Nog niets als investering aangegeven — alle inkoop telt in één keer als kosten.</td></tr>';
+  $("owInvBody").querySelectorAll("[data-owi]").forEach(r => r.addEventListener("click", () => {
+    const a = inv[Number(r.dataset.owi)]; ivOpen(a.f, a.r);
+  }));
+}
+$("owNaarInv").addEventListener("click", () => { toonTab("investeringen"); renderInvesteringen(); });
+
+/* pop-up: jaren, restwaarde en KIA van één investering (hele factuur of één productregel) */
+let ivDoel = null, ivKiaAan = true;   // ivDoel = { f, r } — r null = hele factuur
+function ivOpen(f, r){
   if (!f) return;
-  ivBewerkId = id;
-  ivKiaAan = f.kia !== false;
-  $("ivTitel").textContent = (f.leverancier || "Investering") + (f.nummer && f.nummer !== "-" ? " · " + f.nummer : "");
-  $("ivSub").textContent = fmtDatum(f.datum) + " · " + eur2(kostBedrag(f)) + (f.btw_land ? " (incl. buitenlandse btw)" : " excl. btw") + " · " + kostenNaam(f.categorie);
-  $("ivJaren").value = f.afschrijf_jaren || 5;
-  $("ivRest").value = f.restwaarde != null && Number(f.restwaarde) > 0 ? Number(f.restwaarde) : "";
-  $("ivGeen").style.display = f.is_investering ? "" : "none";
-  $("ivOpslaan").textContent = f.is_investering ? "Opslaan" : "Opslaan als investering";
+  ivDoel = { f, r: r || null };
+  const bron = r || f;
+  const isInv = !!bron.is_investering;
+  ivKiaAan = bron.kia !== false;
+  const bedrag = r ? regelKost(f, r) : kostBedrag(f);
+  $("ivTitel").textContent = r ? (r.omschrijving || "Productregel") : (f.leverancier || "Investering") + (f.nummer && f.nummer !== "-" ? " · " + f.nummer : "");
+  $("ivSub").textContent = (r ? (f.leverancier || "—") + " · " : "") + fmtDatum(f.datum) + " · " + eur2(bedrag) +
+    (f.btw_land ? " (incl. buitenlandse btw)" : " excl. btw") +
+    (r && Number(r.aantal) > 1 ? " (" + Number(r.aantal).toLocaleString("nl-NL") + " stuks)" : "") + " · " + kostenNaam(f.categorie);
+  $("ivJaren").value = bron.afschrijf_jaren || 5;
+  $("ivRest").value = bron.restwaarde != null && Number(bron.restwaarde) > 0 ? Number(bron.restwaarde) : "";
+  $("ivGeen").style.display = isInv ? "" : "none";
+  $("ivOpslaan").textContent = isInv ? "Opslaan" : "Opslaan als investering";
   ivVoorbeeld();
   $("ivOverlay").classList.add("open");
 }
 function ivVoorbeeld(){
-  const f = factData.find(x => x.id === ivBewerkId);
-  if (!f) return;
+  if (!ivDoel) return;
+  const { f, r } = ivDoel;
   (ivKiaAan ? schakel : (a, b) => schakel(b, a))("ivKiaJa", "ivKiaNee");
   const jr = parseInt($("ivJaren").value, 10);
   if (!(jr > 0)){ $("ivVoorbeeld").textContent = "Vul het aantal jaren in."; return; }
-  const a = afschrijving({ ...f, is_investering: true, afschrijf_jaren: jr, restwaarde: parseFloat($("ivRest").value) || 0 });
+  const bedrag = r ? regelKost(f, r) : kostBedrag(f);
+  const a = maakAfschrijving(f, r, bedrag, { afschrijf_jaren: jr, restwaarde: parseFloat($("ivRest").value) || 0, kia: ivKiaAan });
   const eerste = afschrInJaar(a, Math.floor(a.start / 12));
+  const perStuk = r && Number(r.aantal) > 1 ? bedrag / Number(r.aantal) : bedrag;
   $("ivVoorbeeld").innerHTML = "Afschrijving <b>" + eur2(a.perMaand * 12) + " per jaar</b> (" + eur2(a.perMaand) + " per maand), van " +
     maandJaar(a.start) + " t/m " + maandJaar(a.eind - 1) + ". In " + Math.floor(a.start / 12) + " is dat " + eur2(eerste) + "." +
     (jr < 5 ? ' <span style="color:var(--amber)">Let op: minder dan 5 jaar mag fiscaal niet (hooguit 20% per jaar).</span>' : "") +
-    (ivKiaAan && kostBedrag(f) < 450 ? " Onder € 450 telt het niet voor de KIA." : "");
+    (perStuk < 450 ? " <b>Onder € 450 per stuk</b>: telt niet voor de KIA, en je mag het ook gewoon in één keer als kosten nemen (dat levert dit jaar meer aftrek op)." : "");
 }
 ["ivJaren", "ivRest"].forEach(id => $(id).addEventListener("input", ivVoorbeeld));
 $("ivKiaJa").addEventListener("click", () => { ivKiaAan = true; ivVoorbeeld(); });
 $("ivKiaNee").addEventListener("click", () => { ivKiaAan = false; ivVoorbeeld(); });
-const ivSluiten = () => { $("ivOverlay").classList.remove("open"); ivBewerkId = null; };
+const ivSluiten = () => { $("ivOverlay").classList.remove("open"); ivDoel = null; };
 $("ivSluit").addEventListener("click", ivSluiten);
 $("ivOverlay").addEventListener("click", e => { if (e.target === $("ivOverlay")) ivSluiten(); });
 $("ivFactuur").addEventListener("click", () => {
-  const id = ivBewerkId;
+  const id = ivDoel && ivDoel.f.id;
   ivSluiten();
+  if (!id) return;
   toonTab("facturen"); kiesFSub("fIn"); openInkoop(id);
 });
+async function herlaadInvRegels(){
+  const { data, error } = await db.from("factuur_inkoop_regels").select("*").eq("is_investering", true);
+  if (!error) invRegels = data || [];
+}
 async function ivBewaar(velden, melding){
-  const { error } = await db.from("facturen").update(velden).eq("id", ivBewerkId);
+  const { f, r } = ivDoel;
+  const { error } = r
+    ? await db.from("factuur_inkoop_regels").update(velden).eq("id", r.id)
+    : await db.from("facturen").update(velden).eq("id", f.id);
   if (error){ console.error(error); toast("Opslaan mislukt"); return; }
   ivSluiten();
   toast(melding);
-  await herlaadFacturen();
+  if (r){
+    Object.assign(r, velden);   // ook de regel in de kandidatenlijst / factuurweergave bijwerken
+    await herlaadInvRegels();
+    renderFinancieel();
+    if (bekijkInkoopId === f.id) laadInkoopRegels(f.id);
+  } else await herlaadFacturen();
 }
 $("ivOpslaan").addEventListener("click", () => {
+  if (!ivDoel) return;
   const jr = parseInt($("ivJaren").value, 10);
   if (!(jr > 0)){ toast("Vul het aantal jaren in"); return; }
   const rest = parseFloat($("ivRest").value) || 0;
-  const f = factData.find(x => x.id === ivBewerkId);
-  if (f && rest > kostBedrag(f)){ toast("Restwaarde is hoger dan de aanschaf"); return; }
+  const { f, r } = ivDoel;
+  if (rest > (r ? regelKost(f, r) : kostBedrag(f))){ toast("Restwaarde is hoger dan de aanschaf"); return; }
   ivBewaar({ is_investering: true, afschrijf_jaren: jr, restwaarde: r2(rest), kia: ivKiaAan }, "Investering opgeslagen");
 });
 $("ivGeen").addEventListener("click", () => {
-  if (!confirm("Geen investering? Dan telt het hele bedrag weer in één keer als kosten op de factuurdatum, en niet meer voor de KIA.")) return;
+  if (!ivDoel) return;
+  if (!confirm("Geen investering? Dan telt het bedrag weer in één keer als kosten op de factuurdatum, en niet meer voor de KIA.")) return;
   ivBewaar({ is_investering: false, afschrijf_jaren: null }, "Telt weer als gewone kosten");
 });
 
