@@ -2387,7 +2387,16 @@ function ikZetStatus(s){
 }
 $("ikStatusOpen").addEventListener("click", () => ikZetStatus("open"));
 $("ikStatusBetaald").addEventListener("click", () => ikZetStatus("betaald"));
-$("ikBetaaldOp").addEventListener("input", () => { ikBetaaldAuto = false; });
+/* Een bon (inkoop zonder factuurnummer) heeft geen aparte factuurdatum: de dag
+   van betalen is de datum van de bon. Zet je "Betaald op" op een andere dag,
+   dan schuift de factuurdatum mee — zo staat de bon in de btw-lijst op die dag. */
+const isBon = f => f.type === "inkoop" && (!f.nummer || f.nummer.trim() === "-");
+const ikIsBon = () => { const n = $("ikNummer").value.trim(); return !n || n === "-"; };
+$("ikBetaaldOp").addEventListener("input", () => {
+  ikBetaaldAuto = false;
+  const v = $("ikBetaaldOp").value;
+  if (ikIsBon() && v) $("ikDatum").value = v.slice(0, 10);
+});
 $("ikDatum").addEventListener("change", () => {
   if (ikBetaaldAuto && $("ikBetaaldOp").value && $("ikDatum").value)
     $("ikBetaaldOp").value = $("ikDatum").value + "T12:00";
@@ -2500,6 +2509,7 @@ $("ikOpslaan").addEventListener("click", async () => {
   // betaalmoment zelf meegeven; leeg laten = de trigger zet "nu"
   const bOp = $("ikBetaaldOp").value;
   if (ikStatus === "betaald" && bOp) rij.betaald_op = new Date(bOp).toISOString();
+  if (ikStatus === "betaald" && bOp && rij.nummer === "-") rij.datum = bOp.slice(0, 10);
   $("ikOpslaan").disabled = true;
   const oudPad = ikBijlagePad;
   const bestand = $("ikBijlage").files[0];
@@ -7507,7 +7517,9 @@ function openBpFactuur(id){
   $("bpFactTitel").textContent = (f.type === "inkoop" ? (f.leverancier || "—") : (klantNaam(f.klant_id) || "—")) +
     " · " + eur2(bpIncl(f));
   $("bpFactWanneer").value = f.betaald_op ? naarLokaalInput(f.betaald_op) : f.datum + "T12:00";
-  $("bpFactHint").textContent = f.betaald_op
+  $("bpFactHint").textContent = isBon(f)
+    ? "Bon zonder factuurnummer: de datum van de bon schuift mee met wat je hier invult (ook in de btw-lijst)."
+    : f.betaald_op
     ? "Factuurdatum " + fmtDatum(f.datum) + ". Pas aan als je eerder of later betaalde dan je 'm op betaald zette."
     : "Nog geen betaaltijd vastgelegd — nu ingevuld met de factuurdatum, 12:00. Zet hier neer wanneer het echt van je rekening ging.";
   $("bpFactOnbetaald").textContent = f.type === "inkoop" ? "Toch niet betaald" : "Toch niet ontvangen";
@@ -7517,10 +7529,12 @@ function openBpFactuur(id){
 $("bpFactSluit").addEventListener("click", () => { $("bpFactForm").style.display = "none"; bpFactId = null; });
 $("bpFactOpslaan").addEventListener("click", async () => {
   if (!bpFactId || !$("bpFactWanneer").value){ toast("Vul datum en tijd in"); return; }
-  const { error } = await db.from("facturen")
-    .update({ betaald_op: new Date($("bpFactWanneer").value).toISOString() }).eq("id", bpFactId);
+  const f = factData.find(x => x.id === bpFactId);
+  const upd = { betaald_op: new Date($("bpFactWanneer").value).toISOString() };
+  if (f && isBon(f)) upd.datum = $("bpFactWanneer").value.slice(0, 10);
+  const { error } = await db.from("facturen").update(upd).eq("id", bpFactId);
   if (error){ toast("Opslaan mislukt"); return; }
-  toast("Betaaltijd opgeslagen");
+  toast(upd.datum && upd.datum !== f.datum ? "Betaaltijd opgeslagen — bon staat nu op " + fmtDatum(upd.datum) : "Betaaltijd opgeslagen");
   $("bpFactForm").style.display = "none"; bpFactId = null;
   await herlaadFacturen();
 });
