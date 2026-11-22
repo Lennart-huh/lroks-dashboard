@@ -672,6 +672,10 @@ nav.onderbalk{display:none}
               <button type="button" id="ikStatusBetaald">Betaald</button>
             </div>
           </div>
+          <div class="veld" id="ikBetaaldVeld" style="display:none"><label>Betaald op</label>
+            <input type="datetime-local" id="ikBetaaldOp">
+            <div class="hint">Zo komt hij in Betalingen te staan. Staat op de factuurdatum; pas aan als je op een andere dag betaalde.</div>
+          </div>
           <div class="veld"><label>Notitie</label><input type="text" id="ikNotities" placeholder="optioneel"></div>
           <div class="veld"><label>Bon of factuur (PDF of foto)</label>
             <div id="ikBijlageHuidig" style="display:none;margin-bottom:8px;gap:8px;flex-wrap:wrap;align-items:center">
@@ -2369,8 +2373,25 @@ $("ikInvJa").addEventListener("click", () => {
   $("ikAfschrijfVeld").style.display = "block";
   if (!$("ikAfschrijf").value) $("ikAfschrijf").value = 5;
 });
-$("ikStatusOpen").addEventListener("click", () => { ikStatus = "open"; schakel("ikStatusOpen","ikStatusBetaald"); });
-$("ikStatusBetaald").addEventListener("click", () => { ikStatus = "betaald"; schakel("ikStatusBetaald","ikStatusOpen"); });
+/* Betaald gekozen: betaalmoment tonen, standaard de factuurdatum 12:00.
+   Zolang je het niet zelf aanpast, schuift het mee met de factuurdatum. */
+let ikBetaaldAuto = true;
+function ikZetStatus(s){
+  ikStatus = s;
+  schakel(s === "betaald" ? "ikStatusBetaald" : "ikStatusOpen", s === "betaald" ? "ikStatusOpen" : "ikStatusBetaald");
+  $("ikBetaaldVeld").style.display = s === "betaald" ? "block" : "none";
+  if (s === "betaald" && !$("ikBetaaldOp").value){
+    $("ikBetaaldOp").value = ($("ikDatum").value || vandaagISO()) + "T12:00";
+    ikBetaaldAuto = true;
+  }
+}
+$("ikStatusOpen").addEventListener("click", () => ikZetStatus("open"));
+$("ikStatusBetaald").addEventListener("click", () => ikZetStatus("betaald"));
+$("ikBetaaldOp").addEventListener("input", () => { ikBetaaldAuto = false; });
+$("ikDatum").addEventListener("change", () => {
+  if (ikBetaaldAuto && $("ikBetaaldOp").value && $("ikDatum").value)
+    $("ikBetaaldOp").value = $("ikDatum").value + "T12:00";
+});
 
 $("pfInvNee").addEventListener("click", () => { pfInvestering = false; schakel("pfInvNee","pfInvJa"); });
 $("pfInvJa").addEventListener("click", () => { pfInvestering = true; schakel("pfInvJa","pfInvNee"); });
@@ -2419,7 +2440,8 @@ function ikFormLeeg(){
   $("ikProject").value = "";
   ikInvestering = false; schakel("ikInvNee","ikInvJa");
   $("ikAfschrijfVeld").style.display = "none";
-  ikStatus = "open"; schakel("ikStatusOpen","ikStatusBetaald");
+  $("ikBetaaldOp").value = ""; ikBetaaldAuto = true;
+  ikZetStatus("open");
   $("ikOpslaan").textContent = "Inkoopfactuur opslaan";
   $("ikAnnuleer").style.display = "none";
 }
@@ -2443,9 +2465,9 @@ function ikVulFormulier(f){
   schakel(ikInvestering ? "ikInvJa" : "ikInvNee", ikInvestering ? "ikInvNee" : "ikInvJa");
   $("ikAfschrijfVeld").style.display = ikInvestering ? "block" : "none";
   $("ikAfschrijf").value = f.afschrijf_jaren || "";
-  ikStatus = f.status === "betaald" ? "betaald" : "open";
-  schakel(ikStatus === "betaald" ? "ikStatusBetaald" : "ikStatusOpen",
-          ikStatus === "betaald" ? "ikStatusOpen" : "ikStatusBetaald");
+  $("ikBetaaldOp").value = f.betaald_op ? naarLokaalInput(f.betaald_op) : "";
+  ikBetaaldAuto = !f.betaald_op;
+  ikZetStatus(f.status === "betaald" ? "betaald" : "open");
   $("ikOpslaan").textContent = "Wijziging opslaan";
   $("ikAnnuleer").style.display = "block";
   window.scrollTo(0, 0);
@@ -2475,6 +2497,9 @@ $("ikOpslaan").addEventListener("click", async () => {
     afschrijf_jaren: ikInvestering && afschrijf > 0 ? afschrijf : null,
     notities: $("ikNotities").value.trim() || null
   };
+  // betaalmoment zelf meegeven; leeg laten = de trigger zet "nu"
+  const bOp = $("ikBetaaldOp").value;
+  if (ikStatus === "betaald" && bOp) rij.betaald_op = new Date(bOp).toISOString();
   $("ikOpslaan").disabled = true;
   const oudPad = ikBijlagePad;
   const bestand = $("ikBijlage").files[0];
