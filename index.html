@@ -3714,7 +3714,7 @@ function omzetWinstPerMaand(jaar){
   factData.forEach(f => {
     const fJaar = new Date(f.datum).getFullYear();
     const m = new Date(f.datum).getMonth();
-    const excl = Number(f.bedrag_excl || 0);
+    const excl = f.type === "inkoop" ? kostBedrag(f) : Number(f.bedrag_excl || 0);
     if (f.type === "verkoop"){
       if (fJaar === jaar) omzet[m] += excl;
     } else if (f.type === "inkoop"){
@@ -3756,7 +3756,7 @@ function maandPosten(jaar, maand){
   const inMaand = d => { const x = new Date(d); return x.getFullYear() === jaar && x.getMonth() === maand; };
   const eersteVanMaand = jaar + "-" + String(maand + 1).padStart(2, "0") + "-01";
   factData.forEach(f => {
-    const excl = Number(f.bedrag_excl || 0);
+    const excl = f.type === "inkoop" ? kostBedrag(f) : Number(f.bedrag_excl || 0);
     if (f.type === "verkoop"){
       if (inMaand(f.datum)){
         const kostRegels = factuurKostprijsRegels(f.id);
@@ -3787,7 +3787,7 @@ function maandPosten(jaar, maand){
   bpTellend().forEach(p => {
     if (!inMaand(p.datum)) return;
     if (p.richting === "in") omzet.push({ datum: p.datum, wat: bpWat(p.l), soort: "Losse betaling", bedrag: p.excl, open: bpOpen(p.l) });
-    else kosten.push({ datum: p.datum, wat: bpWat(p.l), soort: kostenNaam(p.categorie), bedrag: p.excl, open: bpOpen(p.l) });
+    else kosten.push({ datum: p.datum, wat: bpWat(p.l), soort: kostenNaam(p.categorie), bedrag: p.kost, open: bpOpen(p.l) });
   });
   cache.vasteLasten.forEach(vl => {
     vasteLastDatumsInJaar(vl, jaar).forEach(datum => {
@@ -4297,7 +4297,7 @@ function kmJaarTotaal(jaar){
 function autoKostenPosten(jaar){
   const posten = [];
   factData.filter(f => f.type === "inkoop" && f.categorie === "vervoer").forEach(f => {
-    const excl = Number(f.bedrag_excl || 0);
+    const excl = kostBedrag(f);
     const jr = Number(f.afschrijf_jaren || 0);
     const fJaar = new Date(f.datum).getFullYear();
     const wat = (f.leverancier || "—") + (f.nummer && f.nummer !== "-" ? " · " + f.nummer : "");
@@ -4315,7 +4315,7 @@ function autoKostenPosten(jaar){
       wat: vl.naam, soort: "Vaste last", bedrag: Number(vl.bedrag || 0), open: () => startVasteLastBewerken(vl.id) })));
   bpTellend().filter(p => p.richting === "uit" && p.categorie === "vervoer" && new Date(p.datum).getFullYear() === jaar)
     .forEach(p => posten.push({ maand: new Date(p.datum).getMonth(), datum: p.datum,
-      wat: bpWat(p.l), soort: "Losse betaling", bedrag: p.excl, open: bpOpen(p.l) }));
+      wat: bpWat(p.l), soort: "Losse betaling", bedrag: p.kost, open: bpOpen(p.l) }));
   return posten;
 }
 
@@ -7256,11 +7256,18 @@ async function herlaadBetalingen(){
 
 /* Losse betalingen die meetellen (kostensoort/omzet gekozen en btw ingevuld),
    op de dag van betalen: { l, datum, richting, excl, btw, categorie } */
+/* Wat een inkoopfactuur kost: excl. btw, plus buitenlandse btw — die krijg je
+   in Nederland niet terug als voorbelasting, dus het is gewoon een kostenpost. */
+function kostBedrag(f){
+  return Number(f.bedrag_excl || 0) + (f.btw_land ? Number(f.btw_bedrag || 0) : 0);
+}
 function bpTellend(){
   return losseBetalingen.filter(l => l.categorie && l.btw_bedrag != null).map(l => {
     const btw = Number(l.btw_bedrag || 0);
     return { l, datum: lokaleDag(new Date(l.betaald_op)), richting: l.richting,
-      excl: r2(Number(l.bedrag || 0) - btw), btw, categorie: l.categorie, land: l.btw_land || null };
+      excl: r2(Number(l.bedrag || 0) - btw), btw, categorie: l.categorie, land: l.btw_land || null,
+      // kost = wat als kosten telt: excl, plus buitenlandse btw (zie kostBedrag)
+      kost: l.btw_land ? r2(Number(l.bedrag || 0)) : r2(Number(l.bedrag || 0) - btw) };
   });
 }
 const bpWat = l => (l.tegenpartij || "—") + (l.omschrijving ? " · " + l.omschrijving : "") + " (losse betaling)";
@@ -7829,7 +7836,7 @@ function financieelJaar(jaar){
   factData.forEach(f => {
     const fJaar = new Date(f.datum).getFullYear();
     const k = kwartaalVan(f.datum);
-    const excl = Number(f.bedrag_excl || 0), btw = Number(f.btw_bedrag || 0);
+    const excl = f.type === "inkoop" ? kostBedrag(f) : Number(f.bedrag_excl || 0), btw = Number(f.btw_bedrag || 0);
     if (f.type === "verkoop"){
       if (fJaar !== jaar) return;
       omzet[k] += excl;
@@ -7861,7 +7868,7 @@ function financieelJaar(jaar){
     if (new Date(p.datum).getFullYear() !== jaar) return;
     const k = kwartaalVan(p.datum);
     if (p.richting === "in"){ omzet[k] += p.excl; btwUit[k] += p.btw; }
-    else { kosten[k] += p.excl; (p.land ? btwBuiten : btwIn)[k] += p.btw; }
+    else { kosten[k] += p.kost; (p.land ? btwBuiten : btwIn)[k] += p.btw; }
   });
   // vaste lasten tellen mee als kosten (Omzet/winst, Belasting) maar niet bij
   // de btw (BTW-tab) — daar zit geen factuur en dus geen btw achter
@@ -8687,7 +8694,7 @@ function renderKostensoorten(){
   if (ksActief === "vaste_lasten"){ renderVasteLastenBlok(jaar); return; }
 
   const inkoopRegels = inkoop.filter(f => (f.categorie || "materiaal") === ksActief)
-    .map(f => ({ soort: "inkoop", f, datum: f.datum, bedrag: Number(f.bedrag_excl || 0) }));
+    .map(f => ({ soort: "inkoop", f, datum: f.datum, bedrag: kostBedrag(f) }));
 
   // vaste lasten zonder kostensoort tellen nergens mee -- alleen wie er bewust
   // een koos komt hier terecht, met elke afschrijving in dit jaar als eigen regel
@@ -8698,7 +8705,7 @@ function renderKostensoorten(){
 
   const losRegels = bpTellend()
     .filter(p => p.richting === "uit" && p.categorie === ksActief && new Date(p.datum).getFullYear() === jaar)
-    .map(p => ({ soort: "los", l: p.l, datum: p.datum, bedrag: p.excl }));
+    .map(p => ({ soort: "los", l: p.l, datum: p.datum, bedrag: p.kost }));
 
   const lijst = [...inkoopRegels, ...vasteLastRegels, ...losRegels].sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
   const totaal = lijst.reduce((s, r) => s + r.bedrag, 0);
