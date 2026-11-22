@@ -178,6 +178,18 @@ tbody tr.actief td:first-child{box-shadow:inset 3px 0 0 var(--ink)}
 .lees{padding:9px 0;font-size:.9rem;color:var(--ink);border-bottom:1px solid var(--line);min-height:20px}
 .verwijder{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:.95rem;padding:4px 8px;border-radius:5px}
 .verwijder:hover{color:var(--rood);background:var(--rood-bg)}
+/* btw-venster: blokken naast elkaar; op een smal scherm weer onder elkaar */
+#btwUitlegOverlay .form-card{max-width:1240px}
+.btw-kolommen{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:14px;align-items:start}
+.btw-kolom .btw-kolom-kop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:.88rem}
+.btw-kolom table{table-layout:fixed}
+.btw-kolom th,.btw-kolom td{font-size:.8rem;padding:8px 7px;overflow-wrap:anywhere}
+.btw-kolom th:first-child,.btw-kolom td:first-child{width:74px}
+.btw-kolom th:last-child,.btw-kolom td:last-child{width:82px}
+.btw-kolom .sub{display:block;color:var(--ink3);font-size:.74rem;margin-top:2px}
+.btw-saldo{margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);
+  display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;font-size:.9rem}
+@media (max-width:900px){ .btw-kolommen{grid-template-columns:minmax(0,1fr)} }
 .leeg{padding:22px;font-size:.84rem;color:var(--ink3);font-family:'IBM Plex Mono',monospace}
 
 /* subtabs invulformulier */
@@ -1951,12 +1963,7 @@ nav.onderbalk{display:none}
           <h3 style="font-size:.92rem;margin-bottom:4px" id="btwUitlegTitel">—</h3>
           <div class="hint" style="margin-bottom:14px" id="btwUitlegSub">—</div>
           <div class="veld" style="margin-bottom:12px"><input type="search" id="btwUitlegZoek" placeholder="🔍 Zoek op naam, nummer of bedrag" autocomplete="off"></div>
-          <div class="tbl-wrap">
-            <table>
-              <thead><tr><th>Datum</th><th>Omschrijving</th><th class="r">Bedrag excl.</th><th class="r">Btw</th></tr></thead>
-              <tbody id="btwUitlegBody"></tbody>
-            </table>
-          </div>
+          <div id="btwUitlegBody"></div>
         </div>
       </div>
 
@@ -8626,45 +8633,42 @@ function toonBtwUitleg(jaar, k){
   $("btwUitlegTitel").textContent = k === -1 ? "Btw · heel " + jaar : "Btw · " + KWARTAAL_NAMEN[k] + " " + jaar;
   $("btwUitlegSub").innerHTML = "Btw uitgaand " + eur2(uit) + " − voorbelasting " + eur2(in_) +
     " = <b>" + eur2(Math.abs(saldo)) + "</b> " + (saldo >= 0 ? "af te dragen" : "terug te vragen");
-  // uitgaand en inkomend elk in een eigen blok met subtotaal, zodat je in
-  // één oogopslag ziet hoeveel btw je ontvangen hebt en wat je terugkrijgt
+  // Uitgaand, Inkomend en Buitenlandse btw staan naast elkaar, elk met eigen
+  // regels en subtotaal; daaronder wat je afdraagt of terugkrijgt. Op een smal
+  // scherm vallen de kolommen onder elkaar (CSS .btw-kolommen).
   // facturen en losse betalingen zijn aan te klikken; correcties hebben geen eigen scherm
   const regel = i =>
     (i.id ? '<tr class="klik" data-btwsoort="' + i.soort + '" data-btwid="' + i.id + '" title="Openen">' : '<tr>') +
-    '<td>' + fmtDatum(i.datum) + '</td>' +
+    '<td style="white-space:nowrap">' + fmtDatum(i.datum) + '</td>' +
     '<td class="tekst">' + esc(i.omschrijving) + (i.land ? ' <span class="chip grijs">' + esc(btwLandNaam(i.land).toUpperCase()) + '</span>' : '') +
-      (i.nummer ? ' <span style="color:var(--ink3)">· ' + esc(i.nummer) + '</span>' : '') + (i.bijlage ? ' 📎' : '') + '</td>' +
-    '<td class="r">' + eur2(i.excl) + '</td>' +
-    '<td class="r">' + eur2(i.btw) + '</td></tr>';
-  const blok = (titel, chip, lijst, leeg) => {
+      (i.bijlage ? ' 📎' : '') +
+      '<span class="sub">' + (i.nummer && i.nummer !== "-" ? esc(i.nummer) + ' · ' : '') + 'excl. ' + eur2(i.excl) + '</span></td>' +
+    '<td class="r" style="white-space:nowrap">' + eur2(i.btw) + '</td></tr>';
+  const kolom = (titel, chip, lijst, leeg) => {
     const excl = lijst.reduce((s, i) => s + i.excl, 0), btw = lijst.reduce((s, i) => s + i.btw, 0);
-    return '<tr><td colspan="4" style="padding-top:16px;border-bottom:2px solid var(--line)">' + chip +
-        ' <b>' + titel + '</b> <span style="color:var(--ink3)">· ' + lijst.length + (lijst.length === 1 ? ' regel' : ' regels') + '</span></td></tr>' +
-      (lijst.length ? lijst.map(regel).join("") : '<tr><td colspan="4" class="leeg">' + leeg + '</td></tr>') +
-      '<tr><td></td><td class="tekst"><b>Totaal ' + titel.toLowerCase() + '</b></td>' +
-        '<td class="r"><b>' + eur2(excl) + '</b></td><td class="r"><b>' + eur2(btw) + '</b></td></tr>';
+    return '<div class="btw-kolom"><div class="btw-kolom-kop">' + chip + ' <b>' + titel + '</b>' +
+        ' <span style="color:var(--ink3)">· ' + lijst.length + (lijst.length === 1 ? ' regel' : ' regels') + '</span></div>' +
+      '<div class="tbl-wrap"><table><thead><tr><th>Datum</th><th>Omschrijving</th><th class="r">Btw</th></tr></thead><tbody>' +
+      (lijst.length ? lijst.map(regel).join("") : '<tr><td colspan="3" class="leeg">' + leeg + '</td></tr>') +
+      '<tr style="border-top:2px solid var(--line)"><td></td><td class="tekst"><b>Totaal</b><span class="sub">excl. ' + eur2(excl) + '</span></td>' +
+        '<td class="r"><b>' + eur2(btw) + '</b></td></tr>' +
+      '</tbody></table></div></div>';
   };
-  if (term){
-    const groepen = [["Uitgaand", '<span class="chip groen">BTW ONTVANGEN</span>', "uit"],
-      ["Inkomend", '<span class="chip grijs">VOORBELASTING</span>', "in"],
-      ["Buitenlandse btw", '<span class="chip amber">NIET IN AANGIFTE</span>', "buiten"]];
-    $("btwUitlegBody").innerHTML = items.length
-      ? groepen.filter(g => items.some(i => i.richting === g[2]))
-          .map(g => blok(g[0], g[1], items.filter(i => i.richting === g[2]), "")).join("")
-      : '<tr><td colspan="4" class="leeg">Niets gevonden voor “' + esc(term) + '” in deze periode.</td></tr>';
-  } else
-  $("btwUitlegBody").innerHTML =
-    blok("Uitgaand", '<span class="chip groen">BTW ONTVANGEN</span>', items.filter(i => i.richting === "uit"),
-      "Geen uitgaande facturen in deze periode.") +
-    blok("Inkomend", '<span class="chip grijs">VOORBELASTING</span>', items.filter(i => i.richting === "in"),
-      "Geen inkomende facturen in deze periode.") +
-    '<tr><td colspan="3" class="tekst" style="padding-top:16px;border-top:2px solid var(--line)"><b>' +
-      (saldo >= 0 ? "Af te dragen" : "Terug te vragen") + '</b> <span style="color:var(--ink3)">(' + eur2(uit) + ' − ' + eur2(in_) + ')</span></td>' +
-      '<td class="r" style="padding-top:16px;border-top:2px solid var(--line)"><b>' + eur2(Math.abs(saldo)) + '</b></td></tr>' +
-    // buitenlandse btw staat los van de aangifte hierboven: eigen blok eronder
-    (items.some(i => i.richting === "buiten")
-      ? blok("Buitenlandse btw", '<span class="chip amber">NIET IN AANGIFTE</span>', items.filter(i => i.richting === "buiten"), "")
-      : "");
+  const groepen = [["Uitgaand", '<span class="chip groen">BTW ONTVANGEN</span>', "uit", "Geen uitgaande facturen in deze periode."],
+    ["Inkomend", '<span class="chip grijs">VOORBELASTING</span>', "in", "Geen inkomende facturen in deze periode."],
+    ["Buitenlandse btw", '<span class="chip amber">NIET IN AANGIFTE</span>', "buiten", "Geen buitenlandse btw in deze periode."]];
+  // zonder zoekterm: uitgaand en inkomend altijd, buitenlands alleen als er iets is;
+  // met zoekterm: alleen de kolommen met treffers, zonder saldoregel
+  const tonen = term
+    ? groepen.filter(g => items.some(i => i.richting === g[2]))
+    : groepen.filter(g => g[2] !== "buiten" || items.some(i => i.richting === "buiten"));
+  $("btwUitlegBody").innerHTML = term && !items.length
+    ? '<div class="tbl-wrap"><div class="leeg">Niets gevonden voor “' + esc(term) + '” in deze periode.</div></div>'
+    : '<div class="btw-kolommen" style="--n:' + tonen.length + '">' +
+        tonen.map(g => kolom(g[0], g[1], items.filter(i => i.richting === g[2]), g[3])).join("") + '</div>' +
+      (term ? '' :
+        '<div class="btw-saldo"><span>Btw ontvangen ' + eur2(uit) + ' − voorbelasting ' + eur2(in_) + '</span>' +
+        '<b>' + (saldo >= 0 ? "Af te dragen " : "Terug te vragen ") + eur2(Math.abs(saldo)) + '</b></div>');
   // klik op een regel: factuur of betaling openen; met Sluiten kom je via de
   // terug-sprong weer op BTW, en dan gaat dit venster open op dezelfde plek
   $("btwUitlegBody").querySelectorAll("[data-btwid]").forEach(r => r.addEventListener("click", () => {
