@@ -1795,17 +1795,6 @@ nav.onderbalk{display:none}
           <div class="card groen"><div class="k">Naar privé</div><div class="v" id="bwNetto">—</div><div class="m">na belasting</div></div>
           <div class="card"><div class="k">Opzij zetten</div><div class="v" id="bwOpzij">—</div><div class="m">per maand</div></div>
         </div>
-        <div class="form-card" id="bwWinstJaarBlok" style="margin-bottom:20px">
-          <h3 style="font-size:.95rem;margin:0 0 12px">Winst <span id="bwWjJaar"></span></h3>
-          <div class="tbl-wrap" style="margin-bottom:12px">
-            <table><tbody id="bwWjBody"></tbody></table>
-          </div>
-          <div class="veld" style="max-width:360px"><label>Winst die niet in de app staat (€)</label>
-            <input type="number" id="bwWjBuiten" step="1" inputmode="decimal" placeholder="0">
-            <div class="hint">Bijvoorbeeld van voordat je met de app begon: omzet min kosten, excl. btw. Verlies? Vul een minbedrag in. Telt mee in alle belastingberekeningen van dit jaar.</div>
-          </div>
-          <button class="knop" id="bwWjOpslaan">Opslaan</button>
-        </div>
         <h3 style="font-size:.95rem;margin:0 0 10px">Per kwartaal</h3>
         <div class="tbl-wrap" style="margin-bottom:20px">
           <table>
@@ -1832,6 +1821,17 @@ nav.onderbalk{display:none}
           </div>
           </div>
           <div class="hint" id="bwBronHint" style="margin-bottom:20px"></div>
+        </div>
+        <div class="form-card" id="bwWinstJaarBlok" style="margin-bottom:20px">
+          <h3 style="font-size:.95rem;margin:0 0 12px">Winst <span id="bwWjJaar"></span></h3>
+          <div class="tbl-wrap" style="margin-bottom:12px">
+            <table><tbody id="bwWjBody"></tbody></table>
+          </div>
+          <div class="veld" style="max-width:360px"><label>Winst die niet in de app staat (€)</label>
+            <input type="number" id="bwWjBuiten" step="1" inputmode="decimal" placeholder="0">
+            <div class="hint">Bijvoorbeeld van voordat je met de app begon: omzet min kosten, excl. btw. Verlies? Vul een minbedrag in. Telt mee in alle belastingberekeningen van dit jaar.</div>
+          </div>
+          <button class="knop" id="bwWjOpslaan">Opslaan</button>
         </div>
         <div class="form-card">
           <div id="bwSituatie">
@@ -8357,7 +8357,7 @@ function toonPrognose(p, r, t, opt, effJaar, winstBelasting, pctTxt){
     rij("Omzet t/m " + vandaagTxt, "Verkoopfacturen, losse betalingen die binnenkwamen en correcties — excl. btw.", "", eur2(p.omzetNu)),
     rij("Kosten t/m " + vandaagTxt, "Inkoopfacturen, vaste lasten tot vandaag, losse betalingen met een kostensoort en afschrijvingen — excl. btw.", "", min(p.kostenNu)),
     p.buiten ? rij(b("Winst in de app"), "", "", b(eur2(p.winstApp)), streep) : "",
-    p.buiten ? rij("Winst die niet in de app staat", "Zelf ingevuld bij het kopje Winst bovenaan deze pagina.", "", (p.buiten < 0 ? "− " : "+ ") + eur2(Math.abs(p.buiten))) : "",
+    p.buiten ? rij("Winst die niet in de app staat", "Zelf ingevuld bij het kopje Winst hierboven.", "", (p.buiten < 0 ? "− " : "+ ") + eur2(Math.abs(p.buiten))) : "",
     rij(b("Winst tot nu toe"), "", "", b(eur2(p.winstNu)), streep),
     rij("Verwachte winst tot 31 december", p.eigen ? "Jouw eigen schatting (veld hieronder)."
       : "Je tempo in de app tot nu (" + eur(perMaand) + " per maand) doorgetrokken over de laatste " + p.dagenRest + " dagen.", "", plus(p.extra)),
