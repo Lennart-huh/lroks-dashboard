@@ -3928,7 +3928,7 @@ function omzetWinstPerMaand(jaar){
   bpTellend().forEach(p => {
     if (new Date(p.datum).getFullYear() !== jaar) return;
     const m = new Date(p.datum).getMonth();
-    if (p.richting === "in") omzet[m] += p.excl; else kosten[m] += p.excl;
+    if (p.richting === "in") omzet[m] += p.excl; else kosten[m] += p.kost;
   });
   // vaste lasten (huur, abonnementen...) tellen ook mee als kosten — geen
   // factuur, dus geen btw, maar wel elke maand/kwartaal/jaar een kostenpost
