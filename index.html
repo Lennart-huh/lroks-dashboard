@@ -2264,6 +2264,8 @@ document.addEventListener("click", e => {
   toonTab(laatste.van, false);
   terugStapel.pop(); // de terugstap zelf is geen nieuwe sprong
   window.scrollTo(0, y);
+  // sprong je vanuit een pop-up, dan gaat die weer open waar je stond
+  if (laatste.herstel) laatste.herstel();
 });
 
 function kiesSub(subId){
@@ -8503,6 +8505,7 @@ function btwBronnenKwartaal(jaar, k){
       datum: f.datum,
       omschrijving: f.type === "verkoop" ? (klantNaam(f.klant_id) || "—") : (f.leverancier || "—"),
       nummer: f.nummer || "",
+      soort: f.type, id: f.id,
       richting: f.type === "verkoop" ? "uit" : "in",
       excl: Number(f.bedrag_excl || 0),
       btw: Number(f.btw_bedrag || 0)
@@ -8521,7 +8524,7 @@ function btwBronnenKwartaal(jaar, k){
     if (new Date(p.datum).getFullYear() !== jaar) return;
     if (k !== -1 && kwartaalVan(p.datum) !== k) return;
     items.push({ datum: p.datum, omschrijving: p.l.tegenpartij || "—", nummer: "losse betaling",
-      richting: p.richting === "in" ? "uit" : "in", excl: p.excl, btw: p.btw });
+      soort: "los", id: p.l.id, richting: p.richting === "in" ? "uit" : "in", excl: p.excl, btw: p.btw });
   });
   return items.sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
 }
@@ -8536,8 +8539,10 @@ function toonBtwUitleg(jaar, k){
     " = <b>" + eur2(Math.abs(saldo)) + "</b> " + (saldo >= 0 ? "af te dragen" : "terug te vragen");
   // uitgaand en inkomend elk in een eigen blok met subtotaal, zodat je in
   // één oogopslag ziet hoeveel btw je ontvangen hebt en wat je terugkrijgt
+  // facturen en losse betalingen zijn aan te klikken; correcties hebben geen eigen scherm
   const regel = i =>
-    '<tr><td>' + fmtDatum(i.datum) + '</td>' +
+    (i.id ? '<tr class="klik" data-btwsoort="' + i.soort + '" data-btwid="' + i.id + '" title="Openen">' : '<tr>') +
+    '<td>' + fmtDatum(i.datum) + '</td>' +
     '<td class="tekst">' + esc(i.omschrijving) + (i.nummer ? ' <span style="color:var(--ink3)">· ' + esc(i.nummer) + '</span>' : '') + '</td>' +
     '<td class="r">' + eur2(i.excl) + '</td>' +
     '<td class="r">' + eur2(i.btw) + '</td></tr>';
@@ -8557,6 +8562,23 @@ function toonBtwUitleg(jaar, k){
     '<tr><td colspan="3" class="tekst" style="padding-top:16px;border-top:2px solid var(--line)"><b>' +
       (saldo >= 0 ? "Af te dragen" : "Terug te vragen") + '</b> <span style="color:var(--ink3)">(' + eur2(uit) + ' − ' + eur2(in_) + ')</span></td>' +
       '<td class="r" style="padding-top:16px;border-top:2px solid var(--line)"><b>' + eur2(Math.abs(saldo)) + '</b></td></tr>';
+  // klik op een regel: factuur of betaling openen; met Sluiten kom je via de
+  // terug-sprong weer op BTW, en dan gaat dit venster open op dezelfde plek
+  $("btwUitlegBody").querySelectorAll("[data-btwid]").forEach(r => r.addEventListener("click", () => {
+    const ov = $("btwUitlegOverlay"), scroll = ov.scrollTop;
+    ov.classList.remove("open");
+    if (r.dataset.btwsoort === "los"){ toonTab("betalingen"); openLosseBetaling(r.dataset.btwid); }
+    else {
+      toonTab("facturen");
+      if (r.dataset.btwsoort === "verkoop"){ kiesFSub("fUit"); openFactuur(r.dataset.btwid); }
+      else { kiesFSub("fIn"); openInkoop(r.dataset.btwid); }
+    }
+    const stap = terugStapel[terugStapel.length - 1];
+    if (stap && stap.van === "btw") stap.herstel = () => {
+      toonBtwUitleg(jaar, k);
+      $("btwUitlegOverlay").scrollTop = scroll;
+    };
+  }));
   $("btwUitlegOverlay").classList.add("open");
 }
 $("btwUitlegSluit").addEventListener("click", () => $("btwUitlegOverlay").classList.remove("open"));
