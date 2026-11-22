@@ -1582,6 +1582,8 @@ nav.onderbalk{display:none}
           <button data-bpf="vast">Vaste lasten</button>
           <select id="bpMaand" style="margin-left:auto;padding:8px 12px;border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--ink);font-size:.84rem"></select>
         </div>
+        <div class="veld" style="margin-bottom:14px"><input type="search" id="bpZoek" placeholder="🔍 Zoek op naam, omschrijving, factuurnummer of bedrag" autocomplete="off">
+          <div class="hint" id="bpZoekHint" style="margin-top:6px;display:none"></div></div>
         <div id="bpLijst"></div>
         <div class="hint" style="margin-top:10px">Bedragen incl. btw, zoals ze op je bankafschrift staan. Facturen die al betaald waren vóór dit tabblad bestond hebben geen betaaltijd; die staan op hun factuurdatum met "tijd ?" — klik erop om de echte datum en tijd in te vullen. Vaste lasten staan erin op de dag dat ze volgens schema worden afgeschreven (aanpassen via Invulformulier &gt; Vaste last); wat later deze maand nog komt staat er lichter bij als "gepland" en telt nog niet mee.</div>
       </div>
@@ -1900,6 +1902,7 @@ nav.onderbalk{display:none}
       <div class="tab" id="tab-btw">
         <div class="tab-kop"><h2>BTW</h2>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="knop klein stil" id="btZoek" title="Zoek een factuur of betaling in de btw van het gekozen jaar">ZOEKEN</button>
             <button class="knop klein stil" id="btJaarpakket" title="Eén PDF voor de Belastingdienst: dag voor dag km-standen, facturen en betalingen, met daarachter elke bon en factuur zelf">JAARPAKKET (PDF)</button>
             <select id="btJaar" style="width:auto;padding:8px 12px"></select>
           </div>
@@ -1947,6 +1950,7 @@ nav.onderbalk{display:none}
           <button type="button" class="knop klein stil sluitX" id="btwUitlegSluit" title="Sluiten">×</button>
           <h3 style="font-size:.92rem;margin-bottom:4px" id="btwUitlegTitel">—</h3>
           <div class="hint" style="margin-bottom:14px" id="btwUitlegSub">—</div>
+          <div class="veld" style="margin-bottom:12px"><input type="search" id="btwUitlegZoek" placeholder="🔍 Zoek op naam, nummer of bedrag" autocomplete="off"></div>
           <div class="tbl-wrap">
             <table>
               <thead><tr><th>Datum</th><th>Omschrijving</th><th class="r">Bedrag excl.</th><th class="r">Btw</th></tr></thead>
@@ -2025,6 +2029,19 @@ const LOGO_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAJ0CAY
 const $ = id => document.getElementById(id);
 const eur = n => "€ " + Math.round(n).toLocaleString("nl-NL");
 const eur2 = n => "€ " + Number(n).toLocaleString("nl-NL", {minimumFractionDigits:2, maximumFractionDigits:2});
+/* Zoeken in een lijst (Betalingen, btw-venster): elk woord moet ergens
+   voorkomen. Bedragen doen mee als 37,11 / 37.11 / 1.234,56, zodat je ook
+   kunt zoeken op een bedrag zoals het op je afschrift of bon staat. */
+function zoekHooi(teksten, bedragen){
+  return teksten.filter(Boolean).join(" ").toLowerCase() + " " + (bedragen || [])
+    .filter(b => b != null && !isNaN(b)).map(b => {
+      const n = Math.abs(Number(b)), punt = n.toFixed(2);
+      return punt + " " + punt.replace(".", ",") + " " + eur2(n).slice(2);
+    }).join(" ");
+}
+function zoekPast(term, hooi){
+  return String(term || "").toLowerCase().replace(/€/g, " ").split(/\s+/).filter(Boolean).every(w => hooi.includes(w));
+}
 // compacte notatie voor asstippen in grafieken, bv. "€ 1,2k"
 const eurKort = n => {
   const neg = n < 0, abs = Math.abs(n);
@@ -7296,6 +7313,7 @@ function bpPosten(){
       soort: "los", id: l.id, richting: l.richting,
       dag: lokaleDag(d), tijd: tijdVan(d), sort: d.getTime(),
       naam: (l.tegenpartij || "—") + (l.bijlage ? " 📎" : ""), sub: l.omschrijving || "",
+      zoekExtra: [l.categorie ? kostenNaam(l.categorie) : "", "losse betaling", l.btw_land ? btwLandNaam(l.btw_land) : ""],
       bedrag: Number(l.bedrag || 0)
     });
   });
@@ -7371,10 +7389,19 @@ function renderBetalingen(){
 
   renderBpOpen();
 
-  const lijst = inMaand.filter(p =>
-    bpFilter === "alles" ? true : bpFilter === "mist" ? p.soort === "los" : bpFilter === "vast" ? p.soort === "vast" : p.richting === bpFilter);
+  // met een zoekterm zoek je door alle maanden heen; de maandkeuze geldt dan niet
+  const term = $("bpZoek").value.trim();
+  const lijst = (term ? alle : inMaand).filter(p =>
+    (bpFilter === "alles" ? true : bpFilter === "mist" ? p.soort === "los" : bpFilter === "vast" ? p.soort === "vast" : p.richting === bpFilter) &&
+    (!term || zoekPast(term, zoekHooi([p.naam, p.sub, fmtDatum(p.dag), p.tijd, ...(p.zoekExtra || [])], [p.bedrag]))));
+  $("bpZoekHint").style.display = term ? "block" : "none";
+  const zoekSaldo = lijst.filter(p => !p.gepland).reduce((s, p) => s + (p.richting === "in" ? p.bedrag : -p.bedrag), 0);
+  $("bpZoekHint").textContent = term
+    ? lijst.length + (lijst.length === 1 ? " betaling" : " betalingen") + " gevonden in alle maanden" +
+      (lijst.length ? " · samen " + (zoekSaldo < 0 ? "− " : "+ ") + eur2(Math.abs(zoekSaldo)) : "")
+    : "";
   if (!lijst.length){
-    $("bpLijst").innerHTML = '<div class="card leeg">Geen betalingen in deze periode.</div>';
+    $("bpLijst").innerHTML = '<div class="card leeg">' + (term ? "Niets gevonden voor “" + esc(term) + "”." : "Geen betalingen in deze periode.") + '</div>';
     return;
   }
   // per dag groeperen, zoals een bankafschrift
@@ -7712,6 +7739,7 @@ document.querySelectorAll("[data-bpf]").forEach(k => k.addEventListener("click",
   renderBetalingen();
 }));
 $("bpMaand").addEventListener("change", () => { bpMaandKeuze = $("bpMaand").value; renderBetalingen(); });
+$("bpZoek").addEventListener("input", renderBetalingen);
 
 /* ---- inkoopfacturen: hier alleen bekijken.
      Toevoegen en wijzigen gaat via Invulformulier > Inkoopfactuur ---- */
@@ -8530,9 +8558,20 @@ function renderBtw(){
       return rij(n, f.btwUit[i], f.btwIn[i], chip, '', i);
     }).join("") +
     rij("<b>Heel " + jaar + "</b>", uitJ, inJ, '', ' style="border-top:2px solid var(--line)"', -1);
-  $("btKwartaalBody").querySelectorAll("[data-btwk]").forEach(b => b.addEventListener("click", () =>
-    toonBtwUitleg(Number(b.dataset.btwjaar), Number(b.dataset.btwk))));
+  $("btKwartaalBody").querySelectorAll("[data-btwk]").forEach(b => b.addEventListener("click", () => {
+    $("btwUitlegZoek").value = "";
+    toonBtwUitleg(Number(b.dataset.btwjaar), Number(b.dataset.btwk));
+  }));
 }
+// Zoeken op het BTW-tabblad: opent het venster voor heel het gekozen jaar
+$("btZoek").addEventListener("click", () => {
+  $("btwUitlegZoek").value = "";
+  toonBtwUitleg(Number($("btJaar").value) || new Date().getFullYear(), -1);
+  $("btwUitlegZoek").focus();
+});
+$("btwUitlegZoek").addEventListener("input", () => {
+  if (btwUitlegStand) toonBtwUitleg(btwUitlegStand.jaar, btwUitlegStand.k);
+});
 
 /* Alle facturen en correcties die meetellen in een btw-cijfer, voor het
    uitleg-pop-upje achter het vraagteken. k = kwartaalindex, of -1 voor heel het jaar. */
@@ -8565,17 +8604,25 @@ function btwBronnenKwartaal(jaar, k){
     if (new Date(p.datum).getFullYear() !== jaar) return;
     if (k !== -1 && kwartaalVan(p.datum) !== k) return;
     items.push({ datum: p.datum, omschrijving: p.l.tegenpartij || "—", nummer: "losse betaling",
-      soort: "los", id: p.l.id, land: p.land, bijlage: !!p.l.bijlage,
+      soort: "los", id: p.l.id, land: p.land, bijlage: !!p.l.bijlage, zoekExtra: p.l.omschrijving || "",
       richting: p.richting === "in" ? "uit" : p.land ? "buiten" : "in", excl: p.excl, btw: p.btw });
   });
   return items.sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
 }
 
+let btwUitlegStand = null;   // { jaar, k } van het open venster, voor het zoekveld
 function toonBtwUitleg(jaar, k){
-  const items = btwBronnenKwartaal(jaar, k);
-  const uit = items.filter(i => i.richting === "uit").reduce((s, i) => s + i.btw, 0);
-  const in_ = items.filter(i => i.richting === "in").reduce((s, i) => s + i.btw, 0);
+  btwUitlegStand = { jaar, k };
+  const alleItems = btwBronnenKwartaal(jaar, k);
+  const uit = alleItems.filter(i => i.richting === "uit").reduce((s, i) => s + i.btw, 0);
+  const in_ = alleItems.filter(i => i.richting === "in").reduce((s, i) => s + i.btw, 0);
   const saldo = uit - in_;
+  // zoekterm: alleen de regels die passen, met subtotalen van wat gevonden is
+  const term = $("btwUitlegZoek").value.trim();
+  const items = term ? alleItems.filter(i => zoekPast(term, zoekHooi(
+    [i.omschrijving, i.nummer, i.zoekExtra, fmtDatum(i.datum), i.land ? btwLandNaam(i.land) : "",
+     i.soort === "verkoop" ? "verkoopfactuur" : i.soort === "inkoop" ? "inkoopfactuur" : ""],
+    [i.excl, i.btw, i.excl + i.btw]))) : alleItems;
   $("btwUitlegTitel").textContent = k === -1 ? "Btw · heel " + jaar : "Btw · " + KWARTAAL_NAMEN[k] + " " + jaar;
   $("btwUitlegSub").innerHTML = "Btw uitgaand " + eur2(uit) + " − voorbelasting " + eur2(in_) +
     " = <b>" + eur2(Math.abs(saldo)) + "</b> " + (saldo >= 0 ? "af te dragen" : "terug te vragen");
@@ -8597,6 +8644,15 @@ function toonBtwUitleg(jaar, k){
       '<tr><td></td><td class="tekst"><b>Totaal ' + titel.toLowerCase() + '</b></td>' +
         '<td class="r"><b>' + eur2(excl) + '</b></td><td class="r"><b>' + eur2(btw) + '</b></td></tr>';
   };
+  if (term){
+    const groepen = [["Uitgaand", '<span class="chip groen">BTW ONTVANGEN</span>', "uit"],
+      ["Inkomend", '<span class="chip grijs">VOORBELASTING</span>', "in"],
+      ["Buitenlandse btw", '<span class="chip amber">NIET IN AANGIFTE</span>', "buiten"]];
+    $("btwUitlegBody").innerHTML = items.length
+      ? groepen.filter(g => items.some(i => i.richting === g[2]))
+          .map(g => blok(g[0], g[1], items.filter(i => i.richting === g[2]), "")).join("")
+      : '<tr><td colspan="4" class="leeg">Niets gevonden voor “' + esc(term) + '” in deze periode.</td></tr>';
+  } else
   $("btwUitlegBody").innerHTML =
     blok("Uitgaand", '<span class="chip groen">BTW ONTVANGEN</span>', items.filter(i => i.richting === "uit"),
       "Geen uitgaande facturen in deze periode.") +
