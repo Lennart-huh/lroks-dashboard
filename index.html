@@ -1058,26 +1058,31 @@ nav.onderbalk{display:none}
             <thead><tr><th></th><th class="r">Geschat</th><th class="r">Werkelijk</th></tr></thead>
             <tbody id="klVergelijkBody"></tbody>
           </table></div>
-          <div style="margin-top:16px">
+          <div id="klKostenOpbouw">
+          <div class="hint" style="margin-top:12px">Waar de werkelijke kosten vandaan komen: uren tellen tegen het uurtarief
+            van die urenregel, km tegen de km-prijs, materiaal tegen de inkoopprijs die nu bij het product staat.
+            Klik op een regel om hem te wijzigen; klik op een productnaam om de inkoopprijs aan te passen.</div>
+          <div style="margin-top:14px">
             <b style="font-size:.82rem;color:var(--ink3)">UREN</b>
             <div class="tbl-wrap"><table>
-              <thead><tr><th>Datum</th><th class="r">Uren</th><th class="r">Bedrag</th><th></th></tr></thead>
+              <thead><tr><th>Datum</th><th class="r">Uren</th><th class="r">Tarief</th><th class="r">Kosten</th><th></th></tr></thead>
               <tbody id="klUrenBody"></tbody>
             </table></div>
           </div>
           <div style="margin-top:14px">
             <b style="font-size:.82rem;color:var(--ink3)">KILOMETERS</b>
             <div class="tbl-wrap"><table>
-              <thead><tr><th>Datum</th><th class="r">Km</th><th class="r">Bedrag</th><th></th></tr></thead>
+              <thead><tr><th>Datum</th><th class="r">Km</th><th class="r">Per km</th><th class="r">Kosten</th><th></th></tr></thead>
               <tbody id="klKmBody"></tbody>
             </table></div>
           </div>
           <div style="margin-top:14px">
-            <b style="font-size:.82rem;color:var(--ink3)">PRODUCTEN GEBRUIKT</b>
+            <b style="font-size:.82rem;color:var(--ink3)">MATERIAAL (PRODUCTEN GEBRUIKT)</b>
             <div class="tbl-wrap"><table>
-              <thead><tr><th>Datum</th><th>Product</th><th class="r">Aantal</th></tr></thead>
+              <thead><tr><th>Datum</th><th>Product</th><th class="r">Aantal</th><th class="r">Inkoopprijs</th><th class="r">Kosten</th></tr></thead>
               <tbody id="klProdBody"></tbody>
             </table></div>
+          </div>
           </div>
           </div>
         </div>
@@ -5441,6 +5446,11 @@ function renderKlussenTab(){
 
   const statusChip = k => '<span class="chip ' + (k.status === "open" ? "amber" : "grijs") + '">' + (k.status === "open" ? "OPEN" : "AFGEROND") + '</span>' +
     (k.meerwerk ? ' <span class="chip amber">MEERWERK</span>' : '');
+  // werkelijke kosten met een vraagteken: opent de klus bij de kostenopbouw
+  const kostCel = (k, kosten) =>
+    '<button type="button" class="info-vraag" data-klkost="' + k.id + '" title="Uren ' + eur2(kosten.werkelijkeUrenKosten) +
+      ' + materiaal ' + eur2(kosten.werkelijkeMateriaalKosten) + ' + km ' + eur2(kosten.werkelijkeKmKosten) +
+      ' — klik voor de opbouw per regel">?</button> ' + eur2(kosten.werkelijkeTotaal);
 
   const htmlVast = vastRijen.map(({ k, kosten }) => {
     const winst = Number(k.vaste_prijs || 0) - kosten.werkelijkeTotaal;
@@ -5449,7 +5459,7 @@ function renderKlussenTab(){
       '<td class="tekst">' + esc(projectNaamVan(k.project_id)) + '</td>' +
       '<td>Vaste prijs</td>' +
       '<td class="r">' + eur2(k.vaste_prijs || 0) + '</td>' +
-      '<td class="r">' + eur2(kosten.werkelijkeTotaal) + '</td>' +
+      '<td class="r">' + kostCel(k, kosten) + '</td>' +
       '<td class="r" style="color:' + (winst >= 0 ? "var(--groen)" : "var(--rood)") + '"><b>' + eur2(winst) + '</b></td>' +
       '<td>' + statusChip(k) + '</td></tr>';
   }).join("");
@@ -5461,13 +5471,19 @@ function renderKlussenTab(){
       '<td class="tekst">' + esc(projectNaamVan(k.project_id)) + '</td>' +
       '<td>Uurbasis</td>' +
       '<td class="r">—</td>' +
-      '<td class="r">' + eur2(kosten.werkelijkeTotaal) + '</td>' +
+      '<td class="r">' + kostCel(k, kosten) + '</td>' +
       '<td class="r">—</td>' +
       '<td>' + statusChip(k) + '</td></tr>';
   }).join("");
 
   body.innerHTML = htmlVast + htmlUur;
   body.querySelectorAll("[data-klid]").forEach(r => r.addEventListener("click", () => startKlusBewerken(r.dataset.klid)));
+  body.querySelectorAll("[data-klkost]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    startKlusBewerken(b.dataset.klkost);
+    // direct (niet vloeiend), zodat het de vloeiende scroll naar het formulier overneemt
+    setTimeout(() => window.scrollTo(0, $("klKostenOpbouw").getBoundingClientRect().top + window.scrollY - 80), 0);
+  }));
 }
 
 function renderKlusDetail(klus){
@@ -5491,13 +5507,21 @@ $("klVergelijkSluit").addEventListener("click", () => { pkFormLeeg(); $("klVerge
    (springt naar het Invulformulier, net als vanuit de gewone lijsten) */
 function laadKlusRegels(klusId){
   const urenLijst = urenData.filter(u => u.klus_id === klusId).sort((a, b) => datumTijd(b).localeCompare(datumTijd(a)));
+  // per regel ook de prijs waartegen hij meetelt, plus een totaal — zo zie je
+  // waar de werkelijke kosten (berekenWerkelijkeKosten) vandaan komen
+  const totaalRij = (kolommen, bedrag, naKolommen) =>
+    '<tr style="border-top:2px solid var(--line)"><td colspan="' + kolommen + '"><b>Totaal</b></td>' +
+    '<td class="r"><b>' + eur2(bedrag) + '</b></td>' + (naKolommen ? '<td></td>' : '') + '</tr>';
+  const geenPrijs = t => '<span class="chip amber">' + t + '</span>';
   $("klUrenBody").innerHTML = !urenLijst.length
-    ? '<tr><td colspan="4" class="leeg">Geen uren op deze klus.</td></tr>'
+    ? '<tr><td colspan="5" class="leeg">Geen uren op deze klus.</td></tr>'
     : urenLijst.map(u =>
         '<tr class="klik" data-klueid="' + u.id + '"><td>' + fmtDatumTijd(u) + '</td>' +
         '<td class="r">' + Number(u.aantal).toLocaleString("nl-NL") + '</td>' +
-        '<td class="r">' + (u.tarief ? eur2(Number(u.aantal) * Number(u.tarief)) : "—") + '</td>' +
-        '<td class="r"><button class="verwijder" data-kluid="' + u.id + '" title="Verwijderen">✕</button></td></tr>').join("");
+        '<td class="r">' + (Number(u.tarief) > 0 ? eur2(u.tarief) : geenPrijs("GEEN TARIEF")) + '</td>' +
+        '<td class="r">' + eur2(Number(u.aantal) * Number(u.tarief || 0)) + '</td>' +
+        '<td class="r"><button class="verwijder" data-kluid="' + u.id + '" title="Verwijderen">✕</button></td></tr>').join("") +
+      totaalRij(3, urenLijst.reduce((s, u) => s + Number(u.aantal || 0) * Number(u.tarief || 0), 0), true);
   $("klUrenBody").querySelectorAll("[data-klueid]").forEach(r => r.addEventListener("click", () => startUrenBewerken(r.dataset.klueid)));
   $("klUrenBody").querySelectorAll("[data-kluid]").forEach(b => b.addEventListener("click", async (e) => {
     e.stopPropagation();
@@ -5510,13 +5534,16 @@ function laadKlusRegels(klusId){
   }));
 
   const kmLijst = kmRegels().filter(k => k.klus_id === klusId && k.zakelijk && k.gereden > 0).sort((a, b) => datumTijd(b).localeCompare(datumTijd(a)));
+  const kmPrijs = k => Number(k.km_prijs ?? (cache.inst.km_prijs || 0));
   $("klKmBody").innerHTML = !kmLijst.length
-    ? '<tr><td colspan="4" class="leeg">Geen kilometers op deze klus.</td></tr>'
+    ? '<tr><td colspan="5" class="leeg">Geen kilometers op deze klus.</td></tr>'
     : kmLijst.map(k =>
         '<tr class="klik" data-klkeid="' + k.id + '"><td>' + fmtDatumTijd(k) + '</td>' +
         '<td class="r">' + Number(k.gereden).toLocaleString("nl-NL") + '</td>' +
-        '<td class="r">' + eur2(Number(k.gereden) * Number(k.km_prijs ?? (cache.inst.km_prijs || 0))) + '</td>' +
-        '<td class="r">' + (k.gefactureerd ? '' : '<button class="verwijder" data-klkid="' + k.id + '" title="Verwijderen">✕</button>') + '</td></tr>').join("");
+        '<td class="r">' + eurP(kmPrijs(k)) + '</td>' +
+        '<td class="r">' + eur2(Number(k.gereden) * kmPrijs(k)) + '</td>' +
+        '<td class="r">' + (k.gefactureerd ? '' : '<button class="verwijder" data-klkid="' + k.id + '" title="Verwijderen">✕</button>') + '</td></tr>').join("") +
+      totaalRij(3, kmLijst.reduce((s, k) => s + Number(k.gereden || 0) * kmPrijs(k), 0), true);
   $("klKmBody").querySelectorAll("[data-klkeid]").forEach(r => r.addEventListener("click", () => startKmBewerken(r.dataset.klkeid)));
   $("klKmBody").querySelectorAll("[data-klkid]").forEach(b => b.addEventListener("click", async (e) => {
     e.stopPropagation();
@@ -5529,15 +5556,23 @@ function laadKlusRegels(klusId){
   }));
 
   const prodLijst = cache.mutaties.filter(m => m.klus_id === klusId && m.type === "gebruik").sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  const inkoopVan = m => { const p = cache.producten.find(x => x.id === m.product_id); return p ? Number(p.inkoopprijs || 0) : 0; };
   $("klProdBody").innerHTML = !prodLijst.length
-    ? '<tr><td colspan="3" class="leeg">Geen producten gebruikt op deze klus.</td></tr>'
+    ? '<tr><td colspan="5" class="leeg">Geen producten gebruikt op deze klus.</td></tr>'
     : prodLijst.map(m =>
         '<tr class="klik" data-klpeid="' + m.id + '"><td>' + fmtDatum(m.datum) + '</td>' +
-        '<td class="tekst">' + esc(productNaam(m.product_id)) + '</td>' +
-        '<td class="r">' + Math.abs(Number(m.aantal)).toLocaleString("nl-NL") + '</td></tr>').join("");
+        '<td class="tekst"><a href="#" data-klprod="' + m.product_id + '" style="color:inherit;text-decoration:underline dotted" title="Product openen om de inkoopprijs aan te passen">' + esc(productNaam(m.product_id)) + '</a></td>' +
+        '<td class="r">' + Math.abs(Number(m.aantal)).toLocaleString("nl-NL") + '</td>' +
+        '<td class="r">' + (inkoopVan(m) > 0 ? eurP(inkoopVan(m)) : geenPrijs("GEEN PRIJS")) + '</td>' +
+        '<td class="r">' + eur2(Math.abs(Number(m.aantal || 0)) * inkoopVan(m)) + '</td></tr>').join("") +
+      totaalRij(4, prodLijst.reduce((s, m) => s + Math.abs(Number(m.aantal || 0)) * inkoopVan(m), 0), false);
   $("klProdBody").querySelectorAll("[data-klpeid]").forEach(r => r.addEventListener("click", () => {
     const m = prodLijst.find(x => x.id === r.dataset.klpeid);
     if (m) startGebruikBewerken(m);
+  }));
+  $("klProdBody").querySelectorAll("[data-klprod]").forEach(a => a.addEventListener("click", e => {
+    e.preventDefault(); e.stopPropagation();
+    if (a.dataset.klprod) openProductInVoorraad(a.dataset.klprod);
   }));
 }
 
