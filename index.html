@@ -10050,8 +10050,9 @@ function ofaHandAantallenTekst(){
 function toonOffRegels(){
   const body = $("offRegelsBody");
   // tikt Lennart net een aantal in terwijl Claude het formulier bijwerkt: daarna terug in hetzelfde veld
-  const actief = document.activeElement && body.contains(document.activeElement) && document.activeElement.dataset.oraantal != null
-    ? Number(document.activeElement.dataset.oraantal) : null;
+  const actEl = document.activeElement && body.contains(document.activeElement) && document.activeElement.dataset.oraantal != null
+    ? document.activeElement : null;
+  const actief = actEl ? { regel: offerteRegels[Number(actEl.dataset.oraantal)], waarde: actEl.value } : null;
   body.innerHTML = !offerteRegels.length
     ? '<tr><td colspan="6" class="leeg">Nog geen regels.</td></tr>'
     : offerteRegels.map((r, i) =>
@@ -10090,9 +10091,12 @@ function toonOffRegels(){
     veld.addEventListener("blur", () => { if (!(parseFloat(veld.value) > 0)) veld.value = Number(r.aantal); });
     veld.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); veld.blur(); } });
   });
-  if (actief != null){
-    const v = body.querySelector('[data-oraantal="' + actief + '"]');
-    if (v){ v.focus(); const n = v.value.length; try { v.setSelectionRange(n, n); } catch (e) {} }
+  if (actief && offerteRegels.includes(actief.regel)){
+    const v = body.querySelector('[data-oraantal="' + offerteRegels.indexOf(actief.regel) + '"]');
+    if (v){
+      const w = parseFloat(actief.waarde) > 0 ? v.value : actief.waarde;   // leeg = net leeggemaakt om opnieuw te typen
+      v.focus(); v.value = ""; v.value = w;   // cursor aan het eind
+    }
   }
   return offRegelsTotalen();
 }
