@@ -742,6 +742,7 @@ nav.onderbalk{display:none}
             <div class="veld"><label>Geschatte materiaalkosten (€)</label><input type="number" id="pkGeschatKosten" step="0.01" min="0" inputmode="decimal"></div>
             <div class="veld"><label>Geschatte km</label><input type="number" id="pkGeschatKm" step="1" min="0" inputmode="decimal"></div>
           </div>
+          <div class="hint" id="pkGefactHint" style="display:none;margin:-4px 0 13px;color:var(--rood)"></div>
           <div class="veld"><label>Status</label>
             <div class="schakel">
               <button type="button" id="pkOpen" class="aan">Open</button>
@@ -1045,9 +1046,18 @@ nav.onderbalk{display:none}
           <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:10px">
             <b id="klVergelijkNaam"></b>
             <div style="display:flex;gap:8px">
+              <button type="button" class="knop klein stil" id="klWijzig">Klus wijzigen</button>
               <button type="button" class="knop klein stil" id="klNaarProject">Naar project →</button>
               <button type="button" class="knop klein stil" id="klVergelijkSluit">Sluiten</button>
             </div>
+          </div>
+          <div id="klPrijsBlok" style="display:none;margin-bottom:14px">
+            <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+              <div class="veld" style="margin-bottom:0;flex:1;min-width:170px"><label>Vaste prijs aanpassen (excl. btw, €)</label>
+                <input type="number" id="klVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
+              <button type="button" class="knop klein" id="klPrijsOpslaan" style="margin-top:0">Prijs opslaan</button>
+            </div>
+            <div class="hint" id="klPrijsHint" style="margin-top:6px"></div>
           </div>
           <div class="tbl-wrap"><table>
             <thead><tr><th></th><th class="r">Geschat</th><th class="r">Werkelijk</th></tr></thead>
@@ -5285,6 +5295,7 @@ function pkFormLeeg(){
   $("pkVastVelden").style.display = "none"; $("pkVastVelden2").style.display = "none";
   pkStatus = "open"; schakel("pkOpen","pkAfgerond");
   pkMeerwerk = false; schakel("pkOpdracht","pkMeerwerk");
+  $("pkGefactHint").style.display = "none";
   $("pkToevoegen").textContent = "Klus toevoegen";
   $("pkAnnuleer").style.display = "none";
   $("pkVerwijder").style.display = "none";
@@ -5314,6 +5325,21 @@ function startKlusBewerken(id){
   $("pkVerwijder").style.display = "inline-block";
   toonTab("invullen");
   kiesSub("sub-klus");
+  klusFactuurNummer(id).then(nr => {
+    if (bewerkKlusId !== id) return;
+    $("pkGefactHint").textContent = nr ? "Deze klus staat al op factuur " + nr + " — een andere vaste prijs verandert die factuur niet." : "";
+    $("pkGefactHint").style.display = nr ? "block" : "none";
+  });
+}
+
+/* Is de vaste prijs van deze klus al gefactureerd? Dan bestaat er een 'kale'
+   klus-regel (zonder uren/product/km/extra erachter) — zelfde regel als bij
+   het factureren. Geeft het factuurnummer terug, of null. */
+async function klusFactuurNummer(klusId){
+  const { data } = await db.from("factuur_regels")
+    .select("uren_id, mutatie_id, km_id, extra_id, facturen(nummer)").eq("klus_id", klusId);
+  const r = (data || []).find(r => !r.uren_id && !r.mutatie_id && !r.km_id && !r.extra_id);
+  return r ? ((r.facturen && r.facturen.nummer) || "?") : null;
 }
 
 $("pkToevoegen").addEventListener("click", async () => {
@@ -5424,9 +5450,50 @@ function renderKlusVergelijkingTab(klus){
       '<tr style="border-top:2px solid var(--line)"><td class="tekst"><b>Totale kosten</b></td><td class="r" colspan="2"><b>' + eur2(kosten.werkelijkeTotaal) + '</b></td></tr>';
   }
   $("klNaarProject").onclick = () => { toonTab("projecten"); openProjectDetail(klus.project_id); };
+  $("klWijzig").onclick = () => startKlusBewerken(klus.id);
+  klPrijsKlus = klus.prijstype === "vast" ? klus : null;
+  $("klPrijsBlok").style.display = klPrijsKlus ? "block" : "none";
+  if (klPrijsKlus){
+    $("klVastePrijs").value = klus.vaste_prijs ?? "";
+    $("klVastePrijs").disabled = false; $("klPrijsOpslaan").disabled = false;
+    klPrijsHint();
+    klusFactuurNummer(klus.id).then(nr => {
+      if (!nr || klPrijsKlus !== klus) return;
+      $("klVastePrijs").disabled = true; $("klPrijsOpslaan").disabled = true;
+      $("klPrijsHint").textContent = "Al gefactureerd op factuur " + nr + " — de prijs ligt vast. Wat je extra wilt rekenen kun je als meerwerk of extra regel factureren.";
+    });
+  }
   laadKlusRegels(klus.id);
   $("klVergelijkBlok").style.display = "block";
 }
+
+/* Vaste prijs van een klus achteraf aanpassen, bv. als het werk meer was dan
+   op de offerte stond. Kan zolang de klus nog niet gefactureerd is. */
+let klPrijsKlus = null;
+function klPrijsHint(){
+  if (!klPrijsKlus) return;
+  const nieuw = parseFloat($("klVastePrijs").value), oud = Number(klPrijsKlus.vaste_prijs || 0);
+  const kosten = berekenWerkelijkeKosten("klus_id", klPrijsKlus.id).werkelijkeTotaal;
+  $("klPrijsHint").textContent = (nieuw >= 0 && r2(nieuw) !== r2(oud))
+    ? "Was " + eur2(oud) + " — met " + eur2(nieuw) + " wordt de winst " + eur2(nieuw - kosten) + " (nu " + eur2(oud - kosten) + ")."
+    : "Werk meer of minder geworden dan afgesproken? Pas de prijs hier aan; bij factureren komt de nieuwe prijs op de factuur.";
+}
+$("klVastePrijs").addEventListener("input", klPrijsHint);
+$("klPrijsOpslaan").addEventListener("click", async () => {
+  const klus = klPrijsKlus;
+  if (!klus) return;
+  const prijs = parseFloat($("klVastePrijs").value);
+  if (!(prijs >= 0)) { toast("Vul een prijs in"); return; }
+  $("klPrijsOpslaan").disabled = true;
+  const { data, error } = await db.from("klussen").update({ vaste_prijs: r2(prijs) }).eq("id", klus.id).select().single();
+  $("klPrijsOpslaan").disabled = false;
+  if (error) { console.error(error); toast("Opslaan mislukt"); return; }
+  cache.klussen = cache.klussen.map(k => k.id === data.id ? data : k);
+  renderKlussenTab();
+  if (bewerkProjectId === data.project_id) renderKlussen(bewerkProjectId);
+  renderKlusVergelijkingTab(data);
+  toast("Vaste prijs aangepast naar " + eur2(data.vaste_prijs));
+});
 $("klVergelijkSluit").addEventListener("click", () => { $("klVergelijkBlok").style.display = "none"; });
 
 /* itemized uren/km/producten van deze klus, aanklikbaar om te wijzigen
