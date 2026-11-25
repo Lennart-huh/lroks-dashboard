@@ -60,6 +60,8 @@ button{font-family:inherit}
 .veld textarea{min-height:110px;resize:vertical;line-height:1.5}
 .veld input:focus,.veld select:focus,.veld textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
 .veld input[readonly]{color:var(--ink2);background:var(--surface2);cursor:default}
+/* aantal direct aanpasbaar in de regeltabel van een offerte */
+.veld input.of-aantal{width:76px;padding:5px 8px;font-size:.88rem;text-align:right;border-radius:7px}
 .rij2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .rij3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 .knop{width:100%;padding:13px;border:none;border-radius:8px;background:var(--accent);color:var(--bg);font-weight:600;font-size:.95rem;cursor:pointer;letter-spacing:.03em;margin-top:4px}
@@ -724,43 +726,8 @@ nav.onderbalk{display:none}
         <div class="subform form-card" id="sub-klus">
           <div class="hint" style="margin-bottom:13px">Een deelklus binnen een project — bv. een vaste prijs voor één
             onderdeel van een groter project. Kies deze klus daarna bij Uren/KM/Product/Extra regel om eraan te koppelen.</div>
-          <div class="veld"><label>Project</label><select id="pkProject"></select></div>
-          <div class="rij2">
-            <div class="veld"><label>Naam</label><input type="text" id="pkNaam" placeholder="bv. Groepenkast garage"></div>
-            <div class="veld"><label>Prijstype</label>
-              <div class="schakel">
-                <button type="button" id="pkUurbasis" class="aan">Uurbasis</button>
-                <button type="button" id="pkVast">Vaste prijs</button>
-              </div>
-            </div>
-          </div>
-          <div class="rij2" id="pkVastVelden" style="display:none">
-            <div class="veld"><label>Vaste prijs (excl., €)</label><input type="number" id="pkVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
-            <div class="veld"><label>Geschatte uren</label><input type="number" id="pkGeschatUren" step="0.5" min="0" inputmode="decimal"></div>
-          </div>
-          <div class="rij2" id="pkVastVelden2" style="display:none">
-            <div class="veld"><label>Geschatte materiaalkosten (€)</label><input type="number" id="pkGeschatKosten" step="0.01" min="0" inputmode="decimal"></div>
-            <div class="veld"><label>Geschatte km</label><input type="number" id="pkGeschatKm" step="1" min="0" inputmode="decimal"></div>
-          </div>
-          <div class="hint" id="pkGefactHint" style="display:none;margin:-4px 0 13px;color:var(--rood)"></div>
-          <div class="veld"><label>Status</label>
-            <div class="schakel">
-              <button type="button" id="pkOpen" class="aan">Open</button>
-              <button type="button" id="pkAfgerond">Afgerond</button>
-            </div>
-          </div>
-          <div class="veld"><label>Soort</label>
-            <div class="schakel">
-              <button type="button" id="pkOpdracht" class="aan">Opdracht</button>
-              <button type="button" id="pkMeerwerk">Meerwerk</button>
-            </div>
-            <div class="hint">Meerwerk komt op de factuur in een apart blok met een eigen subtotaal.</div>
-          </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="knop" id="pkToevoegen">Klus toevoegen</button>
-            <button class="knop klein stil" id="pkAnnuleer" style="display:none">Wijzigen annuleren</button>
-            <button class="knop klein gevaar" id="pkVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
-          </div>
+          <button type="button" class="knop klein" id="pkNaarTab">Naar het tabblad Klussen →</button>
+          <div class="hint" style="margin-top:8px">Klussen maak, bekijk en wijzig je op het tabblad Klussen.</div>
         </div>
       </div>
 
@@ -1034,31 +1001,59 @@ nav.onderbalk{display:none}
 
       <!-- ========== KLUSSEN ========== -->
       <div class="tab" id="tab-klussen">
-        <h2>Klussen</h2>
+        <div class="tab-kop"><h2>Klussen</h2>
+          <button type="button" class="knop klein" id="klNieuw" style="margin-top:0">+ Nieuwe klus</button></div>
         <div class="hint" style="margin-bottom:14px">Alle klussen uit al je projecten in één overzicht — bij een vaste
-          prijs zie je meteen of die winst of verlies heeft opgeleverd.</div>
+          prijs zie je meteen of die winst of verlies heeft opgeleverd. Klik op een klus om hem te bekijken en te wijzigen.</div>
         <div class="tbl-wrap"><table>
           <thead><tr><th>Klus</th><th>Project</th><th>Prijstype</th><th class="r">Vaste prijs</th>
             <th class="r">Werkelijke kosten</th><th class="r">Winst/verlies</th><th>Status</th></tr></thead>
           <tbody id="klBody"></tbody>
         </table></div>
         <div class="form-card" id="klVergelijkBlok" style="display:none;margin-top:16px;background:var(--surface2)">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:12px">
             <b id="klVergelijkNaam"></b>
-            <div style="display:flex;gap:8px">
-              <button type="button" class="knop klein stil" id="klWijzig">Klus wijzigen</button>
-              <button type="button" class="knop klein stil" id="klNaarProject">Naar project →</button>
-              <button type="button" class="knop klein stil" id="klVergelijkSluit">Sluiten</button>
+            <button type="button" class="knop klein stil" id="klVergelijkSluit" style="margin-top:0">Sluiten</button>
+          </div>
+          <div class="veld"><label>Project</label><select id="pkProject"></select></div>
+          <div class="rij2">
+            <div class="veld"><label>Naam</label><input type="text" id="pkNaam" placeholder="bv. Groepenkast garage"></div>
+            <div class="veld"><label>Prijstype</label>
+              <div class="schakel">
+                <button type="button" id="pkUurbasis" class="aan">Uurbasis</button>
+                <button type="button" id="pkVast">Vaste prijs</button>
+              </div>
             </div>
           </div>
-          <div id="klPrijsBlok" style="display:none;margin-bottom:14px">
-            <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-              <div class="veld" style="margin-bottom:0;flex:1;min-width:170px"><label>Vaste prijs aanpassen (excl. btw, €)</label>
-                <input type="number" id="klVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
-              <button type="button" class="knop klein" id="klPrijsOpslaan" style="margin-top:0">Prijs opslaan</button>
-            </div>
-            <div class="hint" id="klPrijsHint" style="margin-top:6px"></div>
+          <div class="rij2" id="pkVastVelden" style="display:none">
+            <div class="veld"><label>Vaste prijs (excl., €)</label><input type="number" id="pkVastePrijs" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld"><label>Geschatte uren</label><input type="number" id="pkGeschatUren" step="0.5" min="0" inputmode="decimal"></div>
           </div>
+          <div class="rij2" id="pkVastVelden2" style="display:none">
+            <div class="veld"><label>Geschatte materiaalkosten (€)</label><input type="number" id="pkGeschatKosten" step="0.01" min="0" inputmode="decimal"></div>
+            <div class="veld"><label>Geschatte km</label><input type="number" id="pkGeschatKm" step="1" min="0" inputmode="decimal"></div>
+          </div>
+          <div class="hint" id="pkWinstHint" style="display:none;margin:-4px 0 13px"></div>
+          <div class="hint" id="pkGefactHint" style="display:none;margin:-4px 0 13px;color:var(--rood)"></div>
+          <div class="veld"><label>Status</label>
+            <div class="schakel">
+              <button type="button" id="pkOpen" class="aan">Open</button>
+              <button type="button" id="pkAfgerond">Afgerond</button>
+            </div>
+          </div>
+          <div class="veld"><label>Soort</label>
+            <div class="schakel">
+              <button type="button" id="pkOpdracht" class="aan">Opdracht</button>
+              <button type="button" id="pkMeerwerk">Meerwerk</button>
+            </div>
+            <div class="hint">Meerwerk komt op de factuur in een apart blok met een eigen subtotaal.</div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="knop klein" id="pkToevoegen">Klus toevoegen</button>
+            <button class="knop klein gevaar" id="pkVerwijder" style="display:none;margin-left:auto">Verwijderen</button>
+          </div>
+          <div id="klDetail">
+          <b id="klDetailKop" style="font-size:.82rem;color:var(--ink3);display:block;margin:18px 0 4px">VASTE PRIJS VS WERKELIJK</b>
           <div class="tbl-wrap"><table>
             <thead><tr><th></th><th class="r">Geschat</th><th class="r">Werkelijk</th></tr></thead>
             <tbody id="klVergelijkBody"></tbody>
@@ -1083,6 +1078,7 @@ nav.onderbalk{display:none}
               <thead><tr><th>Datum</th><th>Product</th><th class="r">Aantal</th></tr></thead>
               <tbody id="klProdBody"></tbody>
             </table></div>
+          </div>
           </div>
         </div>
       </div>
@@ -5260,7 +5256,7 @@ function renderVastPrijsVergelijking(project){
 function renderKlussen(projectId){
   const lijst = cache.klussen.filter(k => k.project_id === projectId);
   $("prKlussenBody").innerHTML = !lijst.length
-    ? '<tr><td colspan="2" class="leeg">Nog geen klussen bij dit project — voeg er een toe via het Invulformulier.</td></tr>'
+    ? '<tr><td colspan="2" class="leeg">Nog geen klussen bij dit project — voeg er een toe op het tabblad Klussen.</td></tr>'
     : lijst.map(k =>
         '<tr class="klik" data-klid="' + k.id + '">' +
           '<td class="tekst">' + esc(k.naam) + (k.meerwerk ? ' <span class="chip amber">MEERWERK</span>' : '') + '</td>' +
@@ -5287,6 +5283,9 @@ $("pkAfgerond").addEventListener("click", () => { pkStatus = "afgerond"; schakel
 $("pkOpdracht").addEventListener("click", () => { pkMeerwerk = false; schakel("pkOpdracht","pkMeerwerk"); });
 $("pkMeerwerk").addEventListener("click", () => { pkMeerwerk = true; schakel("pkMeerwerk","pkOpdracht"); });
 
+/* Het klusformulier staat op het Klussen-tabblad: daar maak, bekijk en wijzig
+   je klussen. Bij een bestaande klus staan onder het formulier de vergelijking
+   (vaste prijs vs werkelijk) en de uren/km/producten die eraan hangen. */
 function pkFormLeeg(){
   bewerkKlusId = null;
   $("pkNaam").value = ""; $("pkVastePrijs").value = ""; $("pkGeschatUren").value = "";
@@ -5295,16 +5294,38 @@ function pkFormLeeg(){
   $("pkVastVelden").style.display = "none"; $("pkVastVelden2").style.display = "none";
   pkStatus = "open"; schakel("pkOpen","pkAfgerond");
   pkMeerwerk = false; schakel("pkOpdracht","pkMeerwerk");
-  $("pkGefactHint").style.display = "none";
+  zetKlusGefactureerd(null);
+  $("pkWinstHint").style.display = "none";
   $("pkToevoegen").textContent = "Klus toevoegen";
-  $("pkAnnuleer").style.display = "none";
   $("pkVerwijder").style.display = "none";
+  $("klDetail").style.display = "none";
 }
-$("pkAnnuleer").addEventListener("click", pkFormLeeg);
+
+/* Al gefactureerd: prijs en prijstype liggen vast, die staan al op de factuur */
+function zetKlusGefactureerd(nr){
+  ["pkVastePrijs","pkUurbasis","pkVast"].forEach(id => { $(id).disabled = !!nr; });
+  $("pkGefactHint").textContent = nr ? "Al gefactureerd op factuur " + nr + " — prijs en prijstype liggen vast. Wat je extra wilt rekenen kun je als meerwerk of extra regel factureren." : "";
+  $("pkGefactHint").style.display = nr ? "block" : "none";
+}
+
+/* nieuwe klus, eventueel meteen bij een project */
+function nieuweKlus(projectId){
+  if (huidigeTab() !== "klussen") toonTab("klussen");
+  pkFormLeeg();
+  $("pkProject").value = projectId || "";
+  $("klVergelijkNaam").textContent = "Nieuwe klus";
+  $("klVergelijkBlok").style.display = "block";
+  $("klVergelijkBlok").scrollIntoView({ behavior: "smooth", block: "start" });
+  (projectId ? $("pkNaam") : $("pkProject")).focus();
+}
+$("klNieuw").addEventListener("click", () => nieuweKlus());
+$("pkNaarTab").addEventListener("click", () => nieuweKlus());
 
 function startKlusBewerken(id){
   const k = cache.klussen.find(x => x.id === id);
   if (!k) return;
+  if (huidigeTab() !== "klussen") toonTab("klussen");
+  pkFormLeeg();
   bewerkKlusId = id;
   $("pkProject").value = k.project_id || "";
   $("pkNaam").value = k.naam || "";
@@ -5321,15 +5342,13 @@ function startKlusBewerken(id){
   pkMeerwerk = !!k.meerwerk;
   if (pkMeerwerk) schakel("pkMeerwerk","pkOpdracht"); else schakel("pkOpdracht","pkMeerwerk");
   $("pkToevoegen").textContent = "Wijziging opslaan";
-  $("pkAnnuleer").style.display = "inline-block";
   $("pkVerwijder").style.display = "inline-block";
-  toonTab("invullen");
-  kiesSub("sub-klus");
-  klusFactuurNummer(id).then(nr => {
-    if (bewerkKlusId !== id) return;
-    $("pkGefactHint").textContent = nr ? "Deze klus staat al op factuur " + nr + " — een andere vaste prijs verandert die factuur niet." : "";
-    $("pkGefactHint").style.display = nr ? "block" : "none";
-  });
+  $("klVergelijkNaam").textContent = k.naam + " — " + projectNaamVan(k.project_id);
+  renderKlusDetail(k);
+  pkWinstHint();
+  $("klVergelijkBlok").style.display = "block";
+  $("klVergelijkBlok").scrollIntoView({ behavior: "smooth", block: "start" });
+  klusFactuurNummer(id).then(nr => { if (bewerkKlusId === id) zetKlusGefactureerd(nr); });
 }
 
 /* Is de vaste prijs van deze klus al gefactureerd? Dan bestaat er een 'kale'
@@ -5341,6 +5360,22 @@ async function klusFactuurNummer(klusId){
   const r = (data || []).find(r => !r.uren_id && !r.mutatie_id && !r.km_id && !r.extra_id);
   return r ? ((r.facturen && r.facturen.nummer) || "?") : null;
 }
+
+/* Vaste prijs achteraf aanpassen (werk meer/minder dan op de offerte): laat
+   tijdens het typen zien wat dat met de winst doet. */
+function pkWinstHint(){
+  const k = bewerkKlusId && cache.klussen.find(x => x.id === bewerkKlusId);
+  if (!k || pkPrijstype !== "vast"){ $("pkWinstHint").style.display = "none"; return; }
+  const nieuw = parseFloat($("pkVastePrijs").value), oud = Number(k.vaste_prijs || 0);
+  const kosten = berekenWerkelijkeKosten("klus_id", k.id).werkelijkeTotaal;
+  $("pkWinstHint").textContent = (nieuw >= 0 && r2(nieuw) !== r2(oud) && k.prijstype === "vast")
+    ? "Was " + eur2(oud) + " — met " + eur2(nieuw) + " wordt de winst " + eur2(nieuw - kosten) + " (nu " + eur2(oud - kosten) + ")."
+    : "Werkelijke kosten tot nu toe: " + eur2(kosten) + ". Werk meer of minder geworden dan afgesproken? Pas de vaste prijs hier aan.";
+  $("pkWinstHint").style.display = "block";
+}
+$("pkVastePrijs").addEventListener("input", pkWinstHint);
+$("pkVast").addEventListener("click", pkWinstHint);
+$("pkUurbasis").addEventListener("click", pkWinstHint);
 
 $("pkToevoegen").addEventListener("click", async () => {
   const projectId = $("pkProject").value;
@@ -5366,12 +5401,12 @@ $("pkToevoegen").addEventListener("click", async () => {
   const wasBewerken = !!bewerkKlusId;
   if (wasBewerken) cache.klussen = cache.klussen.map(k => k.id === data.id ? data : k);
   else cache.klussen.push(data);
-  pkFormLeeg();
   toast(wasBewerken ? "Klus bijgewerkt" : "Klus toegevoegd");
   if (bewerkProjectId === projectId) renderKlussen(bewerkProjectId);
   renderKlussenTab();
   ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
     vulKlusSelect(projId, ["uKlus","kKlus","pKlus","erKlus"][i]));
+  startKlusBewerken(data.id);   // blijft open, met de bijgewerkte winst
 });
 
 $("pkVerwijder").addEventListener("click", async () => {
@@ -5383,6 +5418,7 @@ $("pkVerwijder").addEventListener("click", async () => {
   cache.klussen = cache.klussen.filter(k => k.id !== bewerkKlusId);
   toast("Klus verwijderd");
   pkFormLeeg();
+  $("klVergelijkBlok").style.display = "none";
   if (bewerkProjectId === projectId) renderKlussen(bewerkProjectId);
   renderKlussenTab();
   ["uProject","kProject","pProject","erProject"].forEach((projId, i) =>
@@ -5395,7 +5431,7 @@ const projectNaamVan = id => { const p = cache.projecten.find(x => x.id === id);
 function renderKlussenTab(){
   const body = $("klBody");
   if (!cache.klussen.length){
-    body.innerHTML = '<tr><td colspan="7" class="leeg">Nog geen klussen — maak er een aan vanuit een project.</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="leeg">Nog geen klussen — maak er een aan met + Nieuwe klus.</td></tr>';
     return;
   }
   const vastRijen = cache.klussen.filter(k => k.prijstype === "vast")
@@ -5431,15 +5467,12 @@ function renderKlussenTab(){
   }).join("");
 
   body.innerHTML = htmlVast + htmlUur;
-  body.querySelectorAll("[data-klid]").forEach(r => r.addEventListener("click", () => {
-    const k = cache.klussen.find(x => x.id === r.dataset.klid);
-    if (k) renderKlusVergelijkingTab(k);
-  }));
+  body.querySelectorAll("[data-klid]").forEach(r => r.addEventListener("click", () => startKlusBewerken(r.dataset.klid)));
 }
 
-function renderKlusVergelijkingTab(klus){
-  $("klVergelijkNaam").textContent = klus.naam + " — " + projectNaamVan(klus.project_id);
+function renderKlusDetail(klus){
   const kosten = berekenWerkelijkeKosten("klus_id", klus.id);
+  $("klDetailKop").textContent = klus.prijstype === "vast" ? "VASTE PRIJS VS WERKELIJK" : "KOSTEN";
   if (klus.prijstype === "vast"){
     renderVergelijkTabel("klVergelijkBody", klus, kosten);
   } else {
@@ -5449,52 +5482,10 @@ function renderKlusVergelijkingTab(klus){
       '<tr><td class="tekst">Kilometers</td><td class="r">—</td><td class="r">' + kosten.werkelijkeKm.toLocaleString("nl-NL") + ' (' + eur2(kosten.werkelijkeKmKosten) + ')</td></tr>' +
       '<tr style="border-top:2px solid var(--line)"><td class="tekst"><b>Totale kosten</b></td><td class="r" colspan="2"><b>' + eur2(kosten.werkelijkeTotaal) + '</b></td></tr>';
   }
-  $("klNaarProject").onclick = () => { toonTab("projecten"); openProjectDetail(klus.project_id); };
-  $("klWijzig").onclick = () => startKlusBewerken(klus.id);
-  klPrijsKlus = klus.prijstype === "vast" ? klus : null;
-  $("klPrijsBlok").style.display = klPrijsKlus ? "block" : "none";
-  if (klPrijsKlus){
-    $("klVastePrijs").value = klus.vaste_prijs ?? "";
-    $("klVastePrijs").disabled = false; $("klPrijsOpslaan").disabled = false;
-    klPrijsHint();
-    klusFactuurNummer(klus.id).then(nr => {
-      if (!nr || klPrijsKlus !== klus) return;
-      $("klVastePrijs").disabled = true; $("klPrijsOpslaan").disabled = true;
-      $("klPrijsHint").textContent = "Al gefactureerd op factuur " + nr + " — de prijs ligt vast. Wat je extra wilt rekenen kun je als meerwerk of extra regel factureren.";
-    });
-  }
   laadKlusRegels(klus.id);
-  $("klVergelijkBlok").style.display = "block";
+  $("klDetail").style.display = "block";
 }
-
-/* Vaste prijs van een klus achteraf aanpassen, bv. als het werk meer was dan
-   op de offerte stond. Kan zolang de klus nog niet gefactureerd is. */
-let klPrijsKlus = null;
-function klPrijsHint(){
-  if (!klPrijsKlus) return;
-  const nieuw = parseFloat($("klVastePrijs").value), oud = Number(klPrijsKlus.vaste_prijs || 0);
-  const kosten = berekenWerkelijkeKosten("klus_id", klPrijsKlus.id).werkelijkeTotaal;
-  $("klPrijsHint").textContent = (nieuw >= 0 && r2(nieuw) !== r2(oud))
-    ? "Was " + eur2(oud) + " — met " + eur2(nieuw) + " wordt de winst " + eur2(nieuw - kosten) + " (nu " + eur2(oud - kosten) + ")."
-    : "Werk meer of minder geworden dan afgesproken? Pas de prijs hier aan; bij factureren komt de nieuwe prijs op de factuur.";
-}
-$("klVastePrijs").addEventListener("input", klPrijsHint);
-$("klPrijsOpslaan").addEventListener("click", async () => {
-  const klus = klPrijsKlus;
-  if (!klus) return;
-  const prijs = parseFloat($("klVastePrijs").value);
-  if (!(prijs >= 0)) { toast("Vul een prijs in"); return; }
-  $("klPrijsOpslaan").disabled = true;
-  const { data, error } = await db.from("klussen").update({ vaste_prijs: r2(prijs) }).eq("id", klus.id).select().single();
-  $("klPrijsOpslaan").disabled = false;
-  if (error) { console.error(error); toast("Opslaan mislukt"); return; }
-  cache.klussen = cache.klussen.map(k => k.id === data.id ? data : k);
-  renderKlussenTab();
-  if (bewerkProjectId === data.project_id) renderKlussen(bewerkProjectId);
-  renderKlusVergelijkingTab(data);
-  toast("Vaste prijs aangepast naar " + eur2(data.vaste_prijs));
-});
-$("klVergelijkSluit").addEventListener("click", () => { $("klVergelijkBlok").style.display = "none"; });
+$("klVergelijkSluit").addEventListener("click", () => { pkFormLeeg(); $("klVergelijkBlok").style.display = "none"; });
 
 /* itemized uren/km/producten van deze klus, aanklikbaar om te wijzigen
    (springt naar het Invulformulier, net als vanuit de gewone lijsten) */
@@ -10045,23 +10036,70 @@ function openProductInVoorraad(id){
   const r = document.querySelector('[data-vid="' + id + '"]'); if (r) r.click();
 }
 
+/* Aantallen die Lennart zelf in de regeltabel verandert, zodat Claude dat
+   hoort (bij zijn volgende blik op de offerte of in het volgende bericht) en
+   er niet overheen rekent. Sleutel: het regel-object zelf. */
+let ofaHandAantallen = new Map();   // regel → { van, naar }
+function ofaHandAantallenTekst(){
+  const lijst = [...ofaHandAantallen].filter(([r, w]) => offerteRegels.includes(r) && w.van !== w.naar)
+    .map(([r, w]) => r.omschrijving + ": " + w.van.toLocaleString("nl-NL") + " → " + w.naar.toLocaleString("nl-NL") + (r.eenheid ? " " + r.eenheid : ""));
+  ofaHandAantallen = new Map();
+  return lijst;
+}
+
 function toonOffRegels(){
-  const vast = offertePrijstype === "vast";
   const body = $("offRegelsBody");
+  // tikt Lennart net een aantal in terwijl Claude het formulier bijwerkt: daarna terug in hetzelfde veld
+  const actief = document.activeElement && body.contains(document.activeElement) && document.activeElement.dataset.oraantal != null
+    ? Number(document.activeElement.dataset.oraantal) : null;
   body.innerHTML = !offerteRegels.length
     ? '<tr><td colspan="6" class="leeg">Nog geen regels.</td></tr>'
     : offerteRegels.map((r, i) =>
         '<tr><td class="tekst">' + esc(r.omschrijving) + (r.product_id ? ' <span class="chip grijs">PRODUCT</span>' : '') + '</td>' +
-        '<td class="r">' + (r.eenheid ? Number(r.aantal).toLocaleString("nl-NL") : "—") + '</td>' +
+        '<td class="r">' + (r.eenheid
+          ? '<input type="number" class="of-aantal" data-oraantal="' + i + '" step="any" min="0" inputmode="decimal" value="' + Number(r.aantal) + '" title="Aantal aanpassen">'
+          : "—") + '</td>' +
         '<td>' + esc(r.eenheid || "—") + '</td>' +
         '<td class="r">' + eur2(r.prijs) + '</td>' +
-        '<td class="r">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td>' +
+        '<td class="r" data-orbedrag="' + i + '">' + eur2(Number(r.aantal) * Number(r.prijs)) + '</td>' +
         '<td class="r"><button class="verwijder" data-ori="' + i + '">✕</button></td></tr>').join("");
   body.querySelectorAll("[data-ori]").forEach(k => k.addEventListener("click", () => {
     offerteRegels.splice(Number(k.dataset.ori), 1);
     offHand.producten = false;
     toonOffRegels();
   }));
+  body.querySelectorAll("[data-oraantal]").forEach(veld => {
+    const r = offerteRegels[Number(veld.dataset.oraantal)];
+    // bij elke toets meteen: bedrag van de regel, prijs producten, vaste prijs en de totalen
+    veld.addEventListener("input", () => {
+      const nieuw = parseFloat(veld.value);
+      if (!(nieuw > 0) || nieuw === Number(r.aantal)) return;   // leeg of 0 tijdens het typen: nog niets doen
+      const oud = Number(r.aantal);
+      if (!ofaHandAantallen.has(r)) ofaHandAantallen.set(r, { van: oud, naar: nieuw });
+      ofaHandAantallen.get(r).naar = nieuw;
+      r.aantal = nieuw;
+      // bij een vaste prijs schuift die mee met het verschil in materiaal
+      if (offertePrijstype === "vast" && $("offVastePrijs").value !== "")
+        $("offVastePrijs").value = r2((parseFloat($("offVastePrijs").value) || 0) + (nieuw - oud) * Number(r.prijs));
+      offHand.producten = false;
+      const bedrag = body.querySelector('[data-orbedrag="' + veld.dataset.oraantal + '"]');
+      if (bedrag) bedrag.textContent = eur2(nieuw * Number(r.prijs));
+      offRegelsTotalen();
+    });
+    // weggeklikt met een leeg of ongeldig veld: terug naar het aantal dat geldt
+    veld.addEventListener("blur", () => { if (!(parseFloat(veld.value) > 0)) veld.value = Number(r.aantal); });
+    veld.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); veld.blur(); } });
+  });
+  if (actief != null){
+    const v = body.querySelector('[data-oraantal="' + actief + '"]');
+    if (v){ v.focus(); const n = v.value.length; try { v.setSelectionRange(n, n); } catch (e) {} }
+  }
+  return offRegelsTotalen();
+}
+/* Bedragen onder de regels opnieuw uitrekenen, zonder de tabel te hertekenen
+   (dan blijft je cursor in het aantal-veld staan). */
+function offRegelsTotalen(){
+  const vast = offertePrijstype === "vast";
   const regelsTotaal = offerteRegels.reduce((s, r) => s + Number(r.aantal) * Number(r.prijs), 0);
   // bij 'vast' is de prijs per regel alleen een hulpmiddel — de offertetotaal
   // is de vaste prijs die je zelf invult, niet de optelling hieronder
@@ -10508,6 +10546,7 @@ const OFA_BEZIG = { offerte_bekijken: "Offerte bekijken…", producten_zoeken: "
 const ofaGetal = id => $(id).value === "" ? null : Number($(id).value);
 function ofaStand(){
   const tot = toonOffRegels();
+  const hand = ofaHandAantallenTekst();
   const klant = cache.klanten.find(k => k.id === $("offKlant").value);
   const vast = offertePrijstype === "vast";
   return JSON.stringify({
@@ -10525,7 +10564,8 @@ function ofaStand(){
       prijs_producten: ofaGetal("offGeschatProducten"), vaste_prijs: ofaGetal("offVastePrijs") } : null,
     totaal: { excl: tot.excl, btw: tot.btw, incl: tot.incl, btw_pct: btwPct() },
     tarieven: { uurtarief: offUurtarief(), km_prijs: offKmPrijs(), standaard_marge_pct: Number(cache.inst.standaard_marge_pct || 0) },
-    notities: $("offNotities").value
+    notities: $("offNotities").value,
+    ...(hand.length ? { zelf_aangepast_door_lennart: hand } : {})
   });
 }
 
@@ -10681,6 +10721,7 @@ function ofaSysteem(){
     "Lennart heeft een offerte open in het offerteformulier en bespreekt die met jou. Je helpt hem de offerte op te bouwen en na te rekenen volgens zijn eigen regels hieronder.\n\n" +
     "Werkwijze:\n" +
     "- Bekijk de offerte met offerte_bekijken voordat je iets zegt of verandert, en opnieuw als Lennart zelf iets aangepast kan hebben.\n" +
+    "- Lennart kan aantallen zelf in de regeltabel aanpassen, ook terwijl jij bezig bent; dat zie je als zelf_aangepast_door_lennart of aan het eind van zijn bericht. Die aantallen gelden: zet ze niet terug, reken ermee verder en pas aan wat ervan afhangt (vaste prijs, notities).\n" +
     "- Volg Lennarts regels. Mis je iets wat je nodig hebt (welke lader, foto van de meterkast, meters, kabeltracé, de dag en tijd voor de reistijd), vraag het. Wil hij toch een prijs, reken dan met een aanname en noem die aanname in je antwoord en in de notities.\n" +
     "- Foto van een meterkast: noem merk en type kast, 1- of 3-fase, hoofdschakelaar, vrije plekken, en wat je niet goed kunt zien.\n" +
     "- Je verandert alleen het formulier, met regels_aanpassen en velden_invullen. Niets staat vast tot Lennart op Opslaan drukt: zeg dat in één zin als je iets hebt veranderd.\n" +
@@ -10720,7 +10761,7 @@ function ofaToonFotos(){
 }
 function ofaReset(){
   ofaGeneratie++;
-  ofaGesprek = []; ofaFotos = []; ofaBezig = false; ofaKosten = 0;
+  ofaGesprek = []; ofaFotos = []; ofaBezig = false; ofaKosten = 0; ofaHandAantallen = new Map();
   $("ofaStuur").disabled = false;
   $("ofaBerichten").innerHTML = "";
   $("ofaVraag").value = "";
@@ -10756,6 +10797,11 @@ $("ofaFoto").addEventListener("change", async e => {
   ofaToonFotos();
 });
 
+// aantallen die Lennart zelf veranderde sinds Claude laatst keek, achter zijn bericht
+function ofaHandNoot(){
+  const hand = ofaHandAantallenTekst();
+  return hand.length ? "\n\n(Zelf aangepast in het formulier: " + hand.join("; ") + ". Ga daarvan uit.)" : "";
+}
 // getoond: wat er in de chat als jouw bericht staat (standaard de vraag zelf)
 async function ofaStel(vraag, getoond){
   vraag = String(vraag || "").trim();
@@ -10772,7 +10818,7 @@ async function ofaStel(vraag, getoond){
   const begin = ofaGesprek.length;   // bij een fout terug naar hier, zodat het gesprek geldig blijft
   ofaGesprek.push({ role: "user", content: [
     ...fotos.map(f => ({ type: "image", source: { type: "base64", media_type: f.media_type, data: f.data } })),
-    { type: "text", text: vraag || "Bekijk deze foto('s)." } ] });
+    { type: "text", text: (vraag || "Bekijk deze foto('s).") + ofaHandNoot() } ] });
   let kosten = 0;   // alle rondes van deze ene vraag samen
   const kostenRegel = () => fmtKosten(kosten) + " voor dit antwoord · " + fmtKosten(ofaKosten) + " dit gesprek";
   try {
